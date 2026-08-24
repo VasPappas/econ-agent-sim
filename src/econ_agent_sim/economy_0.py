@@ -10,9 +10,35 @@ GOODS = ("X", "Y")
 
 
 @dataclass(frozen=True)
+class Economy0Config:
+    """Inputs for a two-agent, two-good pure-exchange economy."""
+
+    alice_x: float = 1.0
+    alice_y: float = 0.0
+    alice_alpha: float = 0.5
+    bob_x: float = 0.0
+    bob_y: float = 1.0
+    bob_alpha: float = 0.5
+
+    def __post_init__(self) -> None:
+        endowments = (self.alice_x, self.alice_y, self.bob_x, self.bob_y)
+        if any(quantity < 0 for quantity in endowments):
+            raise ValueError("endowments cannot be negative")
+        if self.alice_x + self.bob_x <= 0:
+            raise ValueError("the economy must contain some X")
+        if self.alice_y + self.bob_y <= 0:
+            raise ValueError("the economy must contain some Y")
+        for alpha in (self.alice_alpha, self.bob_alpha):
+            if not 0.0 < alpha < 1.0:
+                raise ValueError("Cobb-Douglas alpha must lie strictly between 0 and 1")
+
+
+@dataclass(frozen=True)
 class Economy0Result:
+    config: Economy0Config
     opening_stocks: dict[str, dict[str, float]]
     prices: dict[str, float]
+    wealths: dict[str, float]
     desired_bundles: dict[str, dict[str, float]]
     transactions: tuple[Transaction, ...]
     flows: dict[str, dict[str, float]]
@@ -34,6 +60,21 @@ def equilibrium_prices(agents: list[Agent]) -> dict[str, float]:
         raise ValueError("endowments/preferences do not imply an interior equilibrium")
 
     return {"X": alpha_y_endowment / denominator, "Y": 1.0}
+
+
+def _build_agents(config: Economy0Config) -> list[Agent]:
+    return [
+        Agent(
+            "Alice",
+            CobbDouglasPreferences(alpha=config.alice_alpha),
+            {"X": config.alice_x, "Y": config.alice_y},
+        ),
+        Agent(
+            "Bob",
+            CobbDouglasPreferences(alpha=config.bob_alpha),
+            {"X": config.bob_x, "Y": config.bob_y},
+        ),
+    ]
 
 
 def _snapshot(agents: list[Agent]) -> dict[str, dict[str, float]]:
@@ -78,15 +119,14 @@ def _settle_two_agent_trade(
             )
 
 
-def run_economy_0() -> Economy0Result:
-    """Run the canonical two-agent, two-good pure-exchange economy."""
+def run_economy_0(config: Economy0Config | None = None) -> Economy0Result:
+    """Run Economy 0 using the canonical textbook inputs unless configured."""
 
-    agents = [
-        Agent("Alice", CobbDouglasPreferences(alpha=0.5), {"X": 1.0, "Y": 0.0}),
-        Agent("Bob", CobbDouglasPreferences(alpha=0.5), {"X": 0.0, "Y": 1.0}),
-    ]
+    scenario = config or Economy0Config()
+    agents = _build_agents(scenario)
     opening = _snapshot(agents)
     prices = equilibrium_prices(agents)
+    wealths = {agent.name: agent.wealth(prices) for agent in agents}
     desired = {agent.name: agent.optimal_bundle(prices) for agent in agents}
 
     ledger = Ledger()
@@ -108,10 +148,16 @@ def run_economy_0() -> Economy0Result:
             sum(closing[name][good] for name in closing),
         )
         _assert_close(sum(flows[name][good] for name in flows), 0.0)
+        _assert_close(
+            sum(desired[name][good] for name in desired),
+            sum(opening[name][good] for name in opening),
+        )
 
     return Economy0Result(
+        config=scenario,
         opening_stocks=opening,
         prices=prices,
+        wealths=wealths,
         desired_bundles=desired,
         transactions=ledger.transactions,
         flows=flows,

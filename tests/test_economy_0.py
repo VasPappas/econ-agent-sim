@@ -1,6 +1,9 @@
 from math import isclose
 
-from econ_agent_sim.economy_0 import run_economy_0
+import pytest
+
+from econ_agent_sim.economy_0 import Economy0Config, run_economy_0
+from econ_agent_sim.reporting import accounting_rows
 
 
 def test_equilibrium_prices_are_one_to_one() -> None:
@@ -45,3 +48,37 @@ def test_goods_are_conserved_system_wide() -> None:
         net_flow = sum(v[good] for v in result.flows.values())
         assert isclose(opening_total, closing_total, abs_tol=1e-12)
         assert isclose(net_flow, 0.0, abs_tol=1e-12)
+
+
+def test_custom_scenario_clears_both_markets() -> None:
+    config = Economy0Config(
+        alice_x=2.0,
+        alice_y=0.5,
+        alice_alpha=0.25,
+        bob_x=0.5,
+        bob_y=2.0,
+        bob_alpha=0.75,
+    )
+    result = run_economy_0(config)
+
+    for good in ("X", "Y"):
+        supply = sum(v[good] for v in result.opening_stocks.values())
+        demand = sum(v[good] for v in result.desired_bundles.values())
+        assert isclose(supply, demand, abs_tol=1e-12)
+
+
+def test_accounting_can_be_reconstructed_after_each_transaction() -> None:
+    result = run_economy_0()
+
+    before = accounting_rows(result, 0)
+    after_first = accounting_rows(result, 1)
+    after_all = accounting_rows(result, len(result.transactions))
+
+    assert all(isclose(row["net_flow_so_far"], 0.0) for row in before)
+    assert all(isclose(row["check"], 0.0, abs_tol=1e-12) for row in after_first)
+    assert all(isclose(row["check"], 0.0, abs_tol=1e-12) for row in after_all)
+
+
+def test_invalid_scenario_requires_both_goods_to_exist() -> None:
+    with pytest.raises(ValueError, match="some Y"):
+        Economy0Config(alice_y=0.0, bob_y=0.0)
