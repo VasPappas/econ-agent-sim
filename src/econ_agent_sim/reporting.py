@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from econ_agent_sim.economy_0 import Economy0Result, GOODS
+from econ_agent_sim.economy_0 import GOODS, Economy0Result
 
 
 def stock_flow_rows(result: Economy0Result) -> list[dict[str, Any]]:
