@@ -36,6 +36,11 @@ class TatonnementStep:
     demand_x: float
     excess_demand_x: float
     normalized_excess_demand_x: float
+    supply_y: float
+    demand_y: float
+    excess_demand_y: float
+    normalized_excess_demand_y: float
+    market_error: float
     next_price_x: float | None
 
 
@@ -88,20 +93,28 @@ def discover_price(
 
         p_X(t+1) = p_X(t) * [1 + lambda * z_X(t) / X_bar]
 
-    No benchmark/equilibrium price enters this iteration.
+    Both markets must be within the numerical clearing tolerance before the
+    search is declared converged. No benchmark/equilibrium price enters this
+    iteration.
     """
 
     total_x = sum(agent.holdings["X"] for agent in agents)
+    total_y = sum(agent.holdings["Y"] for agent in agents)
     price_x = config.initial_price_x
     steps: list[TatonnementStep] = []
 
     for iteration in range(config.max_iterations + 1):
         prices = {"X": price_x, "Y": 1.0}
-        demand_x = sum(agent.optimal_bundle(prices)["X"] for agent in agents)
+        bundles = [agent.optimal_bundle(prices) for agent in agents]
+        demand_x = sum(bundle["X"] for bundle in bundles)
+        demand_y = sum(bundle["Y"] for bundle in bundles)
         excess_demand_x = demand_x - total_x
-        normalized_excess = excess_demand_x / total_x
+        excess_demand_y = demand_y - total_y
+        normalized_x = excess_demand_x / total_x
+        normalized_y = excess_demand_y / total_y
+        market_error = max(abs(normalized_x), abs(normalized_y))
 
-        if abs(normalized_excess) <= config.tolerance:
+        if market_error <= config.tolerance:
             steps.append(
                 TatonnementStep(
                     iteration=iteration,
@@ -109,15 +122,18 @@ def discover_price(
                     supply_x=total_x,
                     demand_x=demand_x,
                     excess_demand_x=excess_demand_x,
-                    normalized_excess_demand_x=normalized_excess,
+                    normalized_excess_demand_x=normalized_x,
+                    supply_y=total_y,
+                    demand_y=demand_y,
+                    excess_demand_y=excess_demand_y,
+                    normalized_excess_demand_y=normalized_y,
+                    market_error=market_error,
                     next_price_x=None,
                 )
             )
             return tuple(steps), prices
 
-        next_price_x = price_x * (
-            1.0 + config.adjustment_speed * normalized_excess
-        )
+        next_price_x = price_x * (1.0 + config.adjustment_speed * normalized_x)
         if next_price_x <= 0:
             raise AssertionError("tatonnement produced a non-positive price")
 
@@ -128,7 +144,12 @@ def discover_price(
                 supply_x=total_x,
                 demand_x=demand_x,
                 excess_demand_x=excess_demand_x,
-                normalized_excess_demand_x=normalized_excess,
+                normalized_excess_demand_x=normalized_x,
+                supply_y=total_y,
+                demand_y=demand_y,
+                excess_demand_y=excess_demand_y,
+                normalized_excess_demand_y=normalized_y,
+                market_error=market_error,
                 next_price_x=next_price_x,
             )
         )
@@ -148,10 +169,7 @@ def _settle_trade(
     for good in GOODS:
         first_net = desired[first.name][good] - first.holdings[good]
         second_net = desired[second.name][good] - second.holdings[good]
-        quantity_scale = max(
-            1.0,
-            first.holdings[good] + second.holdings[good],
-        )
+        quantity_scale = max(1.0, first.holdings[good] + second.holdings[good])
         _assert_close(
             first_net + second_net,
             0.0,
