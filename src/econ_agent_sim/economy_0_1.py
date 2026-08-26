@@ -5,9 +5,8 @@ from dataclasses import dataclass, field
 from econ_agent_sim.economy_0 import GOODS, Economy0Config, equilibrium_prices
 from econ_agent_sim.ledger import Ledger, Transaction
 from econ_agent_sim.model import Agent, CobbDouglasPreferences
+from econ_agent_sim.price_discovery import TatonnementSettings, TatonnementStep
 from econ_agent_sim.price_discovery import (
-    TatonnementSettings,
-    TatonnementStep,
     discover_price as discover_tatonnement_price,
 )
 
