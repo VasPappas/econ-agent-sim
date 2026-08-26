@@ -31,7 +31,7 @@ At each iteration:
 3. each agent chooses the Cobb-Douglas utility-maximizing bundle;
 4. aggregate demand for X is compared with the fixed supply of X;
 5. the price rises if there is excess demand and falls if there is excess supply;
-6. the process repeats until excess demand is numerically negligible.
+6. the process repeats until both X and Y markets are within the numerical clearing tolerance.
 
 No trade takes place during this search. Settlement occurs only after the price-discovery process has converged.
 
