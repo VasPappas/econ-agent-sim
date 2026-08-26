@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from econ_agent_sim.economy_0 import GOODS, Economy0Config, equilibrium_prices
 from econ_agent_sim.ledger import Ledger, Transaction
 from econ_agent_sim.model import Agent, CobbDouglasPreferences
+from econ_agent_sim.price_discovery import (
+    TatonnementSettings,
+    TatonnementStep,
+    discover_price as discover_tatonnement_price,
+)
 
 
 @dataclass(frozen=True)
@@ -18,30 +23,12 @@ class Economy01Config:
     max_iterations: int = 5000
 
     def __post_init__(self) -> None:
-        if self.initial_price_x <= 0:
-            raise ValueError("initial_price_x must be strictly positive")
-        if not 0.0 < self.adjustment_speed <= 1.0:
-            raise ValueError("adjustment_speed must lie in (0, 1]")
-        if self.tolerance <= 0:
-            raise ValueError("tolerance must be strictly positive")
-        if self.max_iterations < 1:
-            raise ValueError("max_iterations must be at least 1")
-
-
-@dataclass(frozen=True)
-class TatonnementStep:
-    iteration: int
-    price_x: float
-    supply_x: float
-    demand_x: float
-    excess_demand_x: float
-    normalized_excess_demand_x: float
-    supply_y: float
-    demand_y: float
-    excess_demand_y: float
-    normalized_excess_demand_y: float
-    market_error: float
-    next_price_x: float | None
+        TatonnementSettings(
+            initial_price_x=self.initial_price_x,
+            adjustment_speed=self.adjustment_speed,
+            tolerance=self.tolerance,
+            max_iterations=self.max_iterations,
+        )
 
 
 @dataclass(frozen=True)
@@ -85,77 +72,15 @@ def _assert_close(a: float, b: float, *, tolerance: float = 1e-8) -> None:
 def discover_price(
     agents: list[Agent], config: Economy01Config
 ) -> tuple[tuple[TatonnementStep, ...], dict[str, float]]:
-    """Discover the relative price using discrete proportional tatonnement.
+    """Preserve the Economy 0.1 API while using the shared price-discovery core."""
 
-    The textbook rule is that a price rises under excess demand and falls under
-    excess supply. We normalize X excess demand by total X so the adjustment
-    speed is dimensionless:
-
-        p_X(t+1) = p_X(t) * [1 + lambda * z_X(t) / X_bar]
-
-    Both markets must be within the numerical clearing tolerance before the
-    search is declared converged. No benchmark/equilibrium price enters this
-    iteration.
-    """
-
-    total_x = sum(agent.holdings["X"] for agent in agents)
-    total_y = sum(agent.holdings["Y"] for agent in agents)
-    price_x = config.initial_price_x
-    steps: list[TatonnementStep] = []
-
-    for iteration in range(config.max_iterations + 1):
-        prices = {"X": price_x, "Y": 1.0}
-        bundles = [agent.optimal_bundle(prices) for agent in agents]
-        demand_x = sum(bundle["X"] for bundle in bundles)
-        demand_y = sum(bundle["Y"] for bundle in bundles)
-        excess_demand_x = demand_x - total_x
-        excess_demand_y = demand_y - total_y
-        normalized_x = excess_demand_x / total_x
-        normalized_y = excess_demand_y / total_y
-        market_error = max(abs(normalized_x), abs(normalized_y))
-
-        if market_error <= config.tolerance:
-            steps.append(
-                TatonnementStep(
-                    iteration=iteration,
-                    price_x=price_x,
-                    supply_x=total_x,
-                    demand_x=demand_x,
-                    excess_demand_x=excess_demand_x,
-                    normalized_excess_demand_x=normalized_x,
-                    supply_y=total_y,
-                    demand_y=demand_y,
-                    excess_demand_y=excess_demand_y,
-                    normalized_excess_demand_y=normalized_y,
-                    market_error=market_error,
-                    next_price_x=None,
-                )
-            )
-            return tuple(steps), prices
-
-        next_price_x = price_x * (1.0 + config.adjustment_speed * normalized_x)
-        if next_price_x <= 0:
-            raise AssertionError("tatonnement produced a non-positive price")
-
-        steps.append(
-            TatonnementStep(
-                iteration=iteration,
-                price_x=price_x,
-                supply_x=total_x,
-                demand_x=demand_x,
-                excess_demand_x=excess_demand_x,
-                normalized_excess_demand_x=normalized_x,
-                supply_y=total_y,
-                demand_y=demand_y,
-                excess_demand_y=excess_demand_y,
-                normalized_excess_demand_y=normalized_y,
-                market_error=market_error,
-                next_price_x=next_price_x,
-            )
-        )
-        price_x = next_price_x
-
-    raise RuntimeError("tatonnement did not converge within max_iterations")
+    settings = TatonnementSettings(
+        initial_price_x=config.initial_price_x,
+        adjustment_speed=config.adjustment_speed,
+        tolerance=config.tolerance,
+        max_iterations=config.max_iterations,
+    )
+    return discover_tatonnement_price(agents, settings)
 
 
 def _settle_trade(

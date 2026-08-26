@@ -26,6 +26,14 @@ The analytic Economy 0 price remains visible as a regression benchmark but is no
 
 Read [`docs/economies/economy_0_1.md`](docs/economies/economy_0_1.md).
 
+## Economy 0.2 — Many-agent pure exchange
+
+Economy 0.2 generalizes the exchange economy from two named agents to an arbitrary population. The canonical laboratory uses ten deterministic heterogeneous agents. Each agent optimizes independently, demands are aggregated, the same Walrasian tâtonnement process discovers the clearing price, and a deterministic clearing procedure matches net sellers to net buyers through the append-only ledger.
+
+The canonical population is deliberately non-random and has an analytic benchmark of `pX=1`, keeping the new many-agent mechanism reproducible and independently testable.
+
+Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
+
 ## Run in GitHub Codespaces
 
 1. In GitHub, select the branch you want to inspect. For work in progress, use its feature branch; for completed economies, use `main`.
