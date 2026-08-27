@@ -14,6 +14,13 @@ from econ_agent_sim.economy_0_2 import (
     canonical_population,
     run_economy_0_2,
 )
+from econ_agent_sim.economy_0_3 import (
+    Economy03Config,
+    Economy03PeriodResult,
+    Economy03Result,
+    canonical_period_populations,
+    run_economy_0_3,
+)
 
 __all__ = [
     "Economy0Config",
@@ -22,10 +29,15 @@ __all__ = [
     "Economy01Result",
     "Economy02Config",
     "Economy02Result",
+    "Economy03Config",
+    "Economy03PeriodResult",
+    "Economy03Result",
     "ExchangeAgentConfig",
     "TatonnementStep",
+    "canonical_period_populations",
     "canonical_population",
     "run_economy_0",
     "run_economy_0_1",
     "run_economy_0_2",
+    "run_economy_0_3",
 ]
