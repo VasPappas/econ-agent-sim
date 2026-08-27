@@ -34,6 +34,10 @@ The canonical population is deliberately non-random and has an analytic benchmar
 
 Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
 
+## Hosted browser app
+
+The simulator is prepared for Streamlit Community Cloud so normal use can happen from a permanent `*.streamlit.app` URL without opening GitHub or Codespaces. The one-time deployment settings are documented in [`docs/deployment.md`](docs/deployment.md). After the first deployment, the live URL will be added here.
+
 ## Run in GitHub Codespaces
 
 1. In GitHub, select the branch you want to inspect. For work in progress, use its feature branch; for completed economies, use `main`.
