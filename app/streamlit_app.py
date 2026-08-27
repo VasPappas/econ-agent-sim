@@ -25,50 +25,47 @@ st.caption(
 
 col0, col1, col2 = st.columns(3, gap="large")
 
-with col0:
-    with st.container(border=True):
-        st.markdown("### Economy 0")
-        st.markdown("**Pure exchange foundation**")
-        st.write(
-            "Two agents, two goods, Cobb-Douglas optimization, analytic equilibrium "
-            "prices, explicit barter settlement, and a fully traceable ledger."
-        )
-        st.caption("New mechanism: the baseline exchange economy")
-        st.page_link(
-            "pages/1_Economy_0_Pure_Exchange.py",
-            label="Open Economy 0 →",
-            use_container_width=True,
-        )
+with col0, st.container(border=True):
+    st.markdown("### Economy 0")
+    st.markdown("**Pure exchange foundation**")
+    st.write(
+        "Two agents, two goods, Cobb-Douglas optimization, analytic equilibrium "
+        "prices, explicit barter settlement, and a fully traceable ledger."
+    )
+    st.caption("New mechanism: the baseline exchange economy")
+    st.page_link(
+        "pages/1_Economy_0_Pure_Exchange.py",
+        label="Open Economy 0 →",
+        width="stretch",
+    )
 
-with col1:
-    with st.container(border=True):
-        st.markdown("### Economy 0.1")
-        st.markdown("**Walrasian price discovery**")
-        st.write(
-            "The same two-agent economy, but the relative price is now discovered "
-            "iteratively through textbook tâtonnement before any trade occurs."
-        )
-        st.caption("New mechanism: endogenous price discovery")
-        st.page_link(
-            "pages/2_Economy_0_1_Walrasian_Price_Discovery.py",
-            label="Open Economy 0.1 →",
-            use_container_width=True,
-        )
+with col1, st.container(border=True):
+    st.markdown("### Economy 0.1")
+    st.markdown("**Walrasian price discovery**")
+    st.write(
+        "The same two-agent economy, but the relative price is now discovered "
+        "iteratively through textbook tâtonnement before any trade occurs."
+    )
+    st.caption("New mechanism: endogenous price discovery")
+    st.page_link(
+        "pages/2_Economy_0_1_Walrasian_Price_Discovery.py",
+        label="Open Economy 0.1 →",
+        width="stretch",
+    )
 
-with col2:
-    with st.container(border=True):
-        st.markdown("### Economy 0.2")
-        st.markdown("**Many-agent pure exchange**")
-        st.write(
-            "The market expands to a deterministic heterogeneous population while "
-            "retaining the same optimization, price discovery, ledger, and accounting."
-        )
-        st.caption("New mechanism: population size and heterogeneity")
-        st.page_link(
-            "pages/3_Economy_0_2_Many_Agent_Exchange.py",
-            label="Open Economy 0.2 →",
-            use_container_width=True,
-        )
+with col2, st.container(border=True):
+    st.markdown("### Economy 0.2")
+    st.markdown("**Many-agent pure exchange**")
+    st.write(
+        "The market expands to a deterministic heterogeneous population while "
+        "retaining the same optimization, price discovery, ledger, and accounting."
+    )
+    st.caption("New mechanism: population size and heterogeneity")
+    st.page_link(
+        "pages/3_Economy_0_2_Many_Agent_Exchange.py",
+        label="Open Economy 0.2 →",
+        width="stretch",
+    )
 
 st.divider()
 st.subheader("How the simulator evolves")
