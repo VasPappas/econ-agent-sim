@@ -18,3 +18,12 @@ def test_home_dashboard_links_to_every_permanent_economy() -> None:
     home_source = (APP_ROOT / "streamlit_app.py").read_text()
     for relative_path in PERMANENT_PAGES:
         assert relative_path in home_source
+
+
+def test_economy_0_2_keeps_tablet_controls_and_accounting_in_main_page() -> None:
+    source = (APP_ROOT / PERMANENT_PAGES[2]).read_text()
+
+    assert "st.sidebar" not in source
+    assert 'st.subheader("Experiment controls")' in source
+    assert 'st.subheader("Stock-flow checkpoint")' in source
+    assert 'st.tabs(["Market process", "Agent decisions"])' in source
