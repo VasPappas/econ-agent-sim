@@ -36,6 +36,14 @@ The canonical population is deliberately non-random and has an analytic benchmar
 
 Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
 
+## Economy 0.3 — Repeated pure exchange
+
+Economy 0.3 introduces explicit time while preserving the Economy 0.2 market inside each period. The same ten agents and preferences repeat across four canonical periods. Aggregate X and Y remain fixed at 10 each, but the distribution of Y endowments rotates across agents, producing a transparent period-by-period price path.
+
+Each period starts from fresh exogenous endowments, runs its own tâtonnement process, settles only after convergence, and records all physical transfers with explicit period labels. Closing stocks are not carried into the next period yet, so time is introduced without also introducing saving, inventory accumulation, or intertemporal wealth dynamics.
+
+Read [`docs/economies/economy_0_3.md`](docs/economies/economy_0_3.md).
+
 ## Hosted browser app
 
 Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.

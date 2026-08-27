@@ -5,6 +5,7 @@ PERMANENT_PAGES = (
     "pages/1_Economy_0_Pure_Exchange.py",
     "pages/2_Economy_0_1_Walrasian_Price_Discovery.py",
     "pages/3_Economy_0_2_Many_Agent_Exchange.py",
+    "pages/4_Economy_0_3_Repeated_Exchange.py",
 )
 
 
@@ -27,3 +28,15 @@ def test_economy_0_2_keeps_tablet_controls_and_accounting_in_main_page() -> None
     assert 'st.subheader("Experiment controls")' in source
     assert 'st.subheader("Stock-flow checkpoint")' in source
     assert 'st.tabs(["Market process", "Agent decisions"])' in source
+
+
+def test_economy_0_3_keeps_period_centered_tablet_layout() -> None:
+    source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
+
+    assert "st.sidebar" not in source
+    assert 'st.subheader("Experiment controls")' in source
+    assert 'st.subheader("Across-period view")' in source
+    assert '"Endowments & price"' in source
+    assert '"Accounting"' in source
+    assert '"Full multi-period ledger"' in source
+    assert "Closing stocks from one period are not" in source
