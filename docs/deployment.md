@@ -1,16 +1,20 @@
 # Streamlit Community Cloud deployment
 
-The simulator is designed to run as a normal browser app on Streamlit Community Cloud, with GitHub `main` as the source of truth.
+The simulator runs as a normal browser app on Streamlit Community Cloud, with GitHub `main` as the source of truth.
 
-## One-time deployment settings
+## Live app
 
-Use these values when creating the app in Streamlit Community Cloud:
+Permanent URL: https://econ-agent-sim.streamlit.app
+
+This URL is the preferred way to use the simulator from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
+
+## Deployment settings
 
 - Repository: `VasPappas/econ-agent-sim`
 - Branch: `main`
 - Entrypoint file: `app/streamlit_app.py`
 - Python: `3.11`
-- Suggested app subdomain: `econ-agent-sim` if available
+- App subdomain: `econ-agent-sim`
 - Secrets: none required
 
 Because the repository is public, the deployed app can be public as well.
@@ -21,8 +25,4 @@ Community Cloud reads `requirements.txt` from the repository root. That file ins
 
 ## Update behavior
 
-After the first deployment, `main` remains authoritative. Changes merged into `main` are picked up by Streamlit Community Cloud automatically. Dependency changes trigger a redeploy.
-
-## After first deployment
-
-Copy the permanent `*.streamlit.app` URL into the root README so the simulator can be opened directly from a tablet or any other browser without using GitHub or Codespaces.
+`main` remains authoritative. Changes merged into `main` are picked up by Streamlit Community Cloud automatically. Dependency changes trigger a redeploy.
