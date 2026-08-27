@@ -10,11 +10,36 @@ if "economy02_config" not in st.session_state:
 if "economy02_stage" not in st.session_state:
     st.session_state.economy02_stage = 0
 
+st.caption("SIMULATOR / ECONOMY 0.2 / MANY-AGENT EXCHANGE")
 st.title("Economy 0.2 — Many-Agent Pure Exchange")
 st.caption(
-    "Ten deterministic heterogeneous agents, the same two goods and "
-    "Cobb-Douglas optimization, and the same Walrasian price-discovery rule."
+    "The same two-good exchange model now supports an arbitrary heterogeneous "
+    "population; the canonical laboratory uses ten deterministic agents."
 )
+
+nav_home, nav_prev, nav_space = st.columns([1.2, 1.6, 5])
+with nav_home:
+    st.page_link("streamlit_app.py", label="← Simulator home", use_container_width=True)
+with nav_prev:
+    st.page_link(
+        "pages/2_Economy_0_1_Walrasian_Price_Discovery.py",
+        label="← Economy 0.1",
+        use_container_width=True,
+    )
+
+agents_col, goods_col, price_col, new_col = st.columns(4)
+agents_col.metric("Canonical agents", "10")
+goods_col.metric("Goods", "2")
+price_col.metric("Price formation", "Tâtonnement")
+new_col.metric("New mechanism", "Heterogeneity")
+
+with st.expander("What changed from Economy 0.1", expanded=False):
+    st.write(
+        "Only population size and heterogeneity changed. The engine now works with "
+        "an arbitrary collection of named agents instead of being built around Alice "
+        "and Bob. Price discovery, optimization, settlement, the ledger, and stock-flow "
+        "accounting keep the same logic."
+    )
 
 current = st.session_state.economy02_config
 
@@ -240,14 +265,12 @@ else:
         st.dataframe(history_rows, use_container_width=True, hide_index=True)
 
 st.divider()
-st.subheader("What Economy 0.2 added")
+st.subheader("Version boundary")
 st.write(
-    "Only population size and heterogeneity changed. The engine now works with "
-    "an arbitrary collection of named agents rather than being built around "
-    "Alice and Bob. Prices, optimization, settlement, the ledger, and stock-flow "
-    "accounting retain the same textbook logic."
+    "Economy 0.2 changes population size and heterogeneity only. There is still no "
+    "money, production, time, banking, government, saving, or randomness."
 )
 st.caption(
-    "The canonical ten-agent population is deterministic, not random, so the "
-    "economy remains exactly reproducible."
+    "The canonical ten-agent population is deterministic so the economy remains "
+    "exactly reproducible."
 )

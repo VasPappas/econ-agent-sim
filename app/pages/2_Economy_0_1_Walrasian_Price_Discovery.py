@@ -11,11 +11,41 @@ if "economy01_config" not in st.session_state:
 if "economy01_stage" not in st.session_state:
     st.session_state.economy01_stage = 0
 
+st.caption("SIMULATOR / ECONOMY 0.1 / PRICE DISCOVERY")
 st.title("Economy 0.1 — Walrasian Price Discovery")
 st.caption(
-    "Same pure-exchange economy as Economy 0, now discovering the relative price "
-    "through textbook tâtonnement."
+    "The Economy 0 exchange problem is preserved, but the relative price is now "
+    "discovered through textbook tâtonnement before any trade occurs."
 )
+
+nav_home, nav_prev, nav_next, nav_space = st.columns([1.2, 1.5, 1.5, 4])
+with nav_home:
+    st.page_link("streamlit_app.py", label="← Simulator home", use_container_width=True)
+with nav_prev:
+    st.page_link(
+        "pages/1_Economy_0_Pure_Exchange.py",
+        label="← Economy 0",
+        use_container_width=True,
+    )
+with nav_next:
+    st.page_link(
+        "pages/3_Economy_0_2_Many_Agent_Exchange.py",
+        label="Economy 0.2 →",
+        use_container_width=True,
+    )
+
+agents_col, goods_col, price_col, new_col = st.columns(4)
+agents_col.metric("Agents", "2")
+goods_col.metric("Goods", "2")
+price_col.metric("Price formation", "Tâtonnement")
+new_col.metric("New mechanism", "Price discovery")
+
+with st.expander("What changed from Economy 0", expanded=False):
+    st.write(
+        "Only price formation changed. Endowments, Cobb-Douglas optimization, barter "
+        "settlement, the append-only ledger, and stock-flow accounting are inherited "
+        "from Economy 0. No holdings change while tâtonnement searches for the price."
+    )
 
 current = st.session_state.economy01_config
 exchange = current.exchange
@@ -152,7 +182,9 @@ with left:
     st.subheader("Price discovery")
 
     benchmark_col, discovered_col = st.columns(2)
-    benchmark_col.metric("Economy 0 analytic benchmark pX", f"{result.benchmark_price_x:.6f}")
+    benchmark_col.metric(
+        "Economy 0 analytic benchmark pX", f"{result.benchmark_price_x:.6f}"
+    )
     discovered_col.metric("Numeraire pY", "1.000000")
     st.caption(
         "The benchmark is displayed for validation only. The tâtonnement update "
@@ -234,7 +266,9 @@ with right:
         st.caption("No trade during tâtonnement: holdings remain at opening stocks.")
         rows = accounting_rows(result, 0)
     else:
-        st.caption("Settlement executed: flows now reconcile opening and closing stocks.")
+        st.caption(
+            "Settlement executed: flows now reconcile opening and closing stocks."
+        )
         rows = accounting_rows(result)
 
     st.dataframe(rows, use_container_width=True, hide_index=True)
@@ -242,11 +276,10 @@ with right:
         st.success("All accounting checks = 0")
 
 st.divider()
-st.subheader("What Economy 0.1 added")
+st.subheader("Version boundary")
 st.write(
-    "Only price discovery changed. Preferences, endowments, optimization, barter "
-    "settlement, the ledger, and stock-flow accounting are inherited from the "
-    "Economy 0 framework."
+    "Economy 0.1 adds price discovery and nothing else. There is still no money, "
+    "production, time, banking, government, or randomness."
 )
 st.caption(
     "Walrasian tâtonnement is a textbook theoretical benchmark, not a literal "
