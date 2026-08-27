@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 APP_ROOT = Path("app")
 PERMANENT_PAGES = (
     "pages/1_Economy_0_Pure_Exchange.py",
