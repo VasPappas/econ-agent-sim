@@ -2,6 +2,8 @@
 
 An educational, auditable agent-based economic simulator built one economy at a time.
 
+**Live app:** https://econ-agent-sim.streamlit.app
+
 ## Design principles
 
 1. **Start from the smallest textbook economy.** Add one mechanism at a time.
@@ -36,7 +38,9 @@ Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
 
 ## Hosted browser app
 
-The simulator is prepared for Streamlit Community Cloud so normal use can happen from a permanent `*.streamlit.app` URL without opening GitHub or Codespaces. The one-time deployment settings are documented in [`docs/deployment.md`](docs/deployment.md). After the first deployment, the live URL will be added here.
+Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
+
+Deployment details are documented in [`docs/deployment.md`](docs/deployment.md).
 
 ## Run in GitHub Codespaces
 
