@@ -56,7 +56,6 @@ with st.container(horizontal=True, wrap=False, gap="small"):
                 step=0.1,
             )
             apply_settings = st.form_submit_button("Apply", width="stretch")
-
         reset_experiment = st.button(
             "Reset to baseline",
             key="economy03_reset_experiment",
@@ -83,39 +82,34 @@ with st.expander("Add a redistribution", expanded=len(period_populations) == 1):
         "Create the next period by moving Y from one agent to another. Total Y stays "
         "fixed, so this is redistribution rather than creation or destruction."
     )
-    sender_name = st.selectbox(
-        "Move Y from",
-        options=agent_names,
-        key="economy03_sender",
-    )
+    sender_name = st.selectbox("Move Y from", agent_names, key="economy03_sender")
     receiver_name = st.selectbox(
         "Move Y to",
-        options=agent_names,
+        agent_names,
         index=1,
         key="economy03_receiver",
     )
     sender = next(agent for agent in latest_population if agent.name == sender_name)
-    usable_y = max(0.01, float(sender.y))
     amount = st.number_input(
         "Amount of Y",
         min_value=0.01,
-        max_value=usable_y,
-        value=min(0.5, usable_y),
+        value=0.1,
         step=0.1,
         key="economy03_redistribution_amount",
     )
-    st.caption(
-        f"{sender_name} currently has {sender.y:.2f} Y in the latest period."
-    )
-    add_disabled = sender_name == receiver_name or sender.y < 0.01
+    st.caption(f"{sender_name} currently has {sender.y:.2f} Y in the latest period.")
+    invalid_pair = sender_name == receiver_name
+    insufficient_y = amount > sender.y
     add_redistribution = st.button(
         "Add as next period",
         type="primary",
-        disabled=add_disabled,
+        disabled=invalid_pair or insufficient_y or sender.y < 0.01,
         width="stretch",
     )
-    if sender_name == receiver_name:
+    if invalid_pair:
         st.caption("Choose two different agents.")
+    if insufficient_y:
+        st.caption("The redistribution cannot exceed the sender's current Y.")
 
 if add_redistribution:
     new_population = redistribute_y(
@@ -124,25 +118,23 @@ if add_redistribution:
         receiver_name=receiver_name,
         amount=float(amount),
     )
-    st.session_state.economy03_period_populations = (
-        *period_populations,
-        new_population,
-    )
+    st.session_state.economy03_period_populations = (*period_populations, new_population)
     st.session_state.economy03_period_picker = (
         f"Redistribution {len(period_populations)}"
     )
     st.session_state.economy03_view_picker = "Overview"
     st.rerun()
 
-if len(period_populations) > 1:
-    if st.button("Remove last redistribution", width="stretch"):
-        st.session_state.economy03_period_populations = period_populations[:-1]
-        st.session_state.economy03_period_picker = (
-            "Baseline"
-            if len(period_populations) == 2
-            else f"Redistribution {len(period_populations) - 2}"
-        )
-        st.rerun()
+if len(period_populations) > 1 and st.button(
+    "Remove last redistribution", width="stretch"
+):
+    st.session_state.economy03_period_populations = period_populations[:-1]
+    st.session_state.economy03_period_picker = (
+        "Baseline"
+        if len(period_populations) == 2
+        else f"Redistribution {len(period_populations) - 2}"
+    )
+    st.rerun()
 
 config = Economy03Config(
     period_populations=st.session_state.economy03_period_populations,
@@ -183,7 +175,6 @@ accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
 market_ok = final_step.market_error <= config.tolerance
 start_price_x = period.steps[0].price_x
 adjustments = period.steps[-1].iteration
-
 previous_period = result.periods[selected_index - 1] if selected_index > 0 else None
 previous_price = previous_period.prices["X"] if previous_period else None
 price_change = (
@@ -206,21 +197,14 @@ with st.container(horizontal=True, wrap=False, gap="small"):
 
 if view == "Overview":
     st.subheader("Overview")
-
     price_history = [
         {"step": index, "equilibrium pX": item.prices["X"]}
         for index, item in enumerate(result.periods)
     ]
     if len(price_history) > 1:
-        st.line_chart(
-            price_history,
-            x="step",
-            y="equilibrium pX",
-            height=210,
-        )
+        st.line_chart(price_history, x="step", y="equilibrium pX", height=210)
 
     current_pressure = sum(agent.alpha * agent.y for agent in period.population)
-
     if previous_period is None:
         st.write(
             "**Baseline:** this is the Economy 0.2 endowment distribution. Nothing "
@@ -240,19 +224,29 @@ if view == "Overview":
             agent.alpha * agent.y for agent in previous_period.population
         )
         pressure_change = current_pressure - previous_pressure
-        direction = "increased" if pressure_change > 0 else "decreased"
-        price_direction = "rose" if price_change and price_change > 0 else "fell"
+        if pressure_change > 1e-12:
+            pressure_direction = "increased"
+        elif pressure_change < -1e-12:
+            pressure_direction = "decreased"
+        else:
+            pressure_direction = "left unchanged"
+
+        if price_change > 1e-12:
+            price_direction = "rose"
+        elif price_change < -1e-12:
+            price_direction = "fell"
+        else:
+            price_direction = "was unchanged"
 
         st.markdown(
             f"**pX {previous_price:.4f} → {period.prices['X']:.4f}** "
             f"({price_change:+.1f}%)"
         )
         st.write(
-            f"The redistribution {direction} the Y-weighted demand pressure for X "
-            f"from {previous_pressure:.3f} to {current_pressure:.3f}. "
-            f"Accordingly, equilibrium pX {price_direction}."
+            f"The redistribution {pressure_direction} the Y-weighted demand pressure "
+            f"for X from {previous_pressure:.3f} to {current_pressure:.3f}. "
+            f"Equilibrium pX {price_direction}."
         )
-
         previous_by_name = {agent.name: agent for agent in previous_period.population}
         changed_agents = []
         for agent in period.population:
@@ -285,15 +279,9 @@ elif view == "Market":
     st.subheader("Market")
     total_x = sum(spec.x for spec in period.population)
     total_y = sum(spec.y for spec in period.population)
-
     with st.container(horizontal=True, wrap=False, gap="small"):
         st.metric("Start pX", f"{start_price_x:.3f}", border=True, width=120)
-        st.metric(
-            "Equilibrium",
-            f"{period.prices['X']:.4f}",
-            border=True,
-            width=130,
-        )
+        st.metric("Equilibrium", f"{period.prices['X']:.4f}", border=True, width=130)
         st.metric("λ", f"{config.adjustment_speed:.1f}", border=True, width=85)
         st.metric("Adjustments", adjustments, border=True, width=125)
 
@@ -303,11 +291,7 @@ elif view == "Market":
     for step in period.steps:
         convergence_rows.extend(
             [
-                {
-                    "iteration": step.iteration,
-                    "series": "Trial pX",
-                    "pX": step.price_x,
-                },
+                {"iteration": step.iteration, "series": "Trial pX", "pX": step.price_x},
                 {
                     "iteration": step.iteration,
                     "series": "Equilibrium benchmark",
@@ -315,7 +299,6 @@ elif view == "Market":
                 },
             ]
         )
-
     convergence_chart = (
         alt.Chart(alt.Data(values=convergence_rows))
         .mark_line(point=True)
@@ -346,7 +329,6 @@ elif view == "Market":
         "Neither changes the equilibrium implied by this period's endowments and "
         "preferences."
     )
-
     st.markdown("**Final clearing check**")
     st.dataframe(
         [
@@ -366,7 +348,6 @@ elif view == "Market":
         width="stretch",
         hide_index=True,
     )
-
     with st.expander("Price-discovery iterations"):
         st.dataframe(
             [
@@ -387,7 +368,6 @@ elif view == "Market":
 else:
     st.subheader("Audit")
     st.caption("Full traceability is still here, but it is no longer the default view.")
-
     with st.expander("Agent decisions"):
         decision_rows = []
         for spec in period.population:
@@ -405,11 +385,9 @@ else:
                 }
             )
         st.dataframe(decision_rows, width="stretch", hide_index=True)
-
     with st.expander("Stock-flow accounts"):
         st.caption("Identity: closing stock = opening stock + ledgered net flow.")
         st.dataframe(rows, width="stretch", hide_index=True)
-
     with st.expander("Period settlement ledger"):
         st.dataframe(transaction_rows(period), width="stretch", hide_index=True)
 
@@ -430,8 +408,7 @@ else:
                 )
             st.caption(
                 "The user-defined redistribution sets the next period's exogenous "
-                "opening endowments. It is not a market transaction and therefore "
-                "does not appear in the settlement ledger."
+                "opening endowments. It is not a market transaction."
             )
             st.dataframe(reset_rows, width="stretch", hide_index=True)
 
