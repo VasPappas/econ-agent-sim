@@ -30,13 +30,19 @@ def test_economy_0_2_keeps_tablet_controls_and_accounting_in_main_page() -> None
     assert 'st.tabs(["Market process", "Agent decisions"])' in source
 
 
-def test_economy_0_3_keeps_period_centered_tablet_layout() -> None:
+def test_economy_0_3_keeps_mobile_first_progressive_disclosure() -> None:
     source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
 
+    assert 'layout="centered"' in source
+    assert 'initial_sidebar_state="collapsed"' in source
     assert "st.sidebar" not in source
-    assert 'st.subheader("Experiment controls")' in source
-    assert 'st.subheader("Across-period view")' in source
-    assert '"Endowments & price"' in source
-    assert '"Accounting"' in source
-    assert '"Full multi-period ledger"' in source
-    assert "Closing stocks from one period are not" in source
+    assert 'st.popover("Settings"' in source
+    assert source.count("st.pills(") == 2
+    assert 'options=("Overview", "Market", "Agents", "Accounts", "Ledger")' in source
+    assert "horizontal=True, wrap=False" in source
+    assert 'if view == "Overview"' in source
+    assert 'elif view == "Market"' in source
+    assert 'elif view == "Agents"' in source
+    assert 'elif view == "Accounts"' in source
+    assert 'with st.expander("Full multi-period ledger")' in source
+    assert 'with st.expander("Model boundary")' in source
