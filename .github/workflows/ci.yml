@@ -16,3 +16,26 @@ jobs:
       - run: python -c "import streamlit; import econ_agent_sim"
       - run: ruff check .
       - run: pytest -q
+      - name: Smoke-test Streamlit server
+        run: |
+          streamlit run app/streamlit_app.py \
+            --server.headless true \
+            --server.address 127.0.0.1 \
+            --server.port 8501 \
+            > /tmp/streamlit.log 2>&1 &
+          streamlit_pid=$!
+          trap 'kill "$streamlit_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health; then
+              exit 0
+            fi
+            if ! kill -0 "$streamlit_pid" 2>/dev/null; then
+              cat /tmp/streamlit.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          cat /tmp/streamlit.log
+          exit 1

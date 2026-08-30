@@ -21,7 +21,9 @@ Because the repository is public, the deployed app can be public as well.
 
 ## Dependencies
 
-Community Cloud reads `requirements.txt` from the repository root. That file installs the project together with its `app` extra. The Streamlit version is pinned in `pyproject.toml` so browser deployment and Codespaces use the same declared app dependency.
+Community Cloud reads `requirements.txt` from the repository root. That file installs the project together with its `app` extra. Streamlit is pinned to `1.62.0`, and Starlette is pinned to `1.6.0`, so Community Cloud cannot resolve an older incompatible Starlette server build during a fresh redeploy.
+
+CI installs the same app dependencies and now starts a real Streamlit server and checks its health endpoint after linting and tests. This catches server-startup failures that an in-process Streamlit `AppTest` alone would not detect.
 
 ## Update behavior
 
