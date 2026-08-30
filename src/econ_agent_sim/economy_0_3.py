@@ -12,17 +12,23 @@ from econ_agent_sim.economy_0_2 import (
 from econ_agent_sim.ledger import Transaction
 from econ_agent_sim.price_discovery import TatonnementStep
 
-CANONICAL_PERIOD_COUNT = 4
+LEGACY_CANONICAL_PERIOD_COUNT = 4
+
+
+def baseline_period_populations() -> tuple[tuple[ExchangeAgentConfig, ...], ...]:
+    """Return the one-period Economy 0.3 baseline used by the interactive app."""
+
+    return (canonical_population(),)
 
 
 def canonical_period_populations() -> tuple[tuple[ExchangeAgentConfig, ...], ...]:
-    """Return the deterministic four-period Economy 0.3 endowment schedule."""
+    """Return the original four-period rotating-Y schedule for reproducibility."""
 
     base = canonical_population()
     y_endowments = tuple(agent.y for agent in base)
     periods: list[tuple[ExchangeAgentConfig, ...]] = []
 
-    for shift in range(CANONICAL_PERIOD_COUNT):
+    for shift in range(LEGACY_CANONICAL_PERIOD_COUNT):
         if shift == 0:
             rotated_y = y_endowments
         else:
@@ -43,12 +49,58 @@ def canonical_period_populations() -> tuple[tuple[ExchangeAgentConfig, ...], ...
     return tuple(periods)
 
 
+def redistribute_y(
+    population: tuple[ExchangeAgentConfig, ...],
+    *,
+    sender_name: str,
+    receiver_name: str,
+    amount: float,
+) -> tuple[ExchangeAgentConfig, ...]:
+    """Create a new period by moving an amount of Y between two existing agents."""
+
+    if amount <= 0:
+        raise ValueError("redistribution amount must be strictly positive")
+    if sender_name == receiver_name:
+        raise ValueError("sender and receiver must be different agents")
+
+    by_name = {agent.name: agent for agent in population}
+    if sender_name not in by_name:
+        raise ValueError(f"unknown sender: {sender_name}")
+    if receiver_name not in by_name:
+        raise ValueError(f"unknown receiver: {receiver_name}")
+
+    sender = by_name[sender_name]
+    if amount > sender.y + 1e-12:
+        raise ValueError(
+            f"{sender_name} only has {sender.y:.6g} units of Y available"
+        )
+
+    redistributed: list[ExchangeAgentConfig] = []
+    for agent in population:
+        new_y = agent.y
+        if agent.name == sender_name:
+            new_y -= amount
+        elif agent.name == receiver_name:
+            new_y += amount
+
+        redistributed.append(
+            ExchangeAgentConfig(
+                name=agent.name,
+                x=agent.x,
+                y=new_y,
+                alpha=agent.alpha,
+            )
+        )
+
+    return tuple(redistributed)
+
+
 @dataclass(frozen=True)
 class Economy03Config:
     """Inputs for repeated pure exchange with fresh exogenous endowments."""
 
     period_populations: tuple[tuple[ExchangeAgentConfig, ...], ...] = field(
-        default_factory=canonical_period_populations
+        default_factory=baseline_period_populations
     )
     initial_price_x: float = 0.5
     adjustment_speed: float = 1.0
