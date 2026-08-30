@@ -77,6 +77,14 @@ The initial trial price is a **numerical starting point for the price search**, 
 
 For example, period 1 has an equilibrium of `pX = 1`. Starting at `pX = 1` clears immediately, while starting below or above 1 requires tâtonnement adjustments before reaching the same equilibrium.
 
+The adjustment-speed parameter `lambda` controls how large each price response is:
+
+\[
+p_{X,t+1}=p_{X,t}\left[1+\lambda\frac{z_X(t)}{\bar X}\right].
+\]
+
+A smaller `lambda` therefore produces smaller price changes and slower numerical convergence, while leaving the equilibrium unchanged. In the canonical first period with Initial pX = 0.5, `lambda = 1.0` converges in 25 adjustments whereas `lambda = 0.1` requires 355 adjustments under the default tolerance.
+
 No physical transfer occurs during price discovery. Agents repeatedly calculate optimal demands at trial prices, aggregate excess demand is measured, and the relative price changes until both markets clear within tolerance.
 
 Using the same initial trial price every period is intentional. Economy 0.3 does not yet give prices memory from one period to the next.
@@ -126,9 +134,11 @@ These restrictions isolate the new mechanism to **distribution changing through 
 
 ## Streamlit interface
 
-The Economy 0.3 page is mobile-first and uses progressive disclosure. The default Overview shows the cross-period equilibrium-price path and a compact status strip. It now also displays the selected period's **Start pX**, **Equilibrium pX**, and **Adjustments** so the effect of the configured initial trial price is visible without opening a detailed table.
+The Economy 0.3 page is mobile-first and uses progressive disclosure. The default Overview shows the cross-period equilibrium-price path and a compact status strip. It also displays the selected period's **Start pX**, **Equilibrium pX**, and **Adjustments** so the price-search configuration is visible without opening a detailed table.
 
-The Market view shows the full within-period tâtonnement path from the configured starting price to the equilibrium. Agent, accounting, and ledger details remain available through the compact drill-down views and full audit expanders.
+The Market view shows the full within-period tâtonnement path from the configured starting price to equilibrium. It displays `lambda` explicitly and uses comparable price and adjustment axes for ordinary runs. This prevents automatic chart scaling from making a 25-adjustment path and a 355-adjustment path look artificially similar.
+
+Agent, accounting, and ledger details remain available through the compact drill-down views and full audit expanders.
 
 For periods after the first, the interface explicitly compares the previous period's closing stocks with the new period's opening endowments so the exogenous reset is visible rather than implicit.
 
