@@ -59,6 +59,27 @@ def test_configured_initial_price_starts_every_period_tatonnement() -> None:
     assert result.periods[0].steps[-1].iteration > 0
 
 
+def test_lower_lambda_slows_tatonnement_without_changing_equilibrium() -> None:
+    fast = run_economy_0_3(Economy03Config(adjustment_speed=1.0))
+    slow = run_economy_0_3(Economy03Config(adjustment_speed=0.1))
+
+    for fast_period, slow_period in zip(fast.periods, slow.periods, strict=True):
+        assert slow_period.steps[-1].iteration > fast_period.steps[-1].iteration
+        assert isclose(
+            slow_period.prices["X"],
+            fast_period.prices["X"],
+            abs_tol=1e-8,
+        )
+        assert isclose(
+            slow_period.prices["X"],
+            slow_period.benchmark_price_x,
+            abs_tol=1e-8,
+        )
+
+    assert fast.periods[0].steps[-1].iteration == 25
+    assert slow.periods[0].steps[-1].iteration == 355
+
+
 def test_next_period_uses_fresh_endowments_not_previous_closing_stocks() -> None:
     result = run_economy_0_3()
     first, second = result.periods[:2]
