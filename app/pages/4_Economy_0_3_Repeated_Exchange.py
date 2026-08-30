@@ -1,3 +1,4 @@
+import altair as alt
 import streamlit as st
 
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
@@ -136,6 +137,10 @@ if view == "Overview":
     )
 
     st.caption(
+        "This chart shows equilibrium prices across periods, so it does not change "
+        "when only the initial trial price changes."
+    )
+    st.caption(
         f"Selected period price search: pX {start_price_x:.3f} → "
         f"{period.prices['X']:.4f} · λ {config.adjustment_speed:.1f} · "
         f"{adjustments} adjustments"
@@ -209,18 +214,49 @@ elif view == "Market":
         "Changing the start changes this path, while the same economy converges to "
         "the same equilibrium."
     )
-    st.line_chart(
-        [
-            {
-                "iteration": step.iteration,
-                "trial pX": step.price_x,
-                "benchmark": period.benchmark_price_x,
-            }
-            for step in period.steps
-        ],
-        x="iteration",
-        y=["trial pX", "benchmark"],
-        height=240,
+
+    comparison_ceiling = max(2.0, start_price_x, period.benchmark_price_x) * 1.05
+    convergence_rows = []
+    for step in period.steps:
+        convergence_rows.extend(
+            [
+                {
+                    "iteration": step.iteration,
+                    "series": "Trial pX",
+                    "pX": step.price_x,
+                },
+                {
+                    "iteration": step.iteration,
+                    "series": "Equilibrium benchmark",
+                    "pX": period.benchmark_price_x,
+                },
+            ]
+        )
+
+    convergence_chart = (
+        alt.Chart(alt.Data(values=convergence_rows))
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("iteration:Q", title="Adjustment", axis=alt.Axis(tickMinStep=1)),
+            y=alt.Y(
+                "pX:Q",
+                title="pX",
+                scale=alt.Scale(domain=[0.0, comparison_ceiling]),
+            ),
+            color=alt.Color("series:N", title=None),
+            tooltip=[
+                alt.Tooltip("iteration:Q", title="Adjustment", format=".0f"),
+                alt.Tooltip("series:N", title="Series"),
+                alt.Tooltip("pX:Q", title="pX", format=".6f"),
+            ],
+        )
+        .properties(height=240)
+    )
+    st.altair_chart(convergence_chart, width="stretch")
+    st.caption(
+        "For starting prices up to 2.0, the vertical scale stays fixed at 0–2.1. "
+        "That prevents automatic rescaling from making different starting prices "
+        "look artificially similar."
     )
 
     st.markdown("**Final clearing check**")
