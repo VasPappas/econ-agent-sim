@@ -13,7 +13,7 @@ The completed economies remain separate runnable pages under `app/pages/`:
 1. `1_Economy_0_Pure_Exchange.py` — two-agent pure exchange with analytic equilibrium pricing.
 2. `2_Economy_0_1_Walrasian_Price_Discovery.py` — the same exchange economy with tâtonnement price discovery.
 3. `3_Economy_0_2_Many_Agent_Exchange.py` — many-agent heterogeneous pure exchange.
-4. `4_Economy_0_3_Repeated_Exchange.py` — repeated many-agent exchange with explicit periods and fresh exogenous endowments.
+4. `4_Economy_0_3_Repeated_Exchange.py` — repeated many-agent exchange with user-defined exogenous redistribution across periods.
 
 The economic engine remains independent from these pages. UI changes must not alter equilibrium, settlement, ledger, or accounting logic.
 
@@ -25,29 +25,33 @@ The stock-flow checkpoint remains outside those tabs and is displayed at every s
 
 A headless Streamlit `AppTest` executes the Economy 0.2 page in CI so UI refactors can catch runtime Streamlit errors in addition to the existing engine tests and Ruff checks.
 
-## Economy 0.3 mobile-first prototype
+## Economy 0.3 mobile-first redistribution experiment
 
-Economy 0.3 is the first phone-first interface. It uses a centered layout and starts with the Streamlit sidebar collapsed so the economic content receives the available screen width.
+Economy 0.3 is phone-first and uses a centered layout with the Streamlit sidebar collapsed. Its default state is intentionally small: one **Baseline** period reproducing the Economy 0.2 canonical endowment distribution.
 
-The mobile information hierarchy is deliberately progressive:
+The user creates time explicitly by adding redistributions. Each action chooses a sender, a receiver, and an amount of Y to move. The next period inherits the latest exogenous endowment schedule with only that redistribution applied. Total Y remains fixed, while X endowments, agent identities, and Cobb-Douglas preferences remain unchanged. The user can add as many redistribution periods as desired, remove the latest one, or reset the experiment to the baseline.
 
-1. choose a period with a compact pills control;
-2. choose `Overview`, `Market`, `Agents`, `Accounts`, or `Ledger` with a second pills control;
-3. show only the selected view below those controls; and
-4. place full audit tables behind explicit expanders rather than deleting them.
+The top-level mobile information hierarchy is deliberately shorter than before:
 
-Experiment parameters have moved into a small `Settings` popover. The default `Overview` therefore contains only the cross-period price path, a horizontally scrollable result strip, market/accounting status, a short explanation of the price movement, and the optional exogenous-reset audit for periods after the first.
+1. add an optional redistribution;
+2. choose `Baseline` or one of the user-created redistribution periods;
+3. choose only `Overview`, `Market`, or `Audit`; and
+4. reveal detailed tables through explicit expanders when needed.
 
-The `Market` view contains aggregate supply, the within-period tâtonnement path, the final clearing check, and an expandable iteration table. `Agents` starts with a compact opening-stock/net-demand table and keeps the full optimization table in an expander. `Accounts` summarizes the stock-flow and conservation checks before showing the compact reconciliation. `Ledger` begins with a four-column transfer view and keeps the complete period ledger, final-allocation audit, and multi-period ledger available through expanders.
+`Overview` is the main teaching surface. It shows the equilibrium-price history only when multiple periods exist, the selected period's equilibrium price and accounting status, the exact agents whose Y endowments changed, and the change in `sum(alpha_i * y_i)`. That weighted Y measure makes the causal link between redistribution and X demand pressure visible without asking the user to infer it from an arbitrary four-period path.
 
-Horizontal metric strips use Streamlit's no-wrap horizontal container so they remain one compact, touch-scrollable row on narrow screens instead of stacking into a tall column.
+`Market` keeps the full within-period tâtonnement audit. Initial pX remains the numerical starting point, lambda remains the adjustment speed, and the chart uses comparable price and adjustment axes so those parameters do not disappear visually through automatic rescaling.
 
-The guiding rule is **result first, explanation second, audit detail third**. Nothing required for traceability is removed; detailed material is progressively disclosed when the user asks for it.
+`Audit` contains the complete agent decision table, stock-flow accounts, period settlement ledger, exogenous reset comparison, and full multi-period ledger. Nothing needed for traceability is removed; it is simply one level deeper than the primary economic result.
 
-The Economy 0.3 headless `AppTest` executes every mobile view in CI, including a later-period run that exercises the exogenous-reset path.
+The original four-period rotating-Y schedule is retained in the engine as a legacy deterministic example for reproducibility, but it is no longer the default Streamlit experience.
+
+The guiding rule remains **result first, explanation second, audit detail third**.
+
+The Economy 0.3 headless `AppTest` verifies both the one-period baseline and an injected user-defined redistribution period, then exercises the Market and Audit views.
 
 ## Design rule
 
 A new economy should add a new page rather than replacing an older one. The home dashboard should be updated at the same time so the model progression remains understandable from the browser interface.
 
-When the Economy 0.3 phone layout has been reviewed on a real device, its successful interaction patterns can be propagated backward to the older permanent economy pages. That propagation should remain a UI-only change and preserve every completed economy's model behavior.
+Successful mobile interaction patterns can be propagated backward to older permanent economy pages as UI-only changes while preserving their model behavior.

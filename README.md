@@ -38,9 +38,11 @@ Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
 
 ## Economy 0.3 — Repeated pure exchange
 
-Economy 0.3 introduces explicit time while preserving the Economy 0.2 market inside each period. The same ten agents and preferences repeat across four canonical periods. Aggregate X and Y remain fixed at 10 each, but the distribution of Y endowments rotates across agents, producing a transparent period-by-period price path.
+Economy 0.3 introduces explicit time while preserving the Economy 0.2 market inside each period. The default experiment now begins with a single baseline period. The user may then add as many new periods as desired by moving a chosen amount of Y from one agent to another while total X, total Y, identities, and preferences remain fixed.
 
-Each period starts from fresh exogenous endowments, runs its own tâtonnement process, settles only after convergence, and records all physical transfers with explicit period labels. Closing stocks are not carried into the next period yet, so time is introduced without also introducing saving, inventory accumulation, or intertemporal wealth dynamics.
+Each added period starts from that user-defined exogenous endowment schedule, runs its own tâtonnement process, settles only after convergence, and records all physical transfers with explicit period labels. Closing stocks are not carried into the next period yet, so time is introduced without also introducing saving, inventory accumulation, or intertemporal wealth dynamics.
+
+The original deterministic four-period rotating-Y schedule remains available in the engine as a legacy reproducible example, but it is no longer the default app experience.
 
 Read [`docs/economies/economy_0_3.md`](docs/economies/economy_0_3.md).
 

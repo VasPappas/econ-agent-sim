@@ -30,30 +30,32 @@ def test_economy_0_2_keeps_tablet_controls_and_accounting_in_main_page() -> None
     assert 'st.tabs(["Market process", "Agent decisions"])' in source
 
 
-def test_economy_0_3_keeps_mobile_first_progressive_disclosure() -> None:
+def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
 
     assert 'layout="centered"' in source
     assert 'initial_sidebar_state="collapsed"' in source
     assert "st.sidebar" not in source
+    assert 'st.title("Redistribution experiment")' in source
     assert 'st.popover("Settings"' in source
-    assert '"Initial trial pX"' in source
-    assert '"Start pX"' in source
-    assert '"Equilibrium pX"' in source
-    assert '"Adjustments"' in source
-    assert '"λ"' in source
-    assert "period.steps[0].price_x" in source
-    assert "comparison_ceiling = max(2.0, start_price_x" in source
-    assert "comparison_adjustment_ceiling = max(400, adjustments)" in source
-    assert "alt.Scale(domain=[0, comparison_adjustment_ceiling])" in source
-    assert "alt.Scale(domain=[0.0, comparison_ceiling])" in source
-    assert "st.altair_chart(convergence_chart" in source
+    assert 'with st.expander("Add a redistribution"' in source
+    assert '"Move Y from"' in source
+    assert '"Move Y to"' in source
+    assert '"Add as next period"' in source
+    assert '"Remove last redistribution"' in source
+    assert "baseline_period_populations" in source
+    assert "redistribute_y(" in source
     assert source.count("st.pills(") == 2
-    assert 'options=("Overview", "Market", "Agents", "Accounts", "Ledger")' in source
+    assert 'options=("Overview", "Market", "Audit")' in source
     assert "horizontal=True, wrap=False" in source
     assert 'if view == "Overview"' in source
     assert 'elif view == "Market"' in source
-    assert 'elif view == "Agents"' in source
-    assert 'elif view == "Accounts"' in source
+    assert 'st.subheader("Audit")' in source
+    assert 'with st.expander("Agent decisions")' in source
+    assert 'with st.expander("Stock-flow accounts")' in source
+    assert 'with st.expander("Period settlement ledger")' in source
     assert 'with st.expander("Full multi-period ledger")' in source
+    assert "comparison_iterations = max(400, adjustments) * 1.05" in source
+    assert "alt.Scale(domain=[0.0, comparison_iterations])" in source
+    assert "alt.Scale(domain=[0.0, comparison_ceiling])" in source
     assert 'with st.expander("Model boundary")' in source

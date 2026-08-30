@@ -18,7 +18,9 @@ from econ_agent_sim.economy_0_3 import (
     Economy03Config,
     Economy03PeriodResult,
     Economy03Result,
+    baseline_period_populations,
     canonical_period_populations,
+    redistribute_y,
     run_economy_0_3,
 )
 
@@ -34,8 +36,10 @@ __all__ = [
     "Economy03Result",
     "ExchangeAgentConfig",
     "TatonnementStep",
+    "baseline_period_populations",
     "canonical_period_populations",
     "canonical_population",
+    "redistribute_y",
     "run_economy_0",
     "run_economy_0_1",
     "run_economy_0_2",

@@ -71,12 +71,12 @@ with row_two_left, st.container(border=True):
 
 with row_two_right, st.container(border=True):
     st.markdown("### Economy 0.3")
-    st.markdown("**Repeated pure exchange**")
+    st.markdown("**Redistribution across periods**")
     st.write(
-        "The many-agent economy now repeats across explicit periods. Each period gets "
-        "fresh exogenous endowments, its own clearing price, settlement, and accounting."
+        "Start from the Economy 0.2 baseline, then create as many new periods as you "
+        "want by redistributing Y between agents and observing the new equilibrium."
     )
-    st.caption("New mechanism: time")
+    st.caption("New mechanism: time through user-chosen exogenous redistribution")
     st.page_link(
         "pages/4_Economy_0_3_Repeated_Exchange.py",
         label="Open Economy 0.3 →",
@@ -116,7 +116,7 @@ comparison_rows = [
         "agents": "10 canonical / fixed identities",
         "price formation": "Tâtonnement each period",
         "settlement": "Time-stamped clearing ledger",
-        "time": "Repeated exogenous periods",
+        "time": "User-added redistribution periods",
         "money": "No",
     },
 ]
@@ -138,9 +138,10 @@ with left:
 with right:
     st.subheader("Current boundary")
     st.write(
-        "Economy 0.3 has explicit repeated periods, but each new period resets to fresh "
-        "exogenous endowments. There is still no inventory carry-over, saving, money, "
-        "production, banking, government, or randomness."
+        "Economy 0.3 has explicit repeated periods, but each added period is an "
+        "exogenous redistribution chosen by the user. Previous market closing stocks "
+        "are not carried forward. There is still no saving, money, production, "
+        "banking, government, or randomness."
     )
     st.caption(
         "That boundary is intentional: new mechanisms are introduced only when their "
