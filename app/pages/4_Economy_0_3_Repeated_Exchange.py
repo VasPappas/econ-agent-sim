@@ -1,15 +1,51 @@
+from dataclasses import replace
+
 import altair as alt
 import streamlit as st
 
-from econ_agent_sim.economy_0_3 import (
-    Economy03Config,
-    baseline_period_populations,
-    redistribute_y,
-    run_economy_0_3,
-)
+from econ_agent_sim.economy_0_2 import canonical_population
+from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
 UI_SCHEMA_VERSION = 2
+
+
+def baseline_period_populations():
+    """Build the UI baseline without depending on newly added module helpers."""
+
+    return (canonical_population(),)
+
+
+def redistribute_y(population, *, sender_name: str, receiver_name: str, amount: float):
+    """Move Y between agents while leaving identities, X, and preferences unchanged."""
+
+    if amount <= 0:
+        raise ValueError("redistribution amount must be strictly positive")
+    if sender_name == receiver_name:
+        raise ValueError("sender and receiver must be different agents")
+
+    sender = next((agent for agent in population if agent.name == sender_name), None)
+    if sender is None:
+        raise ValueError(f"unknown sender: {sender_name}")
+    if not any(agent.name == receiver_name for agent in population):
+        raise ValueError(f"unknown receiver: {receiver_name}")
+    if amount > sender.y + 1e-12:
+        raise ValueError(f"{sender_name} only has {sender.y:.6g} units of Y available")
+
+    return tuple(
+        replace(
+            agent,
+            y=(
+                agent.y - amount
+                if agent.name == sender_name
+                else agent.y + amount
+                if agent.name == receiver_name
+                else agent.y
+            ),
+        )
+        for agent in population
+    )
+
 
 st.set_page_config(
     page_title="Economy 0.3 — Redistribution Experiment",
