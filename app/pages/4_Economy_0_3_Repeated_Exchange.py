@@ -1,23 +1,33 @@
 import altair as alt
 import streamlit as st
 
-from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
+from econ_agent_sim.economy_0_3 import (
+    Economy03Config,
+    baseline_period_populations,
+    redistribute_y,
+    run_economy_0_3,
+)
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
+UI_SCHEMA_VERSION = 2
+
 st.set_page_config(
-    page_title="Economy 0.3 — Repeated Exchange",
+    page_title="Economy 0.3 — Redistribution Experiment",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-if "economy03_config" not in st.session_state:
-    st.session_state.economy03_config = Economy03Config()
+if st.session_state.get("economy03_ui_schema") != UI_SCHEMA_VERSION:
+    st.session_state.economy03_ui_schema = UI_SCHEMA_VERSION
+    st.session_state.economy03_period_populations = baseline_period_populations()
+    st.session_state.economy03_initial_price_x = 0.5
+    st.session_state.economy03_adjustment_speed = 1.0
+    st.session_state.economy03_period_picker = "Baseline"
+    st.session_state.economy03_view_picker = "Overview"
 
 st.caption("ECONOMY 0.3")
-st.title("Repeated pure exchange")
-st.caption("10 agents · 2 goods · 4 periods · fresh exogenous endowments")
-
-current = st.session_state.economy03_config
+st.title("Redistribution experiment")
+st.caption("Same economy · same totals · you decide how Y is redistributed")
 
 with st.container(horizontal=True, wrap=False, gap="small"):
     st.page_link("streamlit_app.py", label="← Home", width="content")
@@ -28,52 +38,140 @@ with st.container(horizontal=True, wrap=False, gap="small"):
     )
     with st.popover("Settings", icon=":material/tune:"):
         st.caption(
-            "These controls change the tâtonnement path and iteration count, not the "
-            "equilibrium itself. Endowments stay deterministic."
+            "Initial pX and λ change the numerical price-search path, not the "
+            "underlying equilibrium."
         )
-        with st.form("economy03_inputs"):
+        with st.form("economy03_settings"):
             initial_price_x = st.number_input(
                 "Initial trial pX",
                 min_value=0.01,
-                value=float(current.initial_price_x),
+                value=float(st.session_state.economy03_initial_price_x),
                 step=0.1,
             )
             adjustment_speed = st.slider(
                 "Adjustment speed (lambda)",
                 min_value=0.1,
                 max_value=1.0,
-                value=float(current.adjustment_speed),
+                value=float(st.session_state.economy03_adjustment_speed),
                 step=0.1,
             )
-            apply_scenario = st.form_submit_button("Apply and reset", width="stretch")
+            apply_settings = st.form_submit_button("Apply", width="stretch")
 
-if apply_scenario:
-    st.session_state.economy03_config = Economy03Config(
-        period_populations=current.period_populations,
-        initial_price_x=initial_price_x,
-        adjustment_speed=adjustment_speed,
-    )
-    st.session_state.economy03_period_picker = 1
+        reset_experiment = st.button(
+            "Reset to baseline",
+            key="economy03_reset_experiment",
+            width="stretch",
+        )
+
+if apply_settings:
+    st.session_state.economy03_initial_price_x = initial_price_x
+    st.session_state.economy03_adjustment_speed = adjustment_speed
+    st.rerun()
+
+if reset_experiment:
+    st.session_state.economy03_period_populations = baseline_period_populations()
+    st.session_state.economy03_period_picker = "Baseline"
     st.session_state.economy03_view_picker = "Overview"
     st.rerun()
 
-config = st.session_state.economy03_config
+period_populations = st.session_state.economy03_period_populations
+latest_population = period_populations[-1]
+agent_names = [agent.name for agent in latest_population]
+
+with st.expander("Add a redistribution", expanded=len(period_populations) == 1):
+    st.caption(
+        "Create the next period by moving Y from one agent to another. Total Y stays "
+        "fixed, so this is redistribution rather than creation or destruction."
+    )
+    sender_name = st.selectbox(
+        "Move Y from",
+        options=agent_names,
+        key="economy03_sender",
+    )
+    receiver_name = st.selectbox(
+        "Move Y to",
+        options=agent_names,
+        index=1,
+        key="economy03_receiver",
+    )
+    sender = next(agent for agent in latest_population if agent.name == sender_name)
+    usable_y = max(0.01, float(sender.y))
+    amount = st.number_input(
+        "Amount of Y",
+        min_value=0.01,
+        max_value=usable_y,
+        value=min(0.5, usable_y),
+        step=0.1,
+        key="economy03_redistribution_amount",
+    )
+    st.caption(
+        f"{sender_name} currently has {sender.y:.2f} Y in the latest period."
+    )
+    add_disabled = sender_name == receiver_name or sender.y < 0.01
+    add_redistribution = st.button(
+        "Add as next period",
+        type="primary",
+        disabled=add_disabled,
+        width="stretch",
+    )
+    if sender_name == receiver_name:
+        st.caption("Choose two different agents.")
+
+if add_redistribution:
+    new_population = redistribute_y(
+        latest_population,
+        sender_name=sender_name,
+        receiver_name=receiver_name,
+        amount=float(amount),
+    )
+    st.session_state.economy03_period_populations = (
+        *period_populations,
+        new_population,
+    )
+    st.session_state.economy03_period_picker = (
+        f"Redistribution {len(period_populations)}"
+    )
+    st.session_state.economy03_view_picker = "Overview"
+    st.rerun()
+
+if len(period_populations) > 1:
+    if st.button("Remove last redistribution", width="stretch"):
+        st.session_state.economy03_period_populations = period_populations[:-1]
+        st.session_state.economy03_period_picker = (
+            "Baseline"
+            if len(period_populations) == 2
+            else f"Redistribution {len(period_populations) - 2}"
+        )
+        st.rerun()
+
+config = Economy03Config(
+    period_populations=st.session_state.economy03_period_populations,
+    initial_price_x=float(st.session_state.economy03_initial_price_x),
+    adjustment_speed=float(st.session_state.economy03_adjustment_speed),
+)
 result = run_economy_0_3(config)
 
-selected_period = st.pills(
-    "Period",
-    options=range(1, len(result.periods) + 1),
-    default=1,
+step_labels = ["Baseline"] + [
+    f"Redistribution {index}" for index in range(1, len(result.periods))
+]
+if st.session_state.get("economy03_period_picker") not in step_labels:
+    st.session_state.economy03_period_picker = step_labels[-1]
+
+selected_label = st.pills(
+    "Experiment step",
+    options=step_labels,
+    default="Baseline",
     required=True,
     key="economy03_period_picker",
     width="stretch",
 )
-period = result.periods[selected_period - 1]
+selected_index = step_labels.index(selected_label)
+period = result.periods[selected_index]
 final_step = period.steps[-1]
 
 view = st.pills(
     "View",
-    options=("Overview", "Market", "Agents", "Accounts", "Ledger"),
+    options=("Overview", "Market", "Audit"),
     default="Overview",
     required=True,
     key="economy03_view_picker",
@@ -86,107 +184,102 @@ market_ok = final_step.market_error <= config.tolerance
 start_price_x = period.steps[0].price_x
 adjustments = period.steps[-1].iteration
 
+previous_period = result.periods[selected_index - 1] if selected_index > 0 else None
+previous_price = previous_period.prices["X"] if previous_period else None
+price_change = (
+    (period.prices["X"] / previous_price - 1.0) * 100.0
+    if previous_price is not None
+    else None
+)
+
 with st.container(horizontal=True, wrap=False, gap="small"):
+    st.metric("Step", selected_label, border=True, width=160)
+    st.metric("pX", f"{period.prices['X']:.4f}", border=True, width=115)
     st.metric(
-        "Start pX",
-        f"{start_price_x:.3f}",
+        "Δ pX",
+        "—" if price_change is None else f"{price_change:+.1f}%",
         border=True,
-        width=120,
+        width=115,
     )
-    st.metric(
-        "Equilibrium pX",
-        f"{period.prices['X']:.4f}",
-        border=True,
-        width=145,
-    )
-    st.metric(
-        "Adjustments",
-        adjustments,
-        border=True,
-        width=130,
-    )
-    st.metric(
-        "Trades",
-        len(period.transactions),
-        border=True,
-        width=110,
-    )
-    st.metric(
-        "Market",
-        "✓" if market_ok else "!",
-        border=True,
-        width=110,
-    )
-    st.metric(
-        "Accounts",
-        "✓" if accounting_ok else "!",
-        border=True,
-        width=120,
-    )
+    st.metric("Market", "✓" if market_ok else "!", border=True, width=105)
+    st.metric("Accounts", "✓" if accounting_ok else "!", border=True, width=115)
 
 if view == "Overview":
     st.subheader("Overview")
-    st.line_chart(
-        [
-            {"period": item.period, "equilibrium pX": item.prices["X"]}
-            for item in result.periods
-        ],
-        x="period",
-        y="equilibrium pX",
-        height=230,
-    )
 
-    st.caption(
-        "This chart shows equilibrium prices across periods, so it does not change "
-        "when only the initial trial price or lambda changes."
-    )
-    st.caption(
-        f"Selected period price search: pX {start_price_x:.3f} → "
-        f"{period.prices['X']:.4f} · λ {config.adjustment_speed:.1f} · "
-        f"{adjustments} adjustments"
-    )
-
-    if period.period == 1:
-        st.write(
-            "The first period reproduces the Economy 0.2 benchmark. Later periods "
-            "change only how Y endowments are distributed across the same agents."
+    price_history = [
+        {"step": index, "equilibrium pX": item.prices["X"]}
+        for index, item in enumerate(result.periods)
+    ]
+    if len(price_history) > 1:
+        st.line_chart(
+            price_history,
+            x="step",
+            y="equilibrium pX",
+            height=210,
         )
-    else:
-        previous_price = result.periods[period.period - 2].prices["X"]
-        change = (period.prices["X"] / previous_price - 1.0) * 100.0
-        direction = "rose" if change > 0 else "fell"
+
+    current_pressure = sum(agent.alpha * agent.y for agent in period.population)
+
+    if previous_period is None:
         st.write(
-            f"pX {direction} {abs(change):.1f}% from period {period.period - 1}. "
-            "Aggregate X and Y are unchanged; only the distribution of Y changed."
+            "**Baseline:** this is the Economy 0.2 endowment distribution. Nothing "
+            "changes through time until you add a redistribution."
+        )
+        st.markdown(
+            f"**Equilibrium pX {period.prices['X']:.4f}** · "
+            f"**X-demand pressure {current_pressure:.3f}**"
+        )
+        if len(result.periods) == 1:
+            st.info(
+                "Try moving some Y between two agents above. The next period will "
+                "show whether the equilibrium relative price changes."
+            )
+    else:
+        previous_pressure = sum(
+            agent.alpha * agent.y for agent in previous_period.population
+        )
+        pressure_change = current_pressure - previous_pressure
+        direction = "increased" if pressure_change > 0 else "decreased"
+        price_direction = "rose" if price_change and price_change > 0 else "fell"
+
+        st.markdown(
+            f"**pX {previous_price:.4f} → {period.prices['X']:.4f}** "
+            f"({price_change:+.1f}%)"
+        )
+        st.write(
+            f"The redistribution {direction} the Y-weighted demand pressure for X "
+            f"from {previous_pressure:.3f} to {current_pressure:.3f}. "
+            f"Accordingly, equilibrium pX {price_direction}."
+        )
+
+        previous_by_name = {agent.name: agent for agent in previous_period.population}
+        changed_agents = []
+        for agent in period.population:
+            before = previous_by_name[agent.name]
+            delta_y = agent.y - before.y
+            if abs(delta_y) > 1e-12:
+                changed_agents.append(
+                    {
+                        "agent": agent.name,
+                        "alpha": agent.alpha,
+                        "Y before": round(before.y, 4),
+                        "Y after": round(agent.y, 4),
+                        "ΔY": round(delta_y, 4),
+                    }
+                )
+        st.dataframe(changed_agents, width="stretch", hide_index=True)
+        st.caption(
+            "Higher α means a stronger preference for X. Moving Y toward high-α "
+            "agents tends to raise demand pressure on X; moving it away tends to "
+            "lower that pressure."
         )
 
     st.markdown(
-        f"**Market clearing {'✓' if market_ok else '!' }** · "
-        f"**Stock-flow balance {'✓' if accounting_ok else '!' }** · "
+        f"**Market clearing {'✓' if market_ok else '!'}** · "
+        f"**Stock-flow balance {'✓' if accounting_ok else '!'}** · "
         f"**Final error {final_step.market_error:.1e}**"
     )
-
-    if selected_period > 1:
-        previous = result.periods[selected_period - 2]
-        with st.expander("Inspect the exogenous period reset"):
-            reset_rows = []
-            for spec in period.population:
-                previous_closing = previous.closing_stocks[spec.name]
-                new_opening = period.opening_stocks[spec.name]
-                reset_rows.append(
-                    {
-                        "agent": spec.name,
-                        "previous X": round(previous_closing["X"], 4),
-                        "new X": round(new_opening["X"], 4),
-                        "previous Y": round(previous_closing["Y"], 4),
-                        "new Y": round(new_opening["Y"], 4),
-                    }
-                )
-            st.caption(
-                "These are resets, not economic flows. Previous closing stocks are "
-                "not carried into the new period."
-            )
-            st.dataframe(reset_rows, width="stretch", hide_index=True)
 
 elif view == "Market":
     st.subheader("Market")
@@ -194,35 +287,18 @@ elif view == "Market":
     total_y = sum(spec.y for spec in period.population)
 
     with st.container(horizontal=True, wrap=False, gap="small"):
-        st.metric("X supply", f"{total_x:.1f}", border=True, width=120)
-        st.metric("Y supply", f"{total_y:.1f}", border=True, width=120)
+        st.metric("Start pX", f"{start_price_x:.3f}", border=True, width=120)
         st.metric(
-            "Analytic pX",
-            f"{period.benchmark_price_x:.4f}",
-            border=True,
-            width=140,
-        )
-        st.metric(
-            "λ",
-            f"{config.adjustment_speed:.1f}",
-            border=True,
-            width=90,
-        )
-        st.metric(
-            "Adjustments",
-            adjustments,
+            "Equilibrium",
+            f"{period.prices['X']:.4f}",
             border=True,
             width=130,
         )
-
-    st.caption(
-        f"Within-period Walrasian price discovery starts at pX = {start_price_x:.3f}. "
-        "A smaller λ makes each price move smaller, so convergence takes more "
-        "adjustments; it does not change the equilibrium."
-    )
+        st.metric("λ", f"{config.adjustment_speed:.1f}", border=True, width=85)
+        st.metric("Adjustments", adjustments, border=True, width=125)
 
     comparison_ceiling = max(2.0, start_price_x, period.benchmark_price_x) * 1.05
-    comparison_adjustment_ceiling = max(400, adjustments)
+    comparison_iterations = max(400, adjustments) * 1.05
     convergence_rows = []
     for step in period.steps:
         convergence_rows.extend(
@@ -248,7 +324,7 @@ elif view == "Market":
                 "iteration:Q",
                 title="Adjustment",
                 axis=alt.Axis(tickMinStep=1),
-                scale=alt.Scale(domain=[0, comparison_adjustment_ceiling]),
+                scale=alt.Scale(domain=[0.0, comparison_iterations]),
             ),
             y=alt.Y(
                 "pX:Q",
@@ -262,13 +338,13 @@ elif view == "Market":
                 alt.Tooltip("pX:Q", title="pX", format=".6f"),
             ],
         )
-        .properties(height=240)
+        .properties(height=235)
     )
     st.altair_chart(convergence_chart, width="stretch")
     st.caption(
-        "The price scale stays comparable for ordinary starting prices, and the "
-        "adjustment axis stays at 0–400 for ordinary runs. This prevents automatic "
-        "rescaling from hiding the effects of either Initial pX or λ."
+        "Initial pX changes where the search starts. λ changes how quickly it moves. "
+        "Neither changes the equilibrium implied by this period's endowments and "
+        "preferences."
     )
 
     st.markdown("**Final clearing check**")
@@ -276,13 +352,13 @@ elif view == "Market":
         [
             {
                 "good": "X",
-                "supply": round(final_step.supply_x, 6),
+                "supply": round(total_x, 6),
                 "demand": round(final_step.demand_x, 6),
                 "excess": round(final_step.excess_demand_x, 10),
             },
             {
                 "good": "Y",
-                "supply": round(final_step.supply_y, 6),
+                "supply": round(total_y, 6),
                 "demand": round(final_step.demand_y, 6),
                 "excess": round(final_step.excess_demand_y, 10),
             },
@@ -308,146 +384,69 @@ elif view == "Market":
             hide_index=True,
         )
 
-elif view == "Agents":
-    st.subheader("Agents")
-    st.caption("Compact view: opening stocks and the trade each agent wants to make.")
+else:
+    st.subheader("Audit")
+    st.caption("Full traceability is still here, but it is no longer the default view.")
 
-    compact_rows = []
-    full_rows = []
-    for spec in period.population:
-        desired = period.desired_bundles[spec.name]
-        compact_rows.append(
-            {
-                "agent": spec.name,
-                "X": round(spec.x, 3),
-                "Y": round(spec.y, 3),
-                "net X": round(desired["X"] - spec.x, 4),
-                "net Y": round(desired["Y"] - spec.y, 4),
-            }
-        )
-        full_rows.append(
-            {
-                "agent": spec.name,
-                "alpha": spec.alpha,
-                "wealth": period.wealths[spec.name],
-                "opening X": spec.x,
-                "opening Y": spec.y,
-                "desired X": desired["X"],
-                "desired Y": desired["Y"],
-                "net X": desired["X"] - spec.x,
-                "net Y": desired["Y"] - spec.y,
-            }
-        )
+    with st.expander("Agent decisions"):
+        decision_rows = []
+        for spec in period.population:
+            desired = period.desired_bundles[spec.name]
+            decision_rows.append(
+                {
+                    "agent": spec.name,
+                    "alpha": spec.alpha,
+                    "opening X": spec.x,
+                    "opening Y": spec.y,
+                    "desired X": desired["X"],
+                    "desired Y": desired["Y"],
+                    "net X": desired["X"] - spec.x,
+                    "net Y": desired["Y"] - spec.y,
+                }
+            )
+        st.dataframe(decision_rows, width="stretch", hide_index=True)
 
-    st.dataframe(compact_rows, width="stretch", hide_index=True)
-    with st.expander("Full agent decision table"):
-        st.dataframe(full_rows, width="stretch", hide_index=True)
-
-elif view == "Accounts":
-    st.subheader("Accounts")
-    balanced_rows = sum(abs(row["check"]) < 1e-12 for row in rows)
-    opening_x = sum(item["X"] for item in period.opening_stocks.values())
-    closing_x = sum(item["X"] for item in period.closing_stocks.values())
-    opening_y = sum(item["Y"] for item in period.opening_stocks.values())
-    closing_y = sum(item["Y"] for item in period.closing_stocks.values())
-
-    st.markdown(
-        f"**{balanced_rows}/{len(rows)} identities balanced ✓** · "
-        f"**X conserved {'✓' if abs(opening_x - closing_x) < 1e-12 else '!'}** · "
-        f"**Y conserved {'✓' if abs(opening_y - closing_y) < 1e-12 else '!'}**"
-    )
-
-    compact_accounting = [
-        {
-            "agent": row["agent"],
-            "good": row["good"],
-            "open": round(row["opening_stock"], 4),
-            "flow": round(row["net_flow_so_far"], 4),
-            "close": round(row["current_stock"], 4),
-        }
-        for row in rows
-    ]
-    st.dataframe(compact_accounting, width="stretch", hide_index=True)
-
-    with st.expander("Full stock-flow audit"):
+    with st.expander("Stock-flow accounts"):
         st.caption("Identity: closing stock = opening stock + ledgered net flow.")
         st.dataframe(rows, width="stretch", hide_index=True)
 
-else:
-    st.subheader("Ledger")
-    transactions = transaction_rows(period)
-    transfer_x = sum(
-        transaction["quantity"]
-        for transaction in transactions
-        if transaction["good"] == "X"
-    )
-    transfer_y = sum(
-        transaction["quantity"]
-        for transaction in transactions
-        if transaction["good"] == "Y"
-    )
+    with st.expander("Period settlement ledger"):
+        st.dataframe(transaction_rows(period), width="stretch", hide_index=True)
 
-    with st.container(horizontal=True, wrap=False, gap="small"):
-        st.metric("Entries", len(transactions), border=True, width=110)
-        st.metric("X moved", f"{transfer_x:.3f}", border=True, width=120)
-        st.metric("Y moved", f"{transfer_y:.3f}", border=True, width=120)
+    if previous_period is not None:
+        with st.expander("Exogenous period reset"):
+            reset_rows = []
+            for spec in period.population:
+                previous_closing = previous_period.closing_stocks[spec.name]
+                new_opening = period.opening_stocks[spec.name]
+                reset_rows.append(
+                    {
+                        "agent": spec.name,
+                        "previous close X": round(previous_closing["X"], 4),
+                        "new open X": round(new_opening["X"], 4),
+                        "previous close Y": round(previous_closing["Y"], 4),
+                        "new open Y": round(new_opening["Y"], 4),
+                    }
+                )
+            st.caption(
+                "The user-defined redistribution sets the next period's exogenous "
+                "opening endowments. It is not a market transaction and therefore "
+                "does not appear in the settlement ledger."
+            )
+            st.dataframe(reset_rows, width="stretch", hide_index=True)
 
-    compact_ledger = [
-        {
-            "#": transaction["transaction_id"],
-            "good": transaction["good"],
-            "from → to": (
-                f"{transaction['sender']} → {transaction['receiver']}"
-            ),
-            "qty": round(transaction["quantity"], 5),
-        }
-        for transaction in transactions
-    ]
-    st.dataframe(compact_ledger, width="stretch", hide_index=True)
-
-    with st.expander("Full period ledger"):
-        st.dataframe(transactions, width="stretch", hide_index=True)
-
-    final_rows = []
-    full_final_rows = []
-    for spec in period.population:
-        closing = period.closing_stocks[spec.name]
-        target = period.desired_bundles[spec.name]
-        final_rows.append(
-            {
-                "agent": spec.name,
-                "X": round(closing["X"], 4),
-                "Y": round(closing["Y"], 4),
-            }
-        )
-        full_final_rows.append(
-            {
-                "agent": spec.name,
-                "closing X": closing["X"],
-                "target X": target["X"],
-                "X error": closing["X"] - target["X"],
-                "closing Y": closing["Y"],
-                "target Y": target["Y"],
-                "Y error": closing["Y"] - target["Y"],
-            }
-        )
-
-    st.markdown("**Final allocation**")
-    st.dataframe(final_rows, width="stretch", hide_index=True)
-    with st.expander("Full allocation audit"):
-        st.dataframe(full_final_rows, width="stretch", hide_index=True)
-
-    with st.expander("Full multi-period ledger"):
-        st.caption("Transaction IDs remain unique across all four periods.")
-        st.dataframe(transaction_rows(result), width="stretch", hide_index=True)
+    if len(result.periods) > 1:
+        with st.expander("Full multi-period ledger"):
+            st.caption("Transaction IDs remain unique across the entire experiment.")
+            st.dataframe(transaction_rows(result), width="stretch", hide_index=True)
 
 with st.expander("Model boundary"):
     st.write(
-        "Economy 0.3 adds repeated periods and ledger time stamps only. There is no "
-        "carry-over inventory, consumption, saving, production, money, credit, "
-        "banking, government, or randomness."
+        "Economy 0.3 adds repeated periods with user-chosen exogenous redistribution. "
+        "There is still no carry-over inventory, consumption, saving, production, "
+        "money, credit, banking, government, or randomness."
     )
     st.caption(
-        "Each period starts from a fresh exogenous endowment schedule, so time is "
-        "visible without intertemporal wealth accumulation."
+        "Each added period starts from the latest user-defined endowment schedule, "
+        "not from the previous period's market closing stocks."
     )
