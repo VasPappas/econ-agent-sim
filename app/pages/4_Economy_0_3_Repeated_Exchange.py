@@ -26,10 +26,13 @@ with st.container(horizontal=True, wrap=False, gap="small"):
         width="content",
     )
     with st.popover("Settings", icon=":material/tune:"):
-        st.caption("Price-discovery controls only. Endowments stay deterministic.")
+        st.caption(
+            "These controls change the tâtonnement path and iteration count, not the "
+            "equilibrium itself. Endowments stay deterministic."
+        )
         with st.form("economy03_inputs"):
             initial_price_x = st.number_input(
-                "Initial pX",
+                "Initial trial pX",
                 min_value=0.01,
                 value=float(current.initial_price_x),
                 step=0.1,
@@ -79,32 +82,39 @@ view = st.pills(
 rows = accounting_rows(period)
 accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
 market_ok = final_step.market_error <= config.tolerance
-price_path = [item.prices["X"] for item in result.periods]
+start_price_x = period.steps[0].price_x
+adjustments = period.steps[-1].iteration
 
 with st.container(horizontal=True, wrap=False, gap="small"):
     st.metric(
-        "Period",
-        f"{period.period} / {len(result.periods)}",
+        "Start pX",
+        f"{start_price_x:.3f}",
         border=True,
         width=120,
     )
     st.metric(
-        "pX",
+        "Equilibrium pX",
         f"{period.prices['X']:.4f}",
         border=True,
-        width=120,
+        width=145,
+    )
+    st.metric(
+        "Adjustments",
+        adjustments,
+        border=True,
+        width=130,
     )
     st.metric(
         "Trades",
         len(period.transactions),
         border=True,
-        width=120,
+        width=110,
     )
     st.metric(
         "Market",
         "✓" if market_ok else "!",
         border=True,
-        width=120,
+        width=110,
     )
     st.metric(
         "Accounts",
@@ -123,6 +133,12 @@ if view == "Overview":
         x="period",
         y="equilibrium pX",
         height=230,
+    )
+
+    st.caption(
+        f"Selected period price search: pX {start_price_x:.3f} → "
+        f"{period.prices['X']:.4f} · λ {config.adjustment_speed:.1f} · "
+        f"{adjustments} adjustments"
     )
 
     if period.period == 1:
@@ -182,13 +198,17 @@ elif view == "Market":
             width=140,
         )
         st.metric(
-            "Iterations",
-            period.steps[-1].iteration,
+            "Adjustments",
+            adjustments,
             border=True,
-            width=120,
+            width=130,
         )
 
-    st.caption("Within-period Walrasian price discovery")
+    st.caption(
+        f"Within-period Walrasian price discovery starts at pX = {start_price_x:.3f}. "
+        "Changing the start changes this path, while the same economy converges to "
+        "the same equilibrium."
+    )
     st.line_chart(
         [
             {
