@@ -138,7 +138,7 @@ if view == "Overview":
 
     st.caption(
         "This chart shows equilibrium prices across periods, so it does not change "
-        "when only the initial trial price changes."
+        "when only the initial trial price or lambda changes."
     )
     st.caption(
         f"Selected period price search: pX {start_price_x:.3f} → "
@@ -203,6 +203,12 @@ elif view == "Market":
             width=140,
         )
         st.metric(
+            "λ",
+            f"{config.adjustment_speed:.1f}",
+            border=True,
+            width=90,
+        )
+        st.metric(
             "Adjustments",
             adjustments,
             border=True,
@@ -211,11 +217,12 @@ elif view == "Market":
 
     st.caption(
         f"Within-period Walrasian price discovery starts at pX = {start_price_x:.3f}. "
-        "Changing the start changes this path, while the same economy converges to "
-        "the same equilibrium."
+        "A smaller λ makes each price move smaller, so convergence takes more "
+        "adjustments; it does not change the equilibrium."
     )
 
     comparison_ceiling = max(2.0, start_price_x, period.benchmark_price_x) * 1.05
+    comparison_adjustment_ceiling = max(400, adjustments)
     convergence_rows = []
     for step in period.steps:
         convergence_rows.extend(
@@ -237,7 +244,12 @@ elif view == "Market":
         alt.Chart(alt.Data(values=convergence_rows))
         .mark_line(point=True)
         .encode(
-            x=alt.X("iteration:Q", title="Adjustment", axis=alt.Axis(tickMinStep=1)),
+            x=alt.X(
+                "iteration:Q",
+                title="Adjustment",
+                axis=alt.Axis(tickMinStep=1),
+                scale=alt.Scale(domain=[0, comparison_adjustment_ceiling]),
+            ),
             y=alt.Y(
                 "pX:Q",
                 title="pX",
@@ -254,9 +266,9 @@ elif view == "Market":
     )
     st.altair_chart(convergence_chart, width="stretch")
     st.caption(
-        "For starting prices up to 2.0, the vertical scale stays fixed at 0–2.1. "
-        "That prevents automatic rescaling from making different starting prices "
-        "look artificially similar."
+        "The price scale stays comparable for ordinary starting prices, and the "
+        "adjustment axis stays at 0–400 for ordinary runs. This prevents automatic "
+        "rescaling from hiding the effects of either Initial pX or λ."
     )
 
     st.markdown("**Final clearing check**")
