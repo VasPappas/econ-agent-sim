@@ -15,7 +15,7 @@ The completed economies remain separate runnable pages under `app/pages/`:
 3. `3_Economy_0_2_Many_Agent_Exchange.py` — many-agent heterogeneous pure exchange.
 4. `4_Economy_0_3_Repeated_Exchange.py` — repeated many-agent exchange with explicit periods and fresh exogenous endowments.
 
-Each page has the same top-level structure: version context, navigation back to the simulator home and adjacent versions, a short summary of what changed, experiment controls, the economic process, and stock-flow accounting.
+The economic engine remains independent from these pages. UI changes must not alter equilibrium, settlement, ledger, or accounting logic.
 
 ## Economy 0.2 tablet layout
 
@@ -25,23 +25,29 @@ The stock-flow checkpoint remains outside those tabs and is displayed at every s
 
 A headless Streamlit `AppTest` executes the Economy 0.2 page in CI so UI refactors can catch runtime Streamlit errors in addition to the existing engine tests and Ruff checks.
 
-## Economy 0.3 period-centered layout
+## Economy 0.3 mobile-first prototype
 
-Economy 0.3 keeps the tablet-friendly main-page controls but shifts the visual hierarchy from tâtonnement steps to explicit time periods. The page first shows the full equilibrium-price path across periods, then lets the user choose one period to inspect.
+Economy 0.3 is the first phone-first interface. It uses a centered layout and starts with the Streamlit sidebar collapsed so the economic content receives the available screen width.
 
-The selected period exposes four full-width views:
+The mobile information hierarchy is deliberately progressive:
 
-- exogenous opening endowments and within-period price discovery;
-- agent decisions and net demands;
-- the selected-period stock-flow reconciliation; and
-- the period ledger plus final allocation.
+1. choose a period with a compact pills control;
+2. choose `Overview`, `Market`, `Agents`, `Accounts`, or `Ledger` with a second pills control;
+3. show only the selected view below those controls; and
+4. place full audit tables behind explicit expanders rather than deleting them.
 
-For periods after the first, the page can show the previous period's closing stocks beside the new period's exogenous opening stocks. This makes the deliberate no-carry-over assumption visible in the interface rather than hiding it in the engine.
+Experiment parameters have moved into a small `Settings` popover. The default `Overview` therefore contains only the cross-period price path, a horizontally scrollable result strip, market/accounting status, a short explanation of the price movement, and the optional exogenous-reset audit for periods after the first.
 
-The full multi-period ledger is also inspectable, with globally unique transaction IDs and explicit period labels.
+The `Market` view contains aggregate supply, the within-period tâtonnement path, the final clearing check, and an expandable iteration table. `Agents` starts with a compact opening-stock/net-demand table and keeps the full optimization table in an expander. `Accounts` summarizes the stock-flow and conservation checks before showing the compact reconciliation. `Ledger` begins with a four-column transfer view and keeps the complete period ledger, final-allocation audit, and multi-period ledger available through expanders.
+
+Horizontal metric strips use Streamlit's no-wrap horizontal container so they remain one compact, touch-scrollable row on narrow screens instead of stacking into a tall column.
+
+The guiding rule is **result first, explanation second, audit detail third**. Nothing required for traceability is removed; detailed material is progressively disclosed when the user asks for it.
+
+The Economy 0.3 headless `AppTest` executes every mobile view in CI, including a later-period run that exercises the exogenous-reset path.
 
 ## Design rule
 
 A new economy should add a new page rather than replacing an older one. The home dashboard should be updated at the same time so the model progression remains understandable from the browser interface.
 
-The economic engine remains independent from this navigation layer. Reorganizing the Streamlit shell must not alter equilibrium, settlement, ledger, or accounting logic.
+When the Economy 0.3 phone layout has been reviewed on a real device, its successful interaction patterns can be propagated backward to the older permanent economy pages. That propagation should remain a UI-only change and preserve every completed economy's model behavior.
