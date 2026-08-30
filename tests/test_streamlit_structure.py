@@ -42,6 +42,9 @@ def test_economy_0_3_keeps_mobile_first_progressive_disclosure() -> None:
     assert '"Equilibrium pX"' in source
     assert '"Adjustments"' in source
     assert "period.steps[0].price_x" in source
+    assert "comparison_ceiling = max(2.0, start_price_x" in source
+    assert "alt.Scale(domain=[0.0, comparison_ceiling])" in source
+    assert "st.altair_chart(convergence_chart" in source
     assert source.count("st.pills(") == 2
     assert 'options=("Overview", "Market", "Agents", "Accounts", "Ledger")' in source
     assert "horizontal=True, wrap=False" in source
