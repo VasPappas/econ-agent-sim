@@ -1,3 +1,4 @@
+import altair as alt
 import streamlit as st
 
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
@@ -26,10 +27,13 @@ with st.container(horizontal=True, wrap=False, gap="small"):
         width="content",
     )
     with st.popover("Settings", icon=":material/tune:"):
-        st.caption("Price-discovery controls only. Endowments stay deterministic.")
+        st.caption(
+            "These controls change the tâtonnement path and iteration count, not the "
+            "equilibrium itself. Endowments stay deterministic."
+        )
         with st.form("economy03_inputs"):
             initial_price_x = st.number_input(
-                "Initial pX",
+                "Initial trial pX",
                 min_value=0.01,
                 value=float(current.initial_price_x),
                 step=0.1,
@@ -79,32 +83,39 @@ view = st.pills(
 rows = accounting_rows(period)
 accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
 market_ok = final_step.market_error <= config.tolerance
-price_path = [item.prices["X"] for item in result.periods]
+start_price_x = period.steps[0].price_x
+adjustments = period.steps[-1].iteration
 
 with st.container(horizontal=True, wrap=False, gap="small"):
     st.metric(
-        "Period",
-        f"{period.period} / {len(result.periods)}",
+        "Start pX",
+        f"{start_price_x:.3f}",
         border=True,
         width=120,
     )
     st.metric(
-        "pX",
+        "Equilibrium pX",
         f"{period.prices['X']:.4f}",
         border=True,
-        width=120,
+        width=145,
+    )
+    st.metric(
+        "Adjustments",
+        adjustments,
+        border=True,
+        width=130,
     )
     st.metric(
         "Trades",
         len(period.transactions),
         border=True,
-        width=120,
+        width=110,
     )
     st.metric(
         "Market",
         "✓" if market_ok else "!",
         border=True,
-        width=120,
+        width=110,
     )
     st.metric(
         "Accounts",
@@ -123,6 +134,16 @@ if view == "Overview":
         x="period",
         y="equilibrium pX",
         height=230,
+    )
+
+    st.caption(
+        "This chart shows equilibrium prices across periods, so it does not change "
+        "when only the initial trial price changes."
+    )
+    st.caption(
+        f"Selected period price search: pX {start_price_x:.3f} → "
+        f"{period.prices['X']:.4f} · λ {config.adjustment_speed:.1f} · "
+        f"{adjustments} adjustments"
     )
 
     if period.period == 1:
@@ -182,25 +203,60 @@ elif view == "Market":
             width=140,
         )
         st.metric(
-            "Iterations",
-            period.steps[-1].iteration,
+            "Adjustments",
+            adjustments,
             border=True,
-            width=120,
+            width=130,
         )
 
-    st.caption("Within-period Walrasian price discovery")
-    st.line_chart(
-        [
-            {
-                "iteration": step.iteration,
-                "trial pX": step.price_x,
-                "benchmark": period.benchmark_price_x,
-            }
-            for step in period.steps
-        ],
-        x="iteration",
-        y=["trial pX", "benchmark"],
-        height=240,
+    st.caption(
+        f"Within-period Walrasian price discovery starts at pX = {start_price_x:.3f}. "
+        "Changing the start changes this path, while the same economy converges to "
+        "the same equilibrium."
+    )
+
+    comparison_ceiling = max(2.0, start_price_x, period.benchmark_price_x) * 1.05
+    convergence_rows = []
+    for step in period.steps:
+        convergence_rows.extend(
+            [
+                {
+                    "iteration": step.iteration,
+                    "series": "Trial pX",
+                    "pX": step.price_x,
+                },
+                {
+                    "iteration": step.iteration,
+                    "series": "Equilibrium benchmark",
+                    "pX": period.benchmark_price_x,
+                },
+            ]
+        )
+
+    convergence_chart = (
+        alt.Chart(alt.Data(values=convergence_rows))
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("iteration:Q", title="Adjustment", axis=alt.Axis(tickMinStep=1)),
+            y=alt.Y(
+                "pX:Q",
+                title="pX",
+                scale=alt.Scale(domain=[0.0, comparison_ceiling]),
+            ),
+            color=alt.Color("series:N", title=None),
+            tooltip=[
+                alt.Tooltip("iteration:Q", title="Adjustment", format=".0f"),
+                alt.Tooltip("series:N", title="Series"),
+                alt.Tooltip("pX:Q", title="pX", format=".6f"),
+            ],
+        )
+        .properties(height=240)
+    )
+    st.altair_chart(convergence_chart, width="stretch")
+    st.caption(
+        "For starting prices up to 2.0, the vertical scale stays fixed at 0–2.1. "
+        "That prevents automatic rescaling from making different starting prices "
+        "look artificially similar."
     )
 
     st.markdown("**Final clearing check**")

@@ -44,6 +44,21 @@ def test_each_period_converges_to_its_analytic_benchmark() -> None:
     assert len({round(price, 6) for price in prices}) > 1
 
 
+def test_configured_initial_price_starts_every_period_tatonnement() -> None:
+    config = Economy03Config(initial_price_x=2.0)
+    result = run_economy_0_3(config)
+
+    for period in result.periods:
+        assert isclose(period.steps[0].price_x, 2.0, abs_tol=1e-12)
+        assert isclose(
+            period.prices["X"],
+            period.benchmark_price_x,
+            abs_tol=1e-8,
+        )
+
+    assert result.periods[0].steps[-1].iteration > 0
+
+
 def test_next_period_uses_fresh_endowments_not_previous_closing_stocks() -> None:
     result = run_economy_0_3()
     first, second = result.periods[:2]
