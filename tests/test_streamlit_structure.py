@@ -59,3 +59,15 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert "alt.Scale(domain=[0.0, comparison_iterations])" in source
     assert "alt.Scale(domain=[0.0, comparison_ceiling])" in source
     assert 'with st.expander("Model boundary")' in source
+
+
+def test_economy_0_3_page_avoids_new_helper_imports_for_cloud_hot_reload() -> None:
+    source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
+
+    assert "from econ_agent_sim.economy_0_2 import canonical_population" in source
+    assert (
+        "from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3"
+        in source
+    )
+    assert "    baseline_period_populations,\n" not in source
+    assert "    redistribute_y,\n" not in source
