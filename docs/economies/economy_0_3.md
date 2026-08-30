@@ -73,6 +73,10 @@ The tâtonnement process does not use these values when updating the trial price
 
 Every period starts from the configured initial trial price and runs the same normalized Walrasian tâtonnement rule as Economy 0.2.
 
+The initial trial price is a **numerical starting point for the price search**, not a parameter that changes the underlying equilibrium. Changing Initial pX therefore changes the path of trial prices and usually the number of adjustments required to clear the market. For a fixed period population and preferences, the process should still converge to the same equilibrium price.
+
+For example, period 1 has an equilibrium of `pX = 1`. Starting at `pX = 1` clears immediately, while starting below or above 1 requires tâtonnement adjustments before reaching the same equilibrium.
+
 No physical transfer occurs during price discovery. Agents repeatedly calculate optimal demands at trial prices, aggregate excess demand is measured, and the relative price changes until both markets clear within tolerance.
 
 Using the same initial trial price every period is intentional. Economy 0.3 does not yet give prices memory from one period to the next.
@@ -122,15 +126,9 @@ These restrictions isolate the new mechanism to **distribution changing through 
 
 ## Streamlit interface
 
-The Economy 0.3 page is period-centered and tablet friendly. It shows:
+The Economy 0.3 page is mobile-first and uses progressive disclosure. The default Overview shows the cross-period equilibrium-price path and a compact status strip. It now also displays the selected period's **Start pX**, **Equilibrium pX**, and **Adjustments** so the effect of the configured initial trial price is visible without opening a detailed table.
 
-- the price path across periods;
-- the selected period's exogenous opening endowments;
-- within-period tâtonnement diagnostics;
-- desired bundles and net demands;
-- the stock-flow checkpoint;
-- the selected period's settlement ledger; and
-- the final allocation.
+The Market view shows the full within-period tâtonnement path from the configured starting price to the equilibrium. Agent, accounting, and ledger details remain available through the compact drill-down views and full audit expanders.
 
 For periods after the first, the interface explicitly compares the previous period's closing stocks with the new period's opening endowments so the exogenous reset is visible rather than implicit.
 
