@@ -3,69 +3,45 @@ import streamlit as st
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
-st.set_page_config(page_title="Economy 0.3 — Repeated Exchange", layout="wide")
+st.set_page_config(
+    page_title="Economy 0.3 — Repeated Exchange",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
 
 if "economy03_config" not in st.session_state:
     st.session_state.economy03_config = Economy03Config()
-if "economy03_period" not in st.session_state:
-    st.session_state.economy03_period = 1
 
-st.caption("SIMULATOR / ECONOMY 0.3 / REPEATED EXCHANGE")
-st.title("Economy 0.3 — Repeated Pure Exchange")
-st.caption(
-    "Time is now explicit. The same many-agent exchange economy repeats across "
-    "periods with fresh exogenous endowments and a fully time-stamped ledger."
-)
-
-nav_home, nav_prev, nav_space = st.columns([1.2, 1.6, 5])
-nav_home.page_link("streamlit_app.py", label="← Simulator home", width="stretch")
-nav_prev.page_link(
-    "pages/3_Economy_0_2_Many_Agent_Exchange.py",
-    label="← Economy 0.2",
-    width="stretch",
-)
-
-periods_col, agents_col, goods_col, new_col = st.columns(4)
-periods_col.metric("Canonical periods", "4")
-agents_col.metric("Agents", "10")
-goods_col.metric("Goods", "2")
-new_col.metric("New mechanism", "Time")
-
-with st.expander("What changed from Economy 0.2", expanded=False):
-    st.write(
-        "Only the time dimension changed. Each period is still the Economy 0.2 "
-        "many-agent pure-exchange model: agents optimize, tâtonnement discovers the "
-        "clearing price, and settlement occurs only after convergence. The next period "
-        "then starts from a fresh exogenous endowment schedule rather than carrying "
-        "forward the previous closing stocks."
-    )
+st.caption("ECONOMY 0.3")
+st.title("Repeated pure exchange")
+st.caption("10 agents · 2 goods · 4 periods · fresh exogenous endowments")
 
 current = st.session_state.economy03_config
 
-st.subheader("Experiment controls")
-st.caption(
-    "These controls change the within-period price-discovery path. The canonical "
-    "four-period endowment schedule remains deterministic."
-)
-with st.form("economy03_inputs"):
-    input_col, speed_col, apply_col = st.columns([1, 1, 1])
-    initial_price_x = input_col.number_input(
-        "Initial trial price pX in every period",
-        min_value=0.01,
-        value=float(current.initial_price_x),
-        step=0.1,
+with st.container(horizontal=True, wrap=False, gap="small"):
+    st.page_link("streamlit_app.py", label="← Home", width="content")
+    st.page_link(
+        "pages/3_Economy_0_2_Many_Agent_Exchange.py",
+        label="← Economy 0.2",
+        width="content",
     )
-    adjustment_speed = speed_col.slider(
-        "Adjustment speed (lambda)",
-        min_value=0.1,
-        max_value=1.0,
-        value=float(current.adjustment_speed),
-        step=0.1,
-    )
-    apply_scenario = apply_col.form_submit_button(
-        "Apply and reset",
-        width="stretch",
-    )
+    with st.popover("Settings", icon=":material/tune:"):
+        st.caption("Price-discovery controls only. Endowments stay deterministic.")
+        with st.form("economy03_inputs"):
+            initial_price_x = st.number_input(
+                "Initial pX",
+                min_value=0.01,
+                value=float(current.initial_price_x),
+                step=0.1,
+            )
+            adjustment_speed = st.slider(
+                "Adjustment speed (lambda)",
+                min_value=0.1,
+                max_value=1.0,
+                value=float(current.adjustment_speed),
+                step=0.1,
+            )
+            apply_scenario = st.form_submit_button("Apply and reset", width="stretch")
 
 if apply_scenario:
     st.session_state.economy03_config = Economy03Config(
@@ -73,148 +49,215 @@ if apply_scenario:
         initial_price_x=initial_price_x,
         adjustment_speed=adjustment_speed,
     )
-    st.session_state.economy03_period = 1
+    st.session_state.economy03_period_picker = 1
+    st.session_state.economy03_view_picker = "Overview"
     st.rerun()
 
 config = st.session_state.economy03_config
 result = run_economy_0_3(config)
 
-st.divider()
-st.subheader("Across-period view")
-st.caption(
-    "Aggregate X and Y stay fixed at 10 each. The relative price moves because the "
-    "distribution of Y endowments changes across otherwise comparable periods."
+selected_period = st.pills(
+    "Period",
+    options=range(1, len(result.periods) + 1),
+    default=1,
+    required=True,
+    key="economy03_period_picker",
+    width="stretch",
 )
-
-price_rows = [
-    {
-        "period": period.period,
-        "equilibrium pX": period.prices["X"],
-        "analytic benchmark": period.benchmark_price_x,
-    }
-    for period in result.periods
-]
-st.line_chart(
-    price_rows,
-    x="period",
-    y=["equilibrium pX", "analytic benchmark"],
-)
-
-selected_period = st.slider(
-    "Period to inspect",
-    min_value=1,
-    max_value=len(result.periods),
-    value=min(st.session_state.economy03_period, len(result.periods)),
-    step=1,
-)
-st.session_state.economy03_period = selected_period
 period = result.periods[selected_period - 1]
+final_step = period.steps[-1]
 
-period_col, price_col, iterations_col, ledger_col = st.columns(4)
-period_col.metric("Selected period", period.period)
-price_col.metric("Equilibrium pX", f"{period.prices['X']:.6f}")
-iterations_col.metric("Price iterations", period.steps[-1].iteration)
-ledger_col.metric("Ledger entries", len(period.transactions))
-
-st.info(
-    "Period openings are exogenous resets. Closing stocks from one period are not "
-    "carried into the next period."
+view = st.pills(
+    "View",
+    options=("Overview", "Market", "Agents", "Accounts", "Ledger"),
+    default="Overview",
+    required=True,
+    key="economy03_view_picker",
+    width="stretch",
 )
 
-if selected_period > 1:
-    previous = result.periods[selected_period - 2]
-    reset_rows = []
-    for spec in period.population:
-        previous_closing = previous.closing_stocks[spec.name]
-        new_opening = period.opening_stocks[spec.name]
-        reset_rows.append(
-            {
-                "agent": spec.name,
-                "previous closing X": previous_closing["X"],
-                "new opening X": new_opening["X"],
-                "X reset": new_opening["X"] - previous_closing["X"],
-                "previous closing Y": previous_closing["Y"],
-                "new opening Y": new_opening["Y"],
-                "Y reset": new_opening["Y"] - previous_closing["Y"],
-            }
+rows = accounting_rows(period)
+accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
+market_ok = final_step.market_error <= config.tolerance
+price_path = [item.prices["X"] for item in result.periods]
+
+with st.container(horizontal=True, wrap=False, gap="small"):
+    st.metric(
+        "Period",
+        f"{period.period} / {len(result.periods)}",
+        border=True,
+        width=120,
+    )
+    st.metric(
+        "pX",
+        f"{period.prices['X']:.4f}",
+        border=True,
+        width=120,
+    )
+    st.metric(
+        "Trades",
+        len(period.transactions),
+        border=True,
+        width=120,
+    )
+    st.metric(
+        "Market",
+        "✓" if market_ok else "!",
+        border=True,
+        width=120,
+    )
+    st.metric(
+        "Accounts",
+        "✓" if accounting_ok else "!",
+        border=True,
+        width=120,
+    )
+
+if view == "Overview":
+    st.subheader("Overview")
+    st.line_chart(
+        [
+            {"period": item.period, "equilibrium pX": item.prices["X"]}
+            for item in result.periods
+        ],
+        x="period",
+        y="equilibrium pX",
+        height=230,
+    )
+
+    if period.period == 1:
+        st.write(
+            "The first period reproduces the Economy 0.2 benchmark. Later periods "
+            "change only how Y endowments are distributed across the same agents."
         )
-    with st.expander(
-        f"Show reset from period {selected_period - 1} closing stocks to period "
-        f"{selected_period} openings",
-        expanded=False,
-    ):
-        st.dataframe(reset_rows, width="stretch", hide_index=True, height=390)
+    else:
+        previous_price = result.periods[period.period - 2].prices["X"]
+        change = (period.prices["X"] / previous_price - 1.0) * 100.0
+        direction = "rose" if change > 0 else "fell"
+        st.write(
+            f"pX {direction} {abs(change):.1f}% from period {period.period - 1}. "
+            "Aggregate X and Y are unchanged; only the distribution of Y changed."
+        )
 
-endowment_tab, agents_tab, accounting_tab, ledger_tab = st.tabs(
-    ["Endowments & price", "Agent decisions", "Accounting", "Ledger & allocation"]
-)
+    st.markdown(
+        f"**Market clearing {'✓' if market_ok else '!' }** · "
+        f"**Stock-flow balance {'✓' if accounting_ok else '!' }** · "
+        f"**Final error {final_step.market_error:.1e}**"
+    )
 
-with endowment_tab:
-    st.markdown("#### Exogenous opening endowments")
-    opening_rows = [
-        {
-            "agent": spec.name,
-            "alpha": spec.alpha,
-            "opening X": spec.x,
-            "opening Y": spec.y,
-        }
-        for spec in period.population
-    ]
-    st.dataframe(opening_rows, width="stretch", hide_index=True, height=390)
+    if selected_period > 1:
+        previous = result.periods[selected_period - 2]
+        with st.expander("Inspect the exogenous period reset"):
+            reset_rows = []
+            for spec in period.population:
+                previous_closing = previous.closing_stocks[spec.name]
+                new_opening = period.opening_stocks[spec.name]
+                reset_rows.append(
+                    {
+                        "agent": spec.name,
+                        "previous X": round(previous_closing["X"], 4),
+                        "new X": round(new_opening["X"], 4),
+                        "previous Y": round(previous_closing["Y"], 4),
+                        "new Y": round(new_opening["Y"], 4),
+                    }
+                )
+            st.caption(
+                "These are resets, not economic flows. Previous closing stocks are "
+                "not carried into the new period."
+            )
+            st.dataframe(reset_rows, width="stretch", hide_index=True)
 
+elif view == "Market":
+    st.subheader("Market")
     total_x = sum(spec.x for spec in period.population)
     total_y = sum(spec.y for spec in period.population)
-    total_x_col, total_y_col, benchmark_col = st.columns(3)
-    total_x_col.metric("Aggregate X", f"{total_x:.1f}")
-    total_y_col.metric("Aggregate Y", f"{total_y:.1f}")
-    benchmark_col.metric("Analytic pX", f"{period.benchmark_price_x:.6f}")
 
-    st.markdown("#### Within-period price discovery")
-    path_rows = [
-        {
-            "iteration": step.iteration,
-            "trial pX": step.price_x,
-            "analytic benchmark": period.benchmark_price_x,
-        }
-        for step in period.steps
-    ]
+    with st.container(horizontal=True, wrap=False, gap="small"):
+        st.metric("X supply", f"{total_x:.1f}", border=True, width=120)
+        st.metric("Y supply", f"{total_y:.1f}", border=True, width=120)
+        st.metric(
+            "Analytic pX",
+            f"{period.benchmark_price_x:.4f}",
+            border=True,
+            width=140,
+        )
+        st.metric(
+            "Iterations",
+            period.steps[-1].iteration,
+            border=True,
+            width=120,
+        )
+
+    st.caption("Within-period Walrasian price discovery")
     st.line_chart(
-        path_rows,
+        [
+            {
+                "iteration": step.iteration,
+                "trial pX": step.price_x,
+                "benchmark": period.benchmark_price_x,
+            }
+            for step in period.steps
+        ],
         x="iteration",
-        y=["trial pX", "analytic benchmark"],
+        y=["trial pX", "benchmark"],
+        height=240,
     )
 
-    final_step = period.steps[-1]
-    balance_rows = [
-        {
-            "good": "X",
-            "supply": final_step.supply_x,
-            "demand": final_step.demand_x,
-            "excess demand": final_step.excess_demand_x,
-        },
-        {
-            "good": "Y",
-            "supply": final_step.supply_y,
-            "demand": final_step.demand_y,
-            "excess demand": final_step.excess_demand_y,
-        },
-    ]
-    st.markdown("#### Final market-clearing check")
-    st.dataframe(balance_rows, width="stretch", hide_index=True)
-    st.success(
-        f"Both markets clear within tolerance; market error = "
-        f"{final_step.market_error:.2e}."
+    st.markdown("**Final clearing check**")
+    st.dataframe(
+        [
+            {
+                "good": "X",
+                "supply": round(final_step.supply_x, 6),
+                "demand": round(final_step.demand_x, 6),
+                "excess": round(final_step.excess_demand_x, 10),
+            },
+            {
+                "good": "Y",
+                "supply": round(final_step.supply_y, 6),
+                "demand": round(final_step.demand_y, 6),
+                "excess": round(final_step.excess_demand_y, 10),
+            },
+        ],
+        width="stretch",
+        hide_index=True,
     )
 
-with agents_tab:
-    st.caption(
-        "Positive net demand means an agent acquires the good in settlement; negative "
-        "net demand means the agent supplies it."
-    )
-    decision_rows = []
+    with st.expander("Price-discovery iterations"):
+        st.dataframe(
+            [
+                {
+                    "iteration": step.iteration,
+                    "pX": step.price_x,
+                    "X excess": step.excess_demand_x,
+                    "Y excess": step.excess_demand_y,
+                    "market error": step.market_error,
+                    "next pX": step.next_price_x,
+                }
+                for step in period.steps
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+
+elif view == "Agents":
+    st.subheader("Agents")
+    st.caption("Compact view: opening stocks and the trade each agent wants to make.")
+
+    compact_rows = []
+    full_rows = []
     for spec in period.population:
         desired = period.desired_bundles[spec.name]
-        decision_rows.append(
+        compact_rows.append(
+            {
+                "agent": spec.name,
+                "X": round(spec.x, 3),
+                "Y": round(spec.y, 3),
+                "net X": round(desired["X"] - spec.x, 4),
+                "net Y": round(desired["Y"] - spec.y, 4),
+            }
+        )
+        full_rows.append(
             {
                 "agent": spec.name,
                 "alpha": spec.alpha,
@@ -227,35 +270,89 @@ with agents_tab:
                 "net Y": desired["Y"] - spec.y,
             }
         )
-    st.dataframe(decision_rows, width="stretch", hide_index=True, height=420)
 
-with accounting_tab:
-    st.caption(
-        "Within the selected period, every closing stock equals its exogenous opening "
-        "stock plus the net physical flows recorded in that period's ledger."
-    )
-    rows = accounting_rows(period)
-    st.dataframe(rows, width="stretch", hide_index=True, height=420)
-    if all(abs(row["check"]) < 1e-12 for row in rows):
-        st.success("All selected-period stock-flow checks = 0")
+    st.dataframe(compact_rows, width="stretch", hide_index=True)
+    with st.expander("Full agent decision table"):
+        st.dataframe(full_rows, width="stretch", hide_index=True)
 
-with ledger_tab:
-    st.caption(
-        f"Every row is a physical transfer in period {selected_period}. trade_id equals "
-        "the period number, while transaction_id is unique across the full run."
+elif view == "Accounts":
+    st.subheader("Accounts")
+    balanced_rows = sum(abs(row["check"]) < 1e-12 for row in rows)
+    opening_x = sum(item["X"] for item in period.opening_stocks.values())
+    closing_x = sum(item["X"] for item in period.closing_stocks.values())
+    opening_y = sum(item["Y"] for item in period.opening_stocks.values())
+    closing_y = sum(item["Y"] for item in period.closing_stocks.values())
+
+    st.markdown(
+        f"**{balanced_rows}/{len(rows)} identities balanced ✓** · "
+        f"**X conserved {'✓' if abs(opening_x - closing_x) < 1e-12 else '!'}** · "
+        f"**Y conserved {'✓' if abs(opening_y - closing_y) < 1e-12 else '!'}**"
     )
-    st.dataframe(
-        transaction_rows(period),
-        width="stretch",
-        hide_index=True,
-        height=380,
+
+    compact_accounting = [
+        {
+            "agent": row["agent"],
+            "good": row["good"],
+            "open": round(row["opening_stock"], 4),
+            "flow": round(row["net_flow_so_far"], 4),
+            "close": round(row["current_stock"], 4),
+        }
+        for row in rows
+    ]
+    st.dataframe(compact_accounting, width="stretch", hide_index=True)
+
+    with st.expander("Full stock-flow audit"):
+        st.caption("Identity: closing stock = opening stock + ledgered net flow.")
+        st.dataframe(rows, width="stretch", hide_index=True)
+
+else:
+    st.subheader("Ledger")
+    transactions = transaction_rows(period)
+    transfer_x = sum(
+        transaction["quantity"]
+        for transaction in transactions
+        if transaction["good"] == "X"
     )
+    transfer_y = sum(
+        transaction["quantity"]
+        for transaction in transactions
+        if transaction["good"] == "Y"
+    )
+
+    with st.container(horizontal=True, wrap=False, gap="small"):
+        st.metric("Entries", len(transactions), border=True, width=110)
+        st.metric("X moved", f"{transfer_x:.3f}", border=True, width=120)
+        st.metric("Y moved", f"{transfer_y:.3f}", border=True, width=120)
+
+    compact_ledger = [
+        {
+            "#": transaction["transaction_id"],
+            "good": transaction["good"],
+            "from → to": (
+                f"{transaction['sender']} → {transaction['receiver']}"
+            ),
+            "qty": round(transaction["quantity"], 5),
+        }
+        for transaction in transactions
+    ]
+    st.dataframe(compact_ledger, width="stretch", hide_index=True)
+
+    with st.expander("Full period ledger"):
+        st.dataframe(transactions, width="stretch", hide_index=True)
 
     final_rows = []
+    full_final_rows = []
     for spec in period.population:
         closing = period.closing_stocks[spec.name]
         target = period.desired_bundles[spec.name]
         final_rows.append(
+            {
+                "agent": spec.name,
+                "X": round(closing["X"], 4),
+                "Y": round(closing["Y"], 4),
+            }
+        )
+        full_final_rows.append(
             {
                 "agent": spec.name,
                 "closing X": closing["X"],
@@ -266,29 +363,23 @@ with ledger_tab:
                 "Y error": closing["Y"] - target["Y"],
             }
         )
-    st.markdown("#### Final allocation")
-    st.dataframe(final_rows, width="stretch", hide_index=True, height=390)
 
-with st.expander("Full multi-period ledger"):
+    st.markdown("**Final allocation**")
+    st.dataframe(final_rows, width="stretch", hide_index=True)
+    with st.expander("Full allocation audit"):
+        st.dataframe(full_final_rows, width="stretch", hide_index=True)
+
+    with st.expander("Full multi-period ledger"):
+        st.caption("Transaction IDs remain unique across all four periods.")
+        st.dataframe(transaction_rows(result), width="stretch", hide_index=True)
+
+with st.expander("Model boundary"):
+    st.write(
+        "Economy 0.3 adds repeated periods and ledger time stamps only. There is no "
+        "carry-over inventory, consumption, saving, production, money, credit, "
+        "banking, government, or randomness."
+    )
     st.caption(
-        "This is the complete append-only record. Transaction IDs never restart when "
-        "the model advances to a new period."
+        "Each period starts from a fresh exogenous endowment schedule, so time is "
+        "visible without intertemporal wealth accumulation."
     )
-    st.dataframe(
-        transaction_rows(result),
-        width="stretch",
-        hide_index=True,
-        height=460,
-    )
-
-st.divider()
-st.subheader("Version boundary")
-st.write(
-    "Economy 0.3 adds repeated periods and explicit ledger time stamps only. There is "
-    "still no carry-over inventory, consumption, saving, production, money, credit, "
-    "banking, government, or randomness."
-)
-st.caption(
-    "The next period receives a fresh exogenous endowment schedule, so time is visible "
-    "without yet creating intertemporal wealth accumulation."
-)
