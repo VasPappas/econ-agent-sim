@@ -125,12 +125,12 @@ def _settle_many_agent_trade(
     *,
     tolerance: float,
 ) -> None:
-    """Match net sellers to net buyers for each good in population order."""
+    """Match economically meaningful net sellers to buyers in population order."""
 
     for good in GOODS:
         total_supply = sum(agent.holdings[good] for agent in agents)
         scale = max(1.0, total_supply)
-        epsilon = 1e-15 * scale
+        settlement_epsilon = tolerance * scale * 2.0
 
         buyers: list[_SettlementPosition] = []
         sellers: list[_SettlementPosition] = []
@@ -139,12 +139,12 @@ def _settle_many_agent_trade(
         for agent in agents:
             net = desired[agent.name][good] - agent.holdings[good]
             total_net += net
-            if net > 0:
+            if net > settlement_epsilon:
                 buyers.append(_SettlementPosition(agent, net))
-            elif net < 0:
+            elif net < -settlement_epsilon:
                 sellers.append(_SettlementPosition(agent, -net))
 
-        _assert_close(total_net, 0.0, tolerance=tolerance * scale * 2.0)
+        _assert_close(total_net, 0.0, tolerance=settlement_epsilon)
 
         buyer_index = 0
         seller_index = 0
@@ -165,16 +165,16 @@ def _settle_many_agent_trade(
             buyer.remaining -= quantity
             seller.remaining -= quantity
 
-            if buyer.remaining <= epsilon:
+            if buyer.remaining <= settlement_epsilon:
                 buyer_index += 1
-            if seller.remaining <= epsilon:
+            if seller.remaining <= settlement_epsilon:
                 seller_index += 1
 
         unmatched_buy = sum(item.remaining for item in buyers[buyer_index:])
         unmatched_sell = sum(item.remaining for item in sellers[seller_index:])
-        if unmatched_buy > tolerance * scale * 2.0:
+        if unmatched_buy > settlement_epsilon:
             raise AssertionError("unmatched demand remains after settlement")
-        if unmatched_sell > tolerance * scale * 2.0:
+        if unmatched_sell > settlement_epsilon:
             raise AssertionError("unmatched supply remains after settlement")
 
 
