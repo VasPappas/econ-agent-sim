@@ -128,3 +128,41 @@ def test_economy_0_3_pair_alpha_change_resets_and_preserves_mirror() -> None:
     assert isclose(first.alpha, 0.35, abs_tol=1e-12)
     assert isclose(second.alpha, 0.65, abs_tol=1e-12)
     assert isclose(first.alpha + second.alpha, 1.0, abs_tol=1e-12)
+
+
+def test_economy_0_3_pair_endowment_change_resets_and_preserves_mirror() -> None:
+    app = open_economy_0_3()
+
+    baseline = baseline_period_populations()[0]
+    second = redistribute_y(
+        baseline,
+        sender_name="Agent 2",
+        receiver_name="Agent 1",
+        amount=0.2,
+    )
+    app.session_state["economy03_period_populations"] = (baseline, second)
+    app.session_state["economy03_period_picker"] = "Redistribution 1"
+    app.session_state["economy03_settings_open"] = True
+    app.run(timeout=10)
+
+    app.number_input(key="economy03_pair_x_0_input").set_value(2.4)
+    app.number_input(key="economy03_pair_y_0_input").set_value(0.6)
+    apply_button = next(
+        button for button in app.button if button.label == "Apply and close"
+    )
+    apply_button.click().run(timeout=10)
+
+    assert not app.exception
+    assert app.session_state["economy03_period_picker"] == "Baseline"
+    periods = app.session_state["economy03_period_populations"]
+    assert len(periods) == 1
+    first, second = periods[0][0], periods[0][1]
+    assert isclose(first.x, 2.4, abs_tol=1e-12)
+    assert isclose(first.y, 0.6, abs_tol=1e-12)
+    assert isclose(second.x, 0.6, abs_tol=1e-12)
+    assert isclose(second.y, 2.4, abs_tol=1e-12)
+    assert isclose(first.alpha + second.alpha, 1.0, abs_tol=1e-12)
+
+    numerator = sum(agent.alpha * agent.y for agent in periods[0])
+    denominator = sum((1.0 - agent.alpha) * agent.x for agent in periods[0])
+    assert isclose(numerator, denominator, abs_tol=1e-12)
