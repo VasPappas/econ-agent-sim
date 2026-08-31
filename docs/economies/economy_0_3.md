@@ -84,13 +84,17 @@ Using the same Initial pX and lambda in every period is intentional. Economy 0.3
 
 After a period converges, the same deterministic settlement rule from Economy 0.2 matches net sellers to net buyers in population order.
 
-Economy 0.3 adds explicit time labels to the ledger:
+Settlement now uses the declared numerical tolerance as an economic cutoff. Residual desired transfers smaller than that tolerance are treated as numerical round-off rather than as meaningful physical transactions, so the ledger does not contain rows such as `0.0000000002 X`. The resulting closing allocation still matches the theoretical target within the model's stated tolerance, while stock-flow accounting remains exact for every transfer that is actually recorded.
+
+Economy 0.3 keeps three identifiers internally:
 
 - `period` identifies the exchange period;
-- `trade_id` equals the period number because each period has one market-clearing settlement event; and
-- `transaction_id` remains globally unique across the complete multi-period experiment.
+- `transaction_id` identifies one actual physical transfer and remains globally unique across the complete experiment; and
+- `trade_id` groups the transfers belonging to one settlement event. In Economy 0.3 there is exactly one settlement event per period, so `trade_id` currently equals `period`.
 
-This makes every physical transfer traceable both within a period and across the full simulation horizon.
+Because `trade_id` carries no extra information for the user in Economy 0.3, the normal Streamlit ledger hides it and shows only `transaction_id`, `period`, `good`, `quantity`, `sender`, and `receiver`. The internal field is retained for later economies where one period may contain multiple separate settlement events.
+
+This makes every economically meaningful physical transfer traceable without exposing redundant implementation detail.
 
 ## Stock-flow accounting
 
