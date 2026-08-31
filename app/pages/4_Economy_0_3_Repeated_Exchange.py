@@ -7,7 +7,7 @@ from econ_agent_sim.economy_0_2 import canonical_population
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
-UI_SCHEMA_VERSION = 2
+UI_SCHEMA_VERSION = 3
 
 
 def baseline_period_populations():
@@ -47,6 +47,18 @@ def redistribute_y(population, *, sender_name: str, receiver_name: str, amount: 
     )
 
 
+def apply_settings() -> None:
+    """Apply submitted price-search settings and close the inline settings panel."""
+
+    st.session_state.economy03_initial_price_x = float(
+        st.session_state.economy03_initial_price_input
+    )
+    st.session_state.economy03_adjustment_speed = float(
+        st.session_state.economy03_adjustment_speed_input
+    )
+    st.session_state.economy03_settings_open = False
+
+
 st.set_page_config(
     page_title="Economy 0.3 — Redistribution Experiment",
     layout="centered",
@@ -60,6 +72,9 @@ if st.session_state.get("economy03_ui_schema") != UI_SCHEMA_VERSION:
     st.session_state.economy03_adjustment_speed = 1.0
     st.session_state.economy03_period_picker = "Baseline"
     st.session_state.economy03_view_picker = "Overview"
+    st.session_state.economy03_settings_open = False
+    st.session_state.economy03_initial_price_input = 0.5
+    st.session_state.economy03_adjustment_speed_input = 1.0
 
 st.caption("ECONOMY 0.3")
 st.title("Redistribution experiment")
@@ -72,42 +87,46 @@ with st.container(horizontal=True, wrap=False, gap="small"):
         label="← Economy 0.2",
         width="content",
     )
-    with st.popover("Settings", icon=":material/tune:"):
-        st.caption(
-            "Initial pX and λ change the numerical price-search path, not the "
-            "underlying equilibrium."
+
+settings_panel = st.expander(
+    "Settings",
+    key="economy03_settings_open",
+    on_change="rerun",
+)
+with settings_panel:
+    st.caption(
+        "Initial pX and λ change the numerical price-search path, not the "
+        "underlying equilibrium."
+    )
+    with st.form("economy03_settings"):
+        st.number_input(
+            "Initial trial pX",
+            min_value=0.01,
+            step=0.1,
+            key="economy03_initial_price_input",
         )
-        with st.form("economy03_settings"):
-            initial_price_x = st.number_input(
-                "Initial trial pX",
-                min_value=0.01,
-                value=float(st.session_state.economy03_initial_price_x),
-                step=0.1,
-            )
-            adjustment_speed = st.slider(
-                "Adjustment speed (lambda)",
-                min_value=0.1,
-                max_value=1.0,
-                value=float(st.session_state.economy03_adjustment_speed),
-                step=0.1,
-            )
-            apply_settings = st.form_submit_button("Apply", width="stretch")
-        reset_experiment = st.button(
-            "Reset to baseline",
-            key="economy03_reset_experiment",
+        st.slider(
+            "Adjustment speed (lambda)",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.1,
+            key="economy03_adjustment_speed_input",
+        )
+        st.form_submit_button(
+            "Apply and close",
             width="stretch",
+            on_click=apply_settings,
         )
-
-if apply_settings:
-    st.session_state.economy03_initial_price_x = initial_price_x
-    st.session_state.economy03_adjustment_speed = adjustment_speed
-    st.rerun()
-
-if reset_experiment:
-    st.session_state.economy03_period_populations = baseline_period_populations()
-    st.session_state.economy03_period_picker = "Baseline"
-    st.session_state.economy03_view_picker = "Overview"
-    st.rerun()
+    if st.button(
+        "Reset experiment to baseline",
+        key="economy03_reset_experiment",
+        width="stretch",
+    ):
+        st.session_state.economy03_period_populations = baseline_period_populations()
+        st.session_state.economy03_period_picker = "Baseline"
+        st.session_state.economy03_view_picker = "Overview"
+        st.session_state.economy03_settings_open = False
+        st.rerun()
 
 period_populations = st.session_state.economy03_period_populations
 latest_population = period_populations[-1]
@@ -225,9 +244,7 @@ with st.container(border=True):
         st.markdown(f"### pX {period.prices['X']:.4f}")
         result_change = "Baseline"
     else:
-        st.markdown(
-            f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%"
-        )
+        st.markdown(f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%")
         result_change = f"vs {previous_price:.4f} in the previous step"
     st.caption(
         f"{result_change} · Market cleared {'✓' if market_ok else '!'} · "
@@ -292,9 +309,7 @@ if view == "Overview":
             "**Baseline:** this is the Economy 0.2 endowment distribution. Nothing "
             "changes through time until you add a redistribution."
         )
-        st.markdown(
-            f"**X-demand pressure:** {current_pressure:.3f}"
-        )
+        st.markdown(f"**X-demand pressure:** {current_pressure:.3f}")
         if len(result.periods) == 1:
             st.info(
                 "Try moving some Y between two agents above. The next period will "
@@ -362,9 +377,7 @@ elif view == "Market":
             f"**Price search:** pX {start_price_x:.3f} → "
             f"{period.prices['X']:.4f}"
         )
-        st.caption(
-            f"λ {config.adjustment_speed:.1f} · {adjustments} adjustments"
-        )
+        st.caption(f"λ {config.adjustment_speed:.1f} · {adjustments} adjustments")
 
     comparison_ceiling = max(2.0, start_price_x, period.benchmark_price_x) * 1.05
     comparison_iterations = max(400, adjustments) * 1.05

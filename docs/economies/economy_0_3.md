@@ -143,6 +143,8 @@ The top-level views are only:
 - `Market` — the full within-period tâtonnement path and final clearing check; and
 - `Audit` — agent decisions, stock-flow accounts, settlement ledger, exogenous reset, and the complete multi-period ledger.
 
+Settings use a full-width inline expander directly in the page, matching the visual pattern of the redistribution inputs instead of opening a floating overlay. The expander tracks its open state. Submitting **Apply and close** updates Initial pX and lambda together and closes the panel before the updated simulation result is shown.
+
 The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the exact equilibrium `pX`, the percentage change from the previous step when relevant, and market/accounting status. This avoids truncated labels and values on phone-sized screens.
 
 When multiple redistributions exist, the Overview price-history chart uses a disclosed zoomed vertical axis so small relative-price changes remain visible. The exact numerical `pX` remains visible above the chart, so the zoom improves readability without replacing the quantitative result.

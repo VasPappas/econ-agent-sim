@@ -8,9 +8,13 @@ APP_ENTRYPOINT = Path(__file__).parents[1] / "app" / "streamlit_app.py"
 ECONOMY_03_PAGE = "pages/4_Economy_0_3_Repeated_Exchange.py"
 
 
-def test_economy_0_3_user_redistribution_views_run_without_exceptions() -> None:
+def open_economy_0_3() -> AppTest:
     app = AppTest.from_file(APP_ENTRYPOINT, default_timeout=10).run()
-    app.switch_page(ECONOMY_03_PAGE).run(timeout=10)
+    return app.switch_page(ECONOMY_03_PAGE).run(timeout=10)
+
+
+def test_economy_0_3_user_redistribution_views_run_without_exceptions() -> None:
+    app = open_economy_0_3()
 
     assert not app.exception
     assert any(item.value == "Overview" for item in app.subheader)
@@ -35,3 +39,21 @@ def test_economy_0_3_user_redistribution_views_run_without_exceptions() -> None:
         app.run(timeout=10)
         assert not app.exception
         assert any(item.value == view for item in app.subheader)
+
+
+def test_economy_0_3_settings_apply_and_close() -> None:
+    app = open_economy_0_3()
+
+    app.session_state["economy03_settings_open"] = True
+    app.run(timeout=10)
+    app.number_input(key="economy03_initial_price_input").set_value(2.0)
+    app.slider(key="economy03_adjustment_speed_input").set_value(0.3)
+    apply_button = next(
+        button for button in app.button if button.label == "Apply and close"
+    )
+    apply_button.click().run(timeout=10)
+
+    assert not app.exception
+    assert app.session_state["economy03_initial_price_x"] == 2.0
+    assert app.session_state["economy03_adjustment_speed"] == 0.3
+    assert app.session_state["economy03_settings_open"] is False
