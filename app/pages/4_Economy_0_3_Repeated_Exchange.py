@@ -7,36 +7,70 @@ from econ_agent_sim.economy_0_2 import canonical_population
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
-UI_SCHEMA_VERSION = 5
+UI_SCHEMA_VERSION = 6
 DEFAULT_PAIR_ALPHAS = (0.20, 0.30, 0.40, 0.35, 0.45, 0.20, 0.30, 0.40, 0.35, 0.45)
+DEFAULT_PAIR_ENDOWMENTS = (
+    (1.8, 0.2),
+    (1.5, 0.5),
+    (1.2, 0.8),
+    (1.7, 0.3),
+    (1.4, 0.6),
+    (1.8, 0.2),
+    (1.5, 0.5),
+    (1.2, 0.8),
+    (1.7, 0.3),
+    (1.4, 0.6),
+)
 
 
 def baseline_period_populations(
     agent_count: int = 10,
     pair_alphas: tuple[float, ...] | None = None,
+    pair_endowments: tuple[tuple[float, float], ...] | None = None,
 ):
     """Build a balanced UI population from complete mirrored pairs."""
 
     if agent_count < 2 or agent_count > 20 or agent_count % 2:
         raise ValueError("agent count must be an even number from 2 through 20")
 
+    pair_count = agent_count // 2
     templates = canonical_population()
-    alphas = pair_alphas or DEFAULT_PAIR_ALPHAS[: agent_count // 2]
-    if len(alphas) != agent_count // 2:
+    alphas = pair_alphas or DEFAULT_PAIR_ALPHAS[:pair_count]
+    endowments = pair_endowments or DEFAULT_PAIR_ENDOWMENTS[:pair_count]
+    if len(alphas) != pair_count:
         raise ValueError("one alpha is required for each mirrored pair")
+    if len(endowments) != pair_count:
+        raise ValueError("one endowment is required for each mirrored pair")
 
     population = []
-    for index in range(agent_count):
-        template = templates[index % len(templates)]
-        pair_alpha = float(alphas[index // 2])
+    for pair_index in range(pair_count):
+        pair_alpha = float(alphas[pair_index])
+        pair_x, pair_y = (float(value) for value in endowments[pair_index])
         if not 0.0 < pair_alpha < 1.0:
             raise ValueError("pair alpha must lie strictly between 0 and 1")
-        alpha = pair_alpha if index % 2 == 0 else 1.0 - pair_alpha
-        population.append(
-            replace(
-                template,
-                name=f"Agent {index + 1}",
-                alpha=alpha,
+        if pair_x < 0.0 or pair_y < 0.0:
+            raise ValueError("pair endowments cannot be negative")
+        if pair_x + pair_y <= 0.0:
+            raise ValueError("each mirrored pair must have some X or Y")
+
+        first_index = pair_index * 2
+        second_index = first_index + 1
+        population.extend(
+            (
+                replace(
+                    templates[first_index % len(templates)],
+                    name=f"Agent {first_index + 1}",
+                    x=pair_x,
+                    y=pair_y,
+                    alpha=pair_alpha,
+                ),
+                replace(
+                    templates[second_index % len(templates)],
+                    name=f"Agent {second_index + 1}",
+                    x=pair_y,
+                    y=pair_x,
+                    alpha=1.0 - pair_alpha,
+                ),
             )
         )
 
@@ -82,13 +116,29 @@ def apply_settings() -> None:
         float(st.session_state[f"economy03_pair_alpha_{pair_index}_input"])
         for pair_index in range(new_agent_count // 2)
     )
+    new_pair_endowments = tuple(
+        (
+            float(st.session_state[f"economy03_pair_x_{pair_index}_input"]),
+            float(st.session_state[f"economy03_pair_y_{pair_index}_input"]),
+        )
+        for pair_index in range(new_agent_count // 2)
+    )
+    if any(x + y <= 0.0 for x, y in new_pair_endowments):
+        st.session_state.economy03_settings_error = (
+            "Each mirrored pair needs at least some X or Y."
+        )
+        return
+    st.session_state.pop("economy03_settings_error", None)
+
     population_changed = (
         new_agent_count != st.session_state.economy03_agent_count
         or new_pair_alphas != tuple(st.session_state.economy03_pair_alphas)
+        or new_pair_endowments != tuple(st.session_state.economy03_pair_endowments)
     )
 
     st.session_state.economy03_agent_count = new_agent_count
     st.session_state.economy03_pair_alphas = new_pair_alphas
+    st.session_state.economy03_pair_endowments = new_pair_endowments
     st.session_state.economy03_initial_price_x = float(
         st.session_state.economy03_initial_price_input
     )
@@ -100,6 +150,7 @@ def apply_settings() -> None:
         st.session_state.economy03_period_populations = baseline_period_populations(
             new_agent_count,
             new_pair_alphas,
+            new_pair_endowments,
         )
         st.session_state.economy03_period_picker = "Baseline"
         st.session_state.economy03_view_picker = "Overview"
@@ -124,11 +175,17 @@ if st.session_state.get("economy03_ui_schema") != UI_SCHEMA_VERSION:
     st.session_state.economy03_agent_count = 10
     st.session_state.economy03_agent_count_input = 10
     st.session_state.economy03_pair_alphas = DEFAULT_PAIR_ALPHAS[:5]
-    for pair_index, pair_alpha in enumerate(DEFAULT_PAIR_ALPHAS):
+    st.session_state.economy03_pair_endowments = DEFAULT_PAIR_ENDOWMENTS[:5]
+    for pair_index, (pair_alpha, pair_endowment) in enumerate(
+        zip(DEFAULT_PAIR_ALPHAS, DEFAULT_PAIR_ENDOWMENTS, strict=True)
+    ):
         st.session_state[f"economy03_pair_alpha_{pair_index}_input"] = pair_alpha
+        st.session_state[f"economy03_pair_x_{pair_index}_input"] = pair_endowment[0]
+        st.session_state[f"economy03_pair_y_{pair_index}_input"] = pair_endowment[1]
     st.session_state.economy03_period_populations = baseline_period_populations(
         10,
         st.session_state.economy03_pair_alphas,
+        st.session_state.economy03_pair_endowments,
     )
     st.session_state.economy03_initial_price_x = 0.5
     st.session_state.economy03_adjustment_speed = 1.0
@@ -158,8 +215,10 @@ settings_panel = st.expander(
 with settings_panel:
     st.caption(
         "Use the − / + controls throughout. Initial pX and λ change the numerical "
-        "price-search path. Pair α changes preferences and therefore the economy."
+        "price-search path. Pair endowments and α change the economy itself."
     )
+    if st.session_state.get("economy03_settings_error"):
+        st.error(st.session_state.economy03_settings_error)
     with st.form("economy03_settings"):
         st.number_input(
             "Number of agents",
@@ -186,23 +245,45 @@ with settings_panel:
             format="%.1f",
             key="economy03_adjustment_speed_input",
         )
-        st.markdown("**Pair preferences — α for X**")
+        st.markdown("**Pair endowments and preferences**")
         st.caption(
-            "For each pair, choose the first agent's α. The partner automatically "
-            "gets 1 − α, preserving the mirrored pair and baseline pX = 1."
+            "For each pair, configure the first agent. The partner automatically "
+            "mirrors X and Y and uses 1 − α, preserving baseline pX = 1."
         )
         for pair_index in range(st.session_state.economy03_agent_count // 2):
             first_agent = pair_index * 2 + 1
             second_agent = first_agent + 1
-            st.number_input(
-                f"Pair {pair_index + 1}: Agent {first_agent} α for X",
-                min_value=0.05,
-                max_value=0.95,
-                step=0.05,
-                format="%.2f",
-                key=f"economy03_pair_alpha_{pair_index}_input",
-            )
-            st.caption(f"Agent {second_agent} automatically uses 1 − α.")
+            with st.container(border=True):
+                st.markdown(
+                    f"**Pair {pair_index + 1} — Agents {first_agent} & {second_agent}**"
+                )
+                st.number_input(
+                    f"Agent {first_agent} opening X",
+                    min_value=0.0,
+                    step=0.1,
+                    format="%.2f",
+                    key=f"economy03_pair_x_{pair_index}_input",
+                )
+                st.number_input(
+                    f"Agent {first_agent} opening Y",
+                    min_value=0.0,
+                    step=0.1,
+                    format="%.2f",
+                    key=f"economy03_pair_y_{pair_index}_input",
+                )
+                st.number_input(
+                    f"Agent {first_agent} α for X",
+                    min_value=0.05,
+                    max_value=0.95,
+                    step=0.05,
+                    format="%.2f",
+                    key=f"economy03_pair_alpha_{pair_index}_input",
+                )
+                st.caption(
+                    f"Agent {second_agent} automatically gets opening X = Agent "
+                    f"{first_agent}'s Y, opening Y = Agent {first_agent}'s X, and "
+                    "α = 1 − α."
+                )
         st.form_submit_button(
             "Apply and close",
             width="stretch",
@@ -216,6 +297,7 @@ with settings_panel:
         st.session_state.economy03_period_populations = baseline_period_populations(
             int(st.session_state.economy03_agent_count),
             tuple(st.session_state.economy03_pair_alphas),
+            tuple(st.session_state.economy03_pair_endowments),
         )
         st.session_state.economy03_period_picker = "Baseline"
         st.session_state.economy03_view_picker = "Overview"
