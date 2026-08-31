@@ -61,6 +61,32 @@ def test_economy_0_3_settings_apply_and_close() -> None:
     assert app.session_state["economy03_settings_open"] is False
 
 
+def test_economy_0_3_pair_controls_follow_staged_agent_count_before_apply() -> None:
+    app = open_economy_0_3()
+
+    app.session_state["economy03_settings_open"] = True
+    app.run(timeout=10)
+
+    app.number_input(key="economy03_agent_count_input").set_value(2).run(timeout=10)
+
+    assert not app.exception
+    assert app.session_state["economy03_agent_count"] == 10
+    assert len(app.session_state["economy03_period_populations"][0]) == 10
+
+    visible_pair_x = [
+        item for item in app.number_input if item.key.startswith("economy03_pair_x_")
+    ]
+    visible_pair_y = [
+        item for item in app.number_input if item.key.startswith("economy03_pair_y_")
+    ]
+    visible_pair_alpha = [
+        item for item in app.number_input if item.key.startswith("economy03_pair_alpha_")
+    ]
+    assert len(visible_pair_x) == 1
+    assert len(visible_pair_y) == 1
+    assert len(visible_pair_alpha) == 1
+
+
 def test_economy_0_3_agent_count_change_resets_to_paired_baseline() -> None:
     app = open_economy_0_3()
 
@@ -76,7 +102,7 @@ def test_economy_0_3_agent_count_change_resets_to_paired_baseline() -> None:
     app.session_state["economy03_settings_open"] = True
     app.run(timeout=10)
 
-    app.number_input(key="economy03_agent_count_input").set_value(6)
+    app.number_input(key="economy03_agent_count_input").set_value(6).run(timeout=10)
     apply_button = next(
         button for button in app.button if button.label == "Apply and close"
     )
