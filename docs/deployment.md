@@ -28,3 +28,5 @@ CI installs the same app dependencies and now starts a real Streamlit server and
 ## Update behavior
 
 `main` remains authoritative. Changes merged into `main` are picked up by Streamlit Community Cloud automatically. Dependency changes trigger a redeploy.
+
+Community Cloud may hot-reload a changed Streamlit page while keeping already-imported project modules in memory. Therefore, when a page starts calling a changed Python API signature from `src/econ_agent_sim`, the deployment must also trigger a clean rebuild rather than rely on hot reload. In this project, touching the rebuild marker comment in `requirements.txt` is the explicit mechanism for that clean rebuild. This prevents a new page from calling an older cached module interface.
