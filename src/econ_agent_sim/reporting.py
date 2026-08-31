@@ -5,6 +5,8 @@ from typing import Any
 
 from econ_agent_sim.economy_0 import GOODS, Economy0Result
 
+ECONOMY_03_LEDGER_DISPLAY_EPSILON = 1e-8
+
 
 def accounting_rows(
     result: Economy0Result, transaction_count: int | None = None
@@ -57,7 +59,7 @@ def stock_flow_rows(result: Economy0Result) -> list[dict[str, Any]]:
 def transaction_rows(
     result: Economy0Result, transaction_count: int | None = None
 ) -> list[dict[str, Any]]:
-    """Return ledger rows, hiding internal grouping IDs for explicit-time results."""
+    """Return readable ledger rows while preserving raw transactions internally."""
 
     count = len(result.transactions) if transaction_count is None else transaction_count
     if not 0 <= count <= len(result.transactions):
@@ -70,10 +72,11 @@ def transaction_rows(
                 "transaction_id": row["transaction_id"],
                 "period": row["period"],
                 "good": row["good"],
-                "quantity": row["quantity"],
+                "quantity": round(row["quantity"], 10),
                 "sender": row["sender"],
                 "receiver": row["receiver"],
             }
             for row in rows
+            if row["quantity"] > ECONOMY_03_LEDGER_DISPLAY_EPSILON
         ]
     return rows
