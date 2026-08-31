@@ -69,12 +69,12 @@ def transaction_rows(
     if rows and all(row["period"] > 0 for row in rows):
         return [
             {
-                "transaction": row["transaction_id"],
+                "transaction_id": row["transaction_id"],
                 "period": row["period"],
                 "good": row["good"],
                 "quantity": round(row["quantity"], 10),
-                "from": row["sender"],
-                "to": row["receiver"],
+                "sender": row["sender"],
+                "receiver": row["receiver"],
             }
             for row in rows
             if row["quantity"] > ECONOMY_03_LEDGER_DISPLAY_EPSILON
