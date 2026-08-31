@@ -48,9 +48,14 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert "Agents always come in mirrored pairs" in source
     assert '"Adjustment speed (lambda)"' in source
     assert "st.slider(" not in source
-    assert "Pair preferences — α for X" in source
+    assert "Pair endowments and preferences" in source
+    assert "mirrors X and Y" in source
     assert "1 − α" in source
+    assert 'key=f"economy03_pair_x_{pair_index}_input"' in source
+    assert 'key=f"economy03_pair_y_{pair_index}_input"' in source
     assert 'key=f"economy03_pair_alpha_{pair_index}_input"' in source
+    assert 'f"Agent {first_agent} opening X"' in source
+    assert 'f"Agent {first_agent} opening Y"' in source
     assert '"Apply and close"' in source
     assert "st.session_state.economy03_settings_open = False" in source
     assert 'with st.expander("Add a redistribution"' in source
