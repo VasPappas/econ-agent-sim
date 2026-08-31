@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from econ_agent_sim.economy_0 import GOODS, equilibrium_prices
 from econ_agent_sim.ledger import Ledger, Transaction
@@ -30,10 +30,20 @@ class ExchangeAgentConfig:
             raise ValueError("Cobb-Douglas alpha must lie strictly between 0 and 1")
 
 
-def canonical_population() -> tuple[ExchangeAgentConfig, ...]:
-    """Return the deterministic ten-agent Economy 0.2 benchmark population."""
+def canonical_population(agent_count: int = 10) -> tuple[ExchangeAgentConfig, ...]:
+    """Return a deterministic balanced population built from mirrored agent pairs.
 
-    return (
+    The historical ten-agent Economy 0.2 population remains the default. Smaller
+    even populations take complete pairs from that benchmark. Larger populations
+    repeat the same five pair types deterministically with fresh agent names.
+    """
+
+    if agent_count < 2:
+        raise ValueError("agent count must be at least 2")
+    if agent_count % 2:
+        raise ValueError("agent count must be even because agents come in pairs")
+
+    templates = (
         ExchangeAgentConfig("Agent 1", 1.8, 0.2, 0.20),
         ExchangeAgentConfig("Agent 2", 0.2, 1.8, 0.80),
         ExchangeAgentConfig("Agent 3", 1.5, 0.5, 0.30),
@@ -44,6 +54,14 @@ def canonical_population() -> tuple[ExchangeAgentConfig, ...]:
         ExchangeAgentConfig("Agent 8", 0.3, 1.7, 0.65),
         ExchangeAgentConfig("Agent 9", 1.4, 0.6, 0.45),
         ExchangeAgentConfig("Agent 10", 0.6, 1.4, 0.55),
+    )
+
+    return tuple(
+        replace(
+            templates[index % len(templates)],
+            name=f"Agent {index + 1}",
+        )
+        for index in range(agent_count)
     )
 
 
