@@ -35,15 +35,17 @@ For this teaching baseline, agents always come in mirrored pairs. Within each pa
 - one agent's Y endowment is the other's X endowment; and
 - their Cobb-Douglas preference weights add to 1.
 
-Each complete pair therefore contributes equal aggregate X and Y and is balanced around the benchmark relative price `pX = 1`. The historical ten-agent Economy 0.2 population is exactly the 10-agent case. For populations above ten, the same five deterministic pair types repeat with new agent names.
+Settings expose one preference parameter for every pair: the first agent's `alpha`, or preference weight for X. The partner automatically receives `1 - alpha`. For example, choosing `alpha = 0.35` for Agent 1 makes Agent 2's alpha `0.65`.
 
-This pairing is an **experimental design convention**, not a mathematical restriction of pure exchange. The underlying Economy 0.2 engine still accepts arbitrary populations, including odd numbers. Economy 0.3 deliberately offers only complete pairs so changing population size does not accidentally introduce a new baseline price effect.
+Because endowments and preferences are mirrored together, each complete pair contributes equal aggregate X and Y and remains balanced around the benchmark relative price `pX = 1`, even when the pair's alpha is changed. The historical ten-agent Economy 0.2 population is exactly the default 10-agent case. For populations above ten, the same five deterministic endowment-pair types repeat with new agent names.
 
-Changing the number of agents resets the interactive experiment to Baseline because existing redistributions refer to a specific set of agent identities.
+This pairing is an **experimental design convention**, not a mathematical restriction of pure exchange. The underlying Economy 0.2 engine still accepts arbitrary populations, including odd numbers. Economy 0.3 deliberately offers only complete pairs so changing population size or a mirrored pair's preference does not accidentally introduce a new baseline price effect.
+
+Changing either the number of agents or any pair alpha resets the interactive experiment to Baseline because those choices redefine the population to which later redistributions apply.
 
 ## Baseline first, then user-defined redistribution
 
-The default Economy 0.3 experiment contains only one period: **Baseline**. The default population has ten agents, while Settings can select another even paired population.
+The default Economy 0.3 experiment contains only one period: **Baseline**. The default population has ten agents, while Settings can select another even paired population and can change the mirrored pair preferences.
 
 The user decides whether time should continue. A new period is created by choosing:
 
@@ -91,6 +93,8 @@ Every period starts from the configured initial trial price and runs the same no
 The initial trial price is a **numerical starting point for the price search**, not a parameter that changes the underlying equilibrium. Changing Initial pX therefore changes the path of trial prices and usually the number of adjustments required to clear the market.
 
 The adjustment-speed parameter `lambda` controls the size of each price response to excess demand. Smaller lambda means smaller price moves and therefore more tâtonnement adjustments, while the equilibrium for a fixed period remains unchanged.
+
+Pair alpha is different from Initial pX and lambda: alpha changes agents' preferences and therefore changes their desired bundles. The mirrored-pair construction keeps the unredistributed Baseline at `pX = 1`, but after Y is redistributed the chosen alphas determine how strongly the new distribution affects demand pressure and equilibrium price.
 
 No physical transfer occurs during price discovery. Agents repeatedly calculate optimal demands at trial prices, aggregate excess demand is measured, and the relative price changes until both markets clear within tolerance.
 
@@ -141,7 +145,7 @@ An Economy 0.3 scenario may supply an arbitrary non-empty sequence of period pop
 3. aggregate X remains fixed across periods; and
 4. aggregate Y remains fixed across periods.
 
-The app uses a narrower interaction rule on top of that general engine: the Baseline is constructed from complete mirrored pairs and each new period moves Y between two existing agents while holding all X endowments fixed.
+The app uses a narrower interaction rule on top of that general engine: the Baseline is constructed from complete mirrored pairs, Settings may redefine those pair preferences before the experiment begins, and each new period moves Y between two existing agents while holding all X endowments and alphas fixed.
 
 ## Legacy four-period example
 
@@ -163,7 +167,9 @@ The top-level views are only:
 - `Market` — the full within-period tâtonnement path and final clearing check; and
 - `Audit` — agent decisions, stock-flow accounts, settlement ledger, exogenous reset, and the complete multi-period ledger.
 
-Settings use a full-width inline expander directly in the page. The user can choose 2, 4, 6, ..., 20 agents, with the interface explicitly explaining that the experimental population always consists of complete mirrored pairs. Settings also contain Initial pX and lambda. Submitting **Apply and close** applies the settings and closes the panel; changing agent count resets redistribution history to Baseline.
+Settings use a full-width inline expander directly in the page. All numeric choices use the same number-input pattern with `− / +` controls: Number of agents changes by two, Initial pX changes by 0.1, lambda changes by 0.1, and each pair alpha changes by 0.05. For every visible pair, the user chooses the first agent's alpha and the partner automatically uses `1 - alpha`.
+
+Submitting **Apply and close** applies the settings and closes the panel. Changing agent count or any pair alpha resets redistribution history to Baseline; changing only Initial pX or lambda preserves the existing redistribution history because those two settings change only the numerical price-search path.
 
 The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the number of agents, exact equilibrium `pX`, percentage change from the previous step when relevant, and market/accounting status.
 
