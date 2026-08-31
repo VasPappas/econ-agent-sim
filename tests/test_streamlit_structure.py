@@ -43,8 +43,14 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert 'key="economy03_settings_open"' in source
     assert 'on_change="rerun"' in source
     assert '"Number of agents"' in source
-    assert 'options=tuple(range(2, 21, 2))' in source
+    assert "min_value=2" in source
+    assert "max_value=20" in source
     assert "Agents always come in mirrored pairs" in source
+    assert '"Adjustment speed (lambda)"' in source
+    assert "st.slider(" not in source
+    assert "Pair preferences — α for X" in source
+    assert "1 − α" in source
+    assert 'key=f"economy03_pair_alpha_{pair_index}_input"' in source
     assert '"Apply and close"' in source
     assert "st.session_state.economy03_settings_open = False" in source
     assert 'with st.expander("Add a redistribution"' in source
@@ -86,6 +92,8 @@ def test_economy_0_3_page_avoids_new_helper_imports_for_cloud_hot_reload() -> No
     source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
 
     assert "from econ_agent_sim.economy_0_2 import canonical_population" in source
+    assert "templates = canonical_population()" in source
+    assert "canonical_population(agent_count)" not in source
     assert (
         "from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3"
         in source
