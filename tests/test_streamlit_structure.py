@@ -48,7 +48,7 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert "Agents always come in mirrored pairs" in source
     assert '"Adjustment speed (lambda)"' in source
     assert "st.slider(" not in source
-    assert '"Pair preferences — α for X"' in source
+    assert "Pair preferences — α for X" in source
     assert "1 − α" in source
     assert 'key=f"economy03_pair_alpha_{pair_index}_input"' in source
     assert '"Apply and close"' in source
