@@ -29,23 +29,33 @@ That boundary is deliberate. Economy 0.3 introduces a time index without yet int
 
 The Streamlit experiment lets the user choose any **even** number of agents from 2 through 20.
 
-For this teaching baseline, agents always come in mirrored pairs. Within each pair:
+For this teaching baseline, agents always come in mirrored pairs. Settings expose three economic choices for the first agent in each pair:
 
-- one agent's X endowment is the other's Y endowment;
-- one agent's Y endowment is the other's X endowment; and
-- their Cobb-Douglas preference weights add to 1.
+- opening X endowment;
+- opening Y endowment; and
+- Cobb-Douglas `alpha`, or preference weight for X.
 
-Settings expose one preference parameter for every pair: the first agent's `alpha`, or preference weight for X. The partner automatically receives `1 - alpha`. For example, choosing `alpha = 0.35` for Agent 1 makes Agent 2's alpha `0.65`.
+The partner is generated automatically by mirroring all three choices. If Agent 1 is configured as
 
-Because endowments and preferences are mirrored together, each complete pair contributes equal aggregate X and Y and remains balanced around the benchmark relative price `pX = 1`, even when the pair's alpha is changed. The historical ten-agent Economy 0.2 population is exactly the default 10-agent case. For populations above ten, the same five deterministic endowment-pair types repeat with new agent names.
+`X = x, Y = y, alpha = a`,
 
-This pairing is an **experimental design convention**, not a mathematical restriction of pure exchange. The underlying Economy 0.2 engine still accepts arbitrary populations, including odd numbers. Economy 0.3 deliberately offers only complete pairs so changing population size or a mirrored pair's preference does not accidentally introduce a new baseline price effect.
+then Agent 2 is
 
-Changing either the number of agents or any pair alpha resets the interactive experiment to Baseline because those choices redefine the population to which later redistributions apply.
+`X = y, Y = x, alpha = 1 - a`.
+
+For example, choosing `X = 2.4`, `Y = 0.6`, and `alpha = 0.35` for Agent 1 gives Agent 2 `X = 0.6`, `Y = 2.4`, and `alpha = 0.65`.
+
+Endowments must be non-negative, and a pair must have at least some X or Y. Alpha remains strictly between 0 and 1.
+
+Because endowments and preferences are mirrored together, each complete pair contributes the same aggregate quantity of X as Y. The pair also remains balanced around the benchmark relative price `pX = 1`, even when its endowments or alpha are changed. The historical ten-agent Economy 0.2 population is exactly the default 10-agent case. For populations above ten, the same five deterministic default pair types repeat with new agent names until the user changes them.
+
+This pairing is an **experimental design convention**, not a mathematical restriction of pure exchange. The underlying Economy 0.2 engine still accepts arbitrary populations, including odd numbers. Economy 0.3 deliberately offers only complete pairs so changing population size, endowments, or mirrored preferences does not accidentally introduce a new baseline relative-price effect.
+
+Changing the number of agents, any pair endowment, or any pair alpha resets the interactive experiment to Baseline because those choices redefine the population to which later redistributions apply.
 
 ## Baseline first, then user-defined redistribution
 
-The default Economy 0.3 experiment contains only one period: **Baseline**. The default population has ten agents, while Settings can select another even paired population and can change the mirrored pair preferences.
+The default Economy 0.3 experiment contains only one period: **Baseline**. The default population has ten agents, while Settings can select another even paired population and can change the mirrored pair endowments and preferences.
 
 The user decides whether time should continue. A new period is created by choosing:
 
@@ -55,15 +65,17 @@ The user decides whether time should continue. A new period is created by choosi
 
 The transfer defines the next period's **exogenous opening endowments**. It is not a market transaction and therefore does not appear in the settlement ledger.
 
-Every user-created period preserves:
+Every user-created redistribution period preserves:
 
 - the same agent identities and ordering;
 - the same Cobb-Douglas preference parameters;
 - every agent's X endowment;
-- aggregate X equal to the selected number of agents; and
-- aggregate Y equal to the selected number of agents.
+- aggregate X equal to the Baseline aggregate X; and
+- aggregate Y equal to the Baseline aggregate Y.
 
-Only the distribution of Y changes. The user may add as many redistribution periods as desired, remove the latest one, or reset the experiment to Baseline.
+Because the Baseline is made from mirrored pairs, aggregate X equals aggregate Y, but their common total is no longer required to equal the number of agents once the user customizes pair endowments.
+
+Only the distribution of Y changes after Baseline. The user may add as many redistribution periods as desired, remove the latest one, or reset the experiment to Baseline.
 
 ## Why redistribution can change the equilibrium price
 
@@ -76,7 +88,7 @@ p_{X,t}^* =
 \qquad p_Y = 1.
 \]
 
-Because X endowments and preferences remain fixed within an experiment, the denominator does not change across user-created periods. What changes is:
+Within one experiment, X endowments and preferences remain fixed after the Baseline is configured, so the denominator does not change across user-created redistribution periods. What changes is:
 
 \[
 \sum_i \alpha_i y_{i,t}.
@@ -86,6 +98,8 @@ This is the Y endowment weighted by each agent's preference for X. Moving Y towa
 
 The Streamlit Overview displays this weighted quantity alongside the equilibrium-price change so the causal mechanism is visible directly.
 
+Changing pair X/Y endowments in Settings is different from adding a redistribution period: it defines a new balanced Baseline economy. Because the partner is mirrored at the same time, that new Baseline still has `pX = 1`. Later redistributions then show how the chosen endowment scale and preferences affect the size of the price response.
+
 ## Price discovery inside each period
 
 Every period starts from the configured initial trial price and runs the same normalized Walrasian tâtonnement rule as Economy 0.2.
@@ -94,7 +108,7 @@ The initial trial price is a **numerical starting point for the price search**, 
 
 The adjustment-speed parameter `lambda` controls the size of each price response to excess demand. Smaller lambda means smaller price moves and therefore more tâtonnement adjustments, while the equilibrium for a fixed period remains unchanged.
 
-Pair alpha is different from Initial pX and lambda: alpha changes agents' preferences and therefore changes their desired bundles. The mirrored-pair construction keeps the unredistributed Baseline at `pX = 1`, but after Y is redistributed the chosen alphas determine how strongly the new distribution affects demand pressure and equilibrium price.
+Pair endowments and pair alpha are different from Initial pX and lambda: they change the economy itself by changing agents' wealth and/or preferences. The mirrored-pair construction keeps the unredistributed Baseline at `pX = 1`, but after Y is redistributed the chosen endowments and alphas determine how strongly the new distribution affects demand pressure and equilibrium price.
 
 No physical transfer occurs during price discovery. Agents repeatedly calculate optimal demands at trial prices, aggregate excess demand is measured, and the relative price changes until both markets clear within tolerance.
 
@@ -145,7 +159,7 @@ An Economy 0.3 scenario may supply an arbitrary non-empty sequence of period pop
 3. aggregate X remains fixed across periods; and
 4. aggregate Y remains fixed across periods.
 
-The app uses a narrower interaction rule on top of that general engine: the Baseline is constructed from complete mirrored pairs, Settings may redefine those pair preferences before the experiment begins, and each new period moves Y between two existing agents while holding all X endowments and alphas fixed.
+The app uses a narrower interaction rule on top of that general engine: the Baseline is constructed from complete mirrored pairs, Settings may redefine those pair endowments and preferences before the experiment begins, and each new period moves Y between two existing agents while holding all X endowments and alphas fixed.
 
 ## Legacy four-period example
 
@@ -167,9 +181,9 @@ The top-level views are only:
 - `Market` — the full within-period tâtonnement path and final clearing check; and
 - `Audit` — agent decisions, stock-flow accounts, settlement ledger, exogenous reset, and the complete multi-period ledger.
 
-Settings use a full-width inline expander directly in the page. All numeric choices use the same number-input pattern with `− / +` controls: Number of agents changes by two, Initial pX changes by 0.1, lambda changes by 0.1, and each pair alpha changes by 0.05. For every visible pair, the user chooses the first agent's alpha and the partner automatically uses `1 - alpha`.
+Settings use a full-width inline expander directly in the page. All numeric choices use the same number-input pattern with `− / +` controls: Number of agents changes by two, Initial pX changes by 0.1, lambda changes by 0.1, pair X/Y endowments change by 0.1, and each pair alpha changes by 0.05. For every visible pair, the user configures the first agent's opening X, opening Y, and alpha; the partner automatically mirrors X and Y and uses `1 - alpha`.
 
-Submitting **Apply and close** applies the settings and closes the panel. Changing agent count or any pair alpha resets redistribution history to Baseline; changing only Initial pX or lambda preserves the existing redistribution history because those two settings change only the numerical price-search path.
+Submitting **Apply and close** applies the settings and closes the panel. Changing agent count, any pair endowment, or any pair alpha resets redistribution history to Baseline; changing only Initial pX or lambda preserves the existing redistribution history because those two settings change only the numerical price-search path.
 
 The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the number of agents, exact equilibrium `pX`, percentage change from the previous step when relevant, and market/accounting status.
 
