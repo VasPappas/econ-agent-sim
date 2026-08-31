@@ -4,7 +4,7 @@ Economy 0.3 introduces one new mechanism only: **explicit time through repeated 
 
 The economic structure inside each period is unchanged from Economy 0.2:
 
-- ten canonical heterogeneous agents;
+- a user-selected balanced population of heterogeneous agents;
 - two goods, X and Y;
 - Cobb-Douglas utility;
 - Walrasian tâtonnement for price discovery;
@@ -25,9 +25,25 @@ The next period begins from another exogenous endowment schedule. Closing stocks
 
 That boundary is deliberate. Economy 0.3 introduces a time index without yet introducing intertemporal wealth accumulation, saving, consumption, or inventory carry-over.
 
+## Balanced agent pairs
+
+The Streamlit experiment lets the user choose any **even** number of agents from 2 through 20.
+
+For this teaching baseline, agents always come in mirrored pairs. Within each pair:
+
+- one agent's X endowment is the other's Y endowment;
+- one agent's Y endowment is the other's X endowment; and
+- their Cobb-Douglas preference weights add to 1.
+
+Each complete pair therefore contributes equal aggregate X and Y and is balanced around the benchmark relative price `pX = 1`. The historical ten-agent Economy 0.2 population is exactly the 10-agent case. For populations above ten, the same five deterministic pair types repeat with new agent names.
+
+This pairing is an **experimental design convention**, not a mathematical restriction of pure exchange. The underlying Economy 0.2 engine still accepts arbitrary populations, including odd numbers. Economy 0.3 deliberately offers only complete pairs so changing population size does not accidentally introduce a new baseline price effect.
+
+Changing the number of agents resets the interactive experiment to Baseline because existing redistributions refer to a specific set of agent identities.
+
 ## Baseline first, then user-defined redistribution
 
-The default Economy 0.3 experiment now contains only one period: **Baseline**. It reproduces the canonical Economy 0.2 population exactly.
+The default Economy 0.3 experiment contains only one period: **Baseline**. The default population has ten agents, while Settings can select another even paired population.
 
 The user decides whether time should continue. A new period is created by choosing:
 
@@ -42,8 +58,8 @@ Every user-created period preserves:
 - the same agent identities and ordering;
 - the same Cobb-Douglas preference parameters;
 - every agent's X endowment;
-- aggregate X = 10; and
-- aggregate Y = 10.
+- aggregate X equal to the selected number of agents; and
+- aggregate Y equal to the selected number of agents.
 
 Only the distribution of Y changes. The user may add as many redistribution periods as desired, remove the latest one, or reset the experiment to Baseline.
 
@@ -58,7 +74,7 @@ p_{X,t}^* =
 \qquad p_Y = 1.
 \]
 
-Because X endowments and preferences remain fixed, the denominator does not change across user-created periods. What changes is:
+Because X endowments and preferences remain fixed within an experiment, the denominator does not change across user-created periods. What changes is:
 
 \[
 \sum_i \alpha_i y_{i,t}.
@@ -84,7 +100,7 @@ Using the same Initial pX and lambda in every period is intentional. Economy 0.3
 
 After a period converges, the same deterministic settlement rule from Economy 0.2 matches net sellers to net buyers in population order.
 
-Settlement now uses the declared numerical tolerance as an economic cutoff. Residual desired transfers smaller than that tolerance are treated as numerical round-off rather than as meaningful physical transactions, so the ledger does not contain rows such as `0.0000000002 X`. The resulting closing allocation still matches the theoretical target within the model's stated tolerance, while stock-flow accounting remains exact for every transfer that is actually recorded.
+Settlement uses the declared numerical tolerance as an economic cutoff. Residual desired transfers smaller than that tolerance are treated as numerical round-off rather than as meaningful physical transactions, so the ledger does not contain rows such as `0.0000000002 X`. The resulting closing allocation still matches the theoretical target within the model's stated tolerance, while stock-flow accounting remains exact for every transfer that is actually recorded.
 
 Economy 0.3 keeps three identifiers internally:
 
@@ -125,11 +141,11 @@ An Economy 0.3 scenario may supply an arbitrary non-empty sequence of period pop
 3. aggregate X remains fixed across periods; and
 4. aggregate Y remains fixed across periods.
 
-The app uses a narrower interaction rule on top of that general engine: each new period moves Y between two existing agents while holding all X endowments fixed.
+The app uses a narrower interaction rule on top of that general engine: the Baseline is constructed from complete mirrored pairs and each new period moves Y between two existing agents while holding all X endowments fixed.
 
 ## Legacy four-period example
 
-The original Economy 0.3 implementation used a deterministic four-period schedule created by rotating the baseline Y vector across agents. That schedule remains available through `canonical_period_populations()` so the completed historical example remains reproducible and testable.
+The original Economy 0.3 implementation used a deterministic four-period schedule created by rotating the baseline Y vector across the canonical ten agents. That schedule remains available through `canonical_period_populations()` so the completed historical example remains reproducible and testable.
 
 It is no longer the default app experience because the arbitrary rotation made the price path harder to interpret. The current default instead lets the user create the redistribution that causes each new period.
 
@@ -139,7 +155,7 @@ The Economy 0.3 page is mobile-first and deliberately compact.
 
 The primary flow is:
 
-`Baseline → Add a redistribution → Compare`
+`Choose paired population → Baseline → Add a redistribution → Compare`
 
 The top-level views are only:
 
@@ -147,9 +163,9 @@ The top-level views are only:
 - `Market` — the full within-period tâtonnement path and final clearing check; and
 - `Audit` — agent decisions, stock-flow accounts, settlement ledger, exogenous reset, and the complete multi-period ledger.
 
-Settings use a full-width inline expander directly in the page, matching the visual pattern of the redistribution inputs instead of opening a floating overlay. The expander tracks its open state. Submitting **Apply and close** updates Initial pX and lambda together and closes the panel before the updated simulation result is shown.
+Settings use a full-width inline expander directly in the page. The user can choose 2, 4, 6, ..., 20 agents, with the interface explicitly explaining that the experimental population always consists of complete mirrored pairs. Settings also contain Initial pX and lambda. Submitting **Apply and close** applies the settings and closes the panel; changing agent count resets redistribution history to Baseline.
 
-The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the exact equilibrium `pX`, the percentage change from the previous step when relevant, and market/accounting status. This avoids truncated labels and values on phone-sized screens.
+The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the number of agents, exact equilibrium `pX`, percentage change from the previous step when relevant, and market/accounting status.
 
 When multiple redistributions exist, the Overview price-history chart uses a disclosed zoomed vertical axis so small relative-price changes remain visible. The exact numerical `pX` remains visible above the chart, so the zoom improves readability without replacing the quantitative result.
 

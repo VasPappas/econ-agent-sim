@@ -42,6 +42,9 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert '"Settings",' in source
     assert 'key="economy03_settings_open"' in source
     assert 'on_change="rerun"' in source
+    assert '"Number of agents"' in source
+    assert 'options=tuple(range(2, 21, 2))' in source
+    assert "Agents always come in mirrored pairs" in source
     assert '"Apply and close"' in source
     assert "st.session_state.economy03_settings_open = False" in source
     assert 'with st.expander("Add a redistribution"' in source

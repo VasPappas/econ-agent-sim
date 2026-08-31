@@ -19,6 +19,37 @@ def test_canonical_population_has_ten_heterogeneous_agents() -> None:
     assert len({(agent.x, agent.y) for agent in population}) > 2
 
 
+def test_balanced_population_supports_even_agent_counts() -> None:
+    for agent_count in range(2, 21, 2):
+        population = canonical_population(agent_count)
+
+        assert len(population) == agent_count
+        assert [agent.name for agent in population] == [
+            f"Agent {index}" for index in range(1, agent_count + 1)
+        ]
+        assert isclose(sum(agent.x for agent in population), agent_count, abs_tol=1e-12)
+        assert isclose(sum(agent.y for agent in population), agent_count, abs_tol=1e-12)
+
+        for pair_start in range(0, agent_count, 2):
+            left = population[pair_start]
+            right = population[pair_start + 1]
+            assert isclose(left.x, right.y, abs_tol=1e-12)
+            assert isclose(left.y, right.x, abs_tol=1e-12)
+            assert isclose(left.alpha + right.alpha, 1.0, abs_tol=1e-12)
+
+        result = run_economy_0_2(Economy02Config(agents=population))
+        assert isclose(result.benchmark_price_x, 1.0, abs_tol=1e-12)
+        assert isclose(result.prices["X"], 1.0, abs_tol=1e-8)
+
+
+def test_balanced_population_requires_complete_pairs() -> None:
+    with pytest.raises(ValueError, match="at least 2"):
+        canonical_population(0)
+
+    with pytest.raises(ValueError, match="come in pairs"):
+        canonical_population(3)
+
+
 def test_canonical_many_agent_tatonnement_converges_to_one() -> None:
     result = run_economy_0_2()
 
