@@ -57,7 +57,23 @@ def stock_flow_rows(result: Economy0Result) -> list[dict[str, Any]]:
 def transaction_rows(
     result: Economy0Result, transaction_count: int | None = None
 ) -> list[dict[str, Any]]:
+    """Return ledger rows, hiding internal grouping IDs for explicit-time results."""
+
     count = len(result.transactions) if transaction_count is None else transaction_count
     if not 0 <= count <= len(result.transactions):
         raise ValueError("transaction_count is outside the ledger")
-    return [asdict(transaction) for transaction in result.transactions[:count]]
+
+    rows = [asdict(transaction) for transaction in result.transactions[:count]]
+    if rows and all(row["period"] > 0 for row in rows):
+        return [
+            {
+                "transaction_id": row["transaction_id"],
+                "period": row["period"],
+                "good": row["good"],
+                "quantity": row["quantity"],
+                "sender": row["sender"],
+                "receiver": row["receiver"],
+            }
+            for row in rows
+        ]
+    return rows

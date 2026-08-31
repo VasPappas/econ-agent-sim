@@ -55,6 +55,8 @@ After convergence, each agent has a net target position for each good. Several a
 
 This matching rule does not determine prices or preferences; it only converts the already-determined equilibrium allocation into explicit, traceable transfers. All transfers share `trade_id = 1` because they are legs of one market-clearing settlement event, while each transfer has its own `transaction_id`.
 
+The settlement tolerance is also used to distinguish an economically meaningful transfer from floating-point residue. A residual target smaller than the declared settlement tolerance is treated as numerical round-off and is not written as a ledger transaction. This prevents quantities such as `0.0000000002` from appearing as if they were genuine trades while keeping the closing allocation within the model's stated numerical accuracy.
+
 ## Accounting
 
 For every agent and good:
