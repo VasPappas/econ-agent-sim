@@ -23,6 +23,10 @@ Everything else is inherited from Economy 0.1: two goods, Cobb-Douglas optimizat
 
 The population is deliberately non-random. Adjacent agents are mirrored in endowments and preferences, total X and total Y are both 10, and the analytic benchmark remains `pX = 1` with `pY = 1`.
 
+`canonical_population(agent_count)` can also generate other **even** balanced population sizes. Complete mirrored pairs are always kept together. Counts below ten take complete pairs from the historical benchmark; counts above ten repeat the same five deterministic pair types with new agent names. Every complete pair contributes 2 units of X and 2 units of Y and preserves the baseline benchmark `pX = 1`.
+
+The pair requirement belongs to this balanced benchmark generator and to the Economy 0.3 interactive experiment. It is not a restriction of the general Economy 0.2 engine: `Economy02Config` still accepts arbitrary named populations, including odd-sized ones.
+
 ## Optimization and analytic benchmark
 
 Each agent has Cobb-Douglas utility `U_i(X,Y) = X^alpha_i Y^(1-alpha_i)` and independently chooses the affordable utility-maximizing bundle at each trial price.
@@ -67,8 +71,8 @@ System-wide total X and total Y are conserved, and aggregate net flows are zero.
 
 ## Architectural significance
 
-The Economy 0.2 engine loops over a collection of agent specifications for construction, optimization, aggregation, settlement, and accounting. A test uses three agents with completely different names to verify that the new engine does not depend on Alice, Bob, or the canonical ten-agent labels.
+The Economy 0.2 engine loops over a collection of agent specifications for construction, optimization, aggregation, settlement, and accounting. A test uses three agents with completely different names to verify that the engine does not depend on Alice, Bob, or the canonical ten-agent labels.
 
-The first Streamlit page keeps the canonical population fixed while allowing the initial trial price and tâtonnement adjustment speed to vary. Direct population-table editing can be added later without changing the economic engine.
+The Economy 0.2 Streamlit page still keeps the historical ten-agent population fixed. Economy 0.3 reuses the balanced pair generator to let the user choose an even population size without changing the underlying many-agent engine.
 
 Economies 0 and 0.1 remain separately runnable and tested.
