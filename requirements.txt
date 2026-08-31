@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.3 ledger display cleanup
+# Rebuild marker: Economy 0.3 paired-agent Cloud compatibility
 -e .[app]
