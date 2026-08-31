@@ -33,10 +33,12 @@ The user creates time explicitly by adding redistributions. Each action chooses 
 
 The top-level mobile information hierarchy is deliberately shorter than before:
 
-1. add an optional redistribution;
+1. optionally open `Settings` or add a redistribution;
 2. choose `Baseline` or one of the user-created redistribution periods;
 3. choose only `Overview`, `Market`, or `Audit`; and
 4. reveal detailed tables through explicit expanders when needed.
+
+`Settings` is an inline full-width expander, using the same visual and interaction pattern as `Add a redistribution`. It is not a floating popover, so it never covers the experiment inputs or results. The expander tracks its open state; submitting **Apply and close** updates Initial pX and lambda together and programmatically collapses the settings section before the rerendered result is shown. Home and Economy 0.2 remain navigation links rather than being mixed with the settings control.
 
 The selected result is shown in one responsive full-width block instead of several narrow `st.metric` cards. The block shows the exact equilibrium `pX`, the percentage change from the previous step when relevant, and the market/accounting status in text that can wrap naturally on a phone. The selected period itself is not repeated in another card because the period pill already provides that context.
 
