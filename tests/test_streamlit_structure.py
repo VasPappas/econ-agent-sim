@@ -46,9 +46,12 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert "min_value=2" in source
     assert "max_value=20" in source
     assert "Agents always come in mirrored pairs" in source
+    assert "staged_agent_count = int(st.session_state.economy03_agent_count_input)" in source
+    assert "for pair_index in range(staged_agent_count // 2):" in source
+    assert "settings below update immediately" in source
     assert '"Adjustment speed (lambda)"' in source
     assert "st.slider(" not in source
-    assert "Pair endowments and preferences" in source
+    assert "Calibrate the selected agent pairs" in source
     assert "mirrors X and Y" in source
     assert "1 − α" in source
     assert 'key=f"economy03_pair_x_{pair_index}_input"' in source

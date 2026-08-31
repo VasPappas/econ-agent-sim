@@ -219,18 +219,23 @@ with settings_panel:
     )
     if st.session_state.get("economy03_settings_error"):
         st.error(st.session_state.economy03_settings_error)
+
+    st.markdown("**1. Choose population size**")
+    st.number_input(
+        "Number of agents",
+        min_value=2,
+        max_value=20,
+        step=2,
+        key="economy03_agent_count_input",
+    )
+    staged_agent_count = int(st.session_state.economy03_agent_count_input)
+    st.caption(
+        "Agents always come in mirrored pairs, so the count changes by two. Pair "
+        "settings below update immediately; the economy changes only after Apply."
+    )
+
     with st.form("economy03_settings"):
-        st.number_input(
-            "Number of agents",
-            min_value=2,
-            max_value=20,
-            step=2,
-            key="economy03_agent_count_input",
-        )
-        st.caption(
-            "Agents always come in mirrored pairs, so the count changes by two. "
-            "Changing the population resets the experiment to Baseline."
-        )
+        st.markdown("**2. Choose search settings**")
         st.number_input(
             "Initial trial pX",
             min_value=0.01,
@@ -245,12 +250,12 @@ with settings_panel:
             format="%.1f",
             key="economy03_adjustment_speed_input",
         )
-        st.markdown("**Pair endowments and preferences**")
+        st.markdown("**3. Calibrate the selected agent pairs**")
         st.caption(
             "For each pair, configure the first agent. The partner automatically "
             "mirrors X and Y and uses 1 − α, preserving baseline pX = 1."
         )
-        for pair_index in range(st.session_state.economy03_agent_count // 2):
+        for pair_index in range(staged_agent_count // 2):
             first_agent = pair_index * 2 + 1
             second_agent = first_agent + 1
             with st.container(border=True):
