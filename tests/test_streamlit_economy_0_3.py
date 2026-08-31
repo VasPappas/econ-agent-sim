@@ -54,6 +54,45 @@ def test_economy_0_3_settings_apply_and_close() -> None:
     apply_button.click().run(timeout=10)
 
     assert not app.exception
+    assert app.session_state["economy03_agent_count"] == 10
     assert app.session_state["economy03_initial_price_x"] == 2.0
     assert app.session_state["economy03_adjustment_speed"] == 0.3
     assert app.session_state["economy03_settings_open"] is False
+
+
+def test_economy_0_3_agent_count_change_resets_to_paired_baseline() -> None:
+    app = open_economy_0_3()
+
+    baseline = baseline_period_populations()[0]
+    second = redistribute_y(
+        baseline,
+        sender_name="Agent 2",
+        receiver_name="Agent 1",
+        amount=0.5,
+    )
+    app.session_state["economy03_period_populations"] = (baseline, second)
+    app.session_state["economy03_period_picker"] = "Redistribution 1"
+    app.session_state["economy03_settings_open"] = True
+    app.run(timeout=10)
+
+    app.selectbox(key="economy03_agent_count_input").set_value(6)
+    apply_button = next(
+        button for button in app.button if button.label == "Apply and close"
+    )
+    apply_button.click().run(timeout=10)
+
+    assert not app.exception
+    assert app.session_state["economy03_agent_count"] == 6
+    assert app.session_state["economy03_period_picker"] == "Baseline"
+    assert app.session_state["economy03_view_picker"] == "Overview"
+    assert app.session_state["economy03_settings_open"] is False
+
+    periods = app.session_state["economy03_period_populations"]
+    assert len(periods) == 1
+    assert len(periods[0]) == 6
+    for pair_start in range(0, 6, 2):
+        left = periods[0][pair_start]
+        right = periods[0][pair_start + 1]
+        assert left.x == right.y
+        assert left.y == right.x
+        assert left.alpha + right.alpha == 1.0
