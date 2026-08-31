@@ -61,6 +61,18 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert 'with st.expander("Model boundary")' in source
 
 
+def test_economy_0_3_uses_responsive_result_blocks_not_narrow_metric_cards() -> None:
+    source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
+
+    assert 'st.caption("SELECTED RESULT")' in source
+    assert "st.metric(" not in source
+    assert source.count("with st.container(border=True):") >= 2
+    assert "overview_floor = max(0.0, price_low - price_padding)" in source
+    assert "overview_ceiling = price_high + price_padding" in source
+    assert "zero=False" in source
+    assert "The vertical axis is zoomed" in source
+
+
 def test_economy_0_3_page_avoids_new_helper_imports_for_cloud_hot_reload() -> None:
     source = (APP_ROOT / PERMANENT_PAGES[3]).read_text()
 
