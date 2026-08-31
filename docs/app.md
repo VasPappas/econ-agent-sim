@@ -38,9 +38,11 @@ The top-level mobile information hierarchy is deliberately shorter than before:
 3. choose only `Overview`, `Market`, or `Audit`; and
 4. reveal detailed tables through explicit expanders when needed.
 
-`Overview` is the main teaching surface. It shows the equilibrium-price history only when multiple periods exist, the selected period's equilibrium price and accounting status, the exact agents whose Y endowments changed, and the change in `sum(alpha_i * y_i)`. That weighted Y measure makes the causal link between redistribution and X demand pressure visible without asking the user to infer it from an arbitrary four-period path.
+The selected result is shown in one responsive full-width block instead of several narrow `st.metric` cards. The block shows the exact equilibrium `pX`, the percentage change from the previous step when relevant, and the market/accounting status in text that can wrap naturally on a phone. The selected period itself is not repeated in another card because the period pill already provides that context.
 
-`Market` keeps the full within-period tâtonnement audit. Initial pX remains the numerical starting point, lambda remains the adjustment speed, and the chart uses comparable price and adjustment axes so those parameters do not disappear visually through automatic rescaling.
+`Overview` is the main teaching surface. It shows the equilibrium-price history only when multiple periods exist, the selected period's equilibrium price and accounting status, the exact agents whose Y endowments changed, and the change in `sum(alpha_i * y_i)`. Its price-history chart uses a clearly disclosed zoomed vertical scale so small redistribution-driven price changes remain visible on a phone without hiding the exact numerical value.
+
+`Market` keeps the full within-period tâtonnement audit. Initial pX remains the numerical starting point, lambda remains the adjustment speed, and the chart uses comparable price and adjustment axes so those parameters do not disappear visually through automatic rescaling. Its search summary also uses a responsive text block rather than a row of narrow metric cards.
 
 `Audit` contains the complete agent decision table, stock-flow accounts, period settlement ledger, exogenous reset comparison, and full multi-period ledger. Nothing needed for traceability is removed; it is simply one level deeper than the primary economic result.
 
