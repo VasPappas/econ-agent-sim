@@ -183,6 +183,8 @@ The top-level views are only:
 
 Settings use a full-width inline expander directly in the page. All numeric choices use the same number-input pattern with `− / +` controls: Number of agents changes by two, Initial pX changes by 0.1, lambda changes by 0.1, pair X/Y endowments change by 0.1, and each pair alpha changes by 0.05. For every visible pair, the user configures the first agent's opening X, opening Y, and alpha; the partner automatically mirrors X and Y and uses `1 - alpha`.
 
+The Number of agents control sits before the calibration form and is reactive. Changing it immediately changes how many pair-calibration blocks are visible, so selecting 2 agents shows one pair, selecting 6 shows three pairs, and selecting 10 shows five. This is only a staged UI choice: the active simulation population is not changed until **Apply and close** is submitted.
+
 Submitting **Apply and close** applies the settings and closes the panel. Changing agent count, any pair endowment, or any pair alpha resets redistribution history to Baseline; changing only Initial pX or lambda preserves the existing redistribution history because those two settings change only the numerical price-search path.
 
 The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the number of agents, exact equilibrium `pX`, percentage change from the previous step when relevant, and market/accounting status.
