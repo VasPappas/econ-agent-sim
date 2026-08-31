@@ -219,26 +219,72 @@ price_change = (
     else None
 )
 
-with st.container(horizontal=True, wrap=False, gap="small"):
-    st.metric("Step", selected_label, border=True, width=160)
-    st.metric("pX", f"{period.prices['X']:.4f}", border=True, width=115)
-    st.metric(
-        "Δ pX",
-        "—" if price_change is None else f"{price_change:+.1f}%",
-        border=True,
-        width=115,
+with st.container(border=True):
+    st.caption("SELECTED RESULT")
+    if price_change is None:
+        st.markdown(f"### pX {period.prices['X']:.4f}")
+        result_change = "Baseline"
+    else:
+        st.markdown(
+            f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%"
+        )
+        result_change = f"vs {previous_price:.4f} in the previous step"
+    st.caption(
+        f"{result_change} · Market cleared {'✓' if market_ok else '!'} · "
+        f"Accounts balanced {'✓' if accounting_ok else '!'}"
     )
-    st.metric("Market", "✓" if market_ok else "!", border=True, width=105)
-    st.metric("Accounts", "✓" if accounting_ok else "!", border=True, width=115)
 
 if view == "Overview":
     st.subheader("Overview")
     price_history = [
-        {"step": index, "equilibrium pX": item.prices["X"]}
+        {
+            "step": "Baseline" if index == 0 else f"R{index}",
+            "equilibrium pX": item.prices["X"],
+        }
         for index, item in enumerate(result.periods)
     ]
     if len(price_history) > 1:
-        st.line_chart(price_history, x="step", y="equilibrium pX", height=210)
+        history_prices = [row["equilibrium pX"] for row in price_history]
+        price_low = min(history_prices)
+        price_high = max(history_prices)
+        price_span = price_high - price_low
+        scale_reference = max(abs(price_low), abs(price_high), 1.0)
+        price_padding = max(price_span * 0.25, scale_reference * 0.005)
+        overview_floor = max(0.0, price_low - price_padding)
+        overview_ceiling = price_high + price_padding
+        overview_chart = (
+            alt.Chart(alt.Data(values=price_history))
+            .mark_line(point=True)
+            .encode(
+                x=alt.X(
+                    "step:N",
+                    title=None,
+                    sort=[row["step"] for row in price_history],
+                ),
+                y=alt.Y(
+                    "equilibrium pX:Q",
+                    title="equilibrium pX",
+                    scale=alt.Scale(
+                        domain=[overview_floor, overview_ceiling],
+                        zero=False,
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("step:N", title="Step"),
+                    alt.Tooltip(
+                        "equilibrium pX:Q",
+                        title="pX",
+                        format=".4f",
+                    ),
+                ],
+            )
+            .properties(height=210)
+        )
+        st.altair_chart(overview_chart, width="stretch")
+        st.caption(
+            "The vertical axis is zoomed to make redistribution-driven price "
+            "changes visible. Read the exact pX in the result block above."
+        )
 
     current_pressure = sum(agent.alpha * agent.y for agent in period.population)
     if previous_period is None:
@@ -247,8 +293,7 @@ if view == "Overview":
             "changes through time until you add a redistribution."
         )
         st.markdown(
-            f"**Equilibrium pX {period.prices['X']:.4f}** · "
-            f"**X-demand pressure {current_pressure:.3f}**"
+            f"**X-demand pressure:** {current_pressure:.3f}"
         )
         if len(result.periods) == 1:
             st.info(
@@ -305,21 +350,21 @@ if view == "Overview":
             "lower that pressure."
         )
 
-    st.markdown(
-        f"**Market clearing {'✓' if market_ok else '!'}** · "
-        f"**Stock-flow balance {'✓' if accounting_ok else '!'}** · "
-        f"**Final error {final_step.market_error:.1e}**"
-    )
+    st.caption(f"Final market error: {final_step.market_error:.1e}")
 
 elif view == "Market":
     st.subheader("Market")
     total_x = sum(spec.x for spec in period.population)
     total_y = sum(spec.y for spec in period.population)
-    with st.container(horizontal=True, wrap=False, gap="small"):
-        st.metric("Start pX", f"{start_price_x:.3f}", border=True, width=120)
-        st.metric("Equilibrium", f"{period.prices['X']:.4f}", border=True, width=130)
-        st.metric("λ", f"{config.adjustment_speed:.1f}", border=True, width=85)
-        st.metric("Adjustments", adjustments, border=True, width=125)
+
+    with st.container(border=True):
+        st.markdown(
+            f"**Price search:** pX {start_price_x:.3f} → "
+            f"{period.prices['X']:.4f}"
+        )
+        st.caption(
+            f"λ {config.adjustment_speed:.1f} · {adjustments} adjustments"
+        )
 
     comparison_ceiling = max(2.0, start_price_x, period.benchmark_price_x) * 1.05
     comparison_iterations = max(400, adjustments) * 1.05
@@ -327,7 +372,11 @@ elif view == "Market":
     for step in period.steps:
         convergence_rows.extend(
             [
-                {"iteration": step.iteration, "series": "Trial pX", "pX": step.price_x},
+                {
+                    "iteration": step.iteration,
+                    "series": "Trial pX",
+                    "pX": step.price_x,
+                },
                 {
                     "iteration": step.iteration,
                     "series": "Equilibrium benchmark",
