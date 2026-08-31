@@ -7,13 +7,13 @@ from econ_agent_sim.economy_0_2 import canonical_population
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
-UI_SCHEMA_VERSION = 3
+UI_SCHEMA_VERSION = 4
 
 
-def baseline_period_populations():
+def baseline_period_populations(agent_count: int = 10):
     """Build the UI baseline without depending on newly added module helpers."""
 
-    return (canonical_population(),)
+    return (canonical_population(agent_count),)
 
 
 def redistribute_y(population, *, sender_name: str, receiver_name: str, amount: float):
@@ -48,14 +48,32 @@ def redistribute_y(population, *, sender_name: str, receiver_name: str, amount: 
 
 
 def apply_settings() -> None:
-    """Apply submitted price-search settings and close the inline settings panel."""
+    """Apply submitted settings, resetting redistributions if agent count changes."""
 
+    new_agent_count = int(st.session_state.economy03_agent_count_input)
+    agent_count_changed = new_agent_count != st.session_state.economy03_agent_count
+
+    st.session_state.economy03_agent_count = new_agent_count
     st.session_state.economy03_initial_price_x = float(
         st.session_state.economy03_initial_price_input
     )
     st.session_state.economy03_adjustment_speed = float(
         st.session_state.economy03_adjustment_speed_input
     )
+
+    if agent_count_changed:
+        st.session_state.economy03_period_populations = baseline_period_populations(
+            new_agent_count
+        )
+        st.session_state.economy03_period_picker = "Baseline"
+        st.session_state.economy03_view_picker = "Overview"
+        for key in (
+            "economy03_sender",
+            "economy03_receiver",
+            "economy03_redistribution_amount",
+        ):
+            st.session_state.pop(key, None)
+
     st.session_state.economy03_settings_open = False
 
 
@@ -67,7 +85,9 @@ st.set_page_config(
 
 if st.session_state.get("economy03_ui_schema") != UI_SCHEMA_VERSION:
     st.session_state.economy03_ui_schema = UI_SCHEMA_VERSION
-    st.session_state.economy03_period_populations = baseline_period_populations()
+    st.session_state.economy03_agent_count = 10
+    st.session_state.economy03_agent_count_input = 10
+    st.session_state.economy03_period_populations = baseline_period_populations(10)
     st.session_state.economy03_initial_price_x = 0.5
     st.session_state.economy03_adjustment_speed = 1.0
     st.session_state.economy03_period_picker = "Baseline"
@@ -95,10 +115,19 @@ settings_panel = st.expander(
 )
 with settings_panel:
     st.caption(
-        "Initial pX and λ change the numerical price-search path, not the "
-        "underlying equilibrium."
+        "Choose the population and the numerical price-search settings. Initial pX "
+        "and λ change the search path, not the underlying equilibrium."
     )
     with st.form("economy03_settings"):
+        st.selectbox(
+            "Number of agents",
+            options=tuple(range(2, 21, 2)),
+            key="economy03_agent_count_input",
+        )
+        st.caption(
+            "Agents always come in mirrored pairs, so only even counts are available. "
+            "Changing the number of agents resets the experiment to Baseline."
+        )
         st.number_input(
             "Initial trial pX",
             min_value=0.01,
@@ -122,7 +151,9 @@ with settings_panel:
         key="economy03_reset_experiment",
         width="stretch",
     ):
-        st.session_state.economy03_period_populations = baseline_period_populations()
+        st.session_state.economy03_period_populations = baseline_period_populations(
+            int(st.session_state.economy03_agent_count)
+        )
         st.session_state.economy03_period_picker = "Baseline"
         st.session_state.economy03_view_picker = "Overview"
         st.session_state.economy03_settings_open = False
@@ -247,7 +278,8 @@ with st.container(border=True):
         st.markdown(f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%")
         result_change = f"vs {previous_price:.4f} in the previous step"
     st.caption(
-        f"{result_change} · Market cleared {'✓' if market_ok else '!'} · "
+        f"{len(period.population)} agents · {result_change} · "
+        f"Market cleared {'✓' if market_ok else '!'} · "
         f"Accounts balanced {'✓' if accounting_ok else '!'}"
     )
 
@@ -306,7 +338,7 @@ if view == "Overview":
     current_pressure = sum(agent.alpha * agent.y for agent in period.population)
     if previous_period is None:
         st.write(
-            "**Baseline:** this is the Economy 0.2 endowment distribution. Nothing "
+            "**Baseline:** this is a balanced mirrored-pair population. Nothing "
             "changes through time until you add a redistribution."
         )
         st.markdown(f"**X-demand pressure:** {current_pressure:.3f}")
@@ -518,8 +550,9 @@ else:
 with st.expander("Model boundary"):
     st.write(
         "Economy 0.3 adds repeated periods with user-chosen exogenous redistribution. "
-        "There is still no carry-over inventory, consumption, saving, production, "
-        "money, credit, banking, government, or randomness."
+        "The baseline population is built from mirrored agent pairs. There is still "
+        "no carry-over inventory, consumption, saving, production, money, credit, "
+        "banking, government, or randomness."
     )
     st.caption(
         "Each added period starts from the latest user-defined endowment schedule, "
