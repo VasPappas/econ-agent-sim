@@ -10,10 +10,10 @@ st.write(
     "runnable, traceable, and stock-flow consistent."
 )
 
-version_col, goods_col, frontier_col, accounting_col = st.columns(4)
-version_col.metric("Permanent economies", "4")
-goods_col.metric("Goods so far", "2")
-frontier_col.metric("Current frontier", "Economy 0.3")
+version_col, assets_col, frontier_col, accounting_col = st.columns(4)
+version_col.metric("Permanent economies", "5")
+assets_col.metric("Assets so far", "X · Y · Money")
+frontier_col.metric("Current frontier", "Economy 0.4")
 accounting_col.metric("Accounting rule", "Stock = opening + flows")
 
 st.divider()
@@ -83,6 +83,21 @@ with row_two_right, st.container(border=True):
         width="stretch",
     )
 
+with st.container(border=True):
+    st.markdown("### Economy 0.4")
+    st.markdown("**Money and monetary settlement**")
+    st.write(
+        "Keep the same real X/Y exchange economy and repeated redistribution "
+        "experiment, but settle every goods transfer with an explicit reverse money "
+        "payment. Money appears on every agent balance sheet and in the ledger."
+    )
+    st.caption("New mechanism: money as a settlement asset")
+    st.page_link(
+        "pages/5_Economy_0_4_Monetary_Settlement.py",
+        label="Open Economy 0.4 →",
+        width="stretch",
+    )
+
 st.divider()
 st.subheader("How the simulator evolves")
 
@@ -115,9 +130,17 @@ comparison_rows = [
         "version": "Economy 0.3",
         "agents": "10 canonical / fixed identities",
         "price formation": "Tâtonnement each period",
-        "settlement": "Time-stamped clearing ledger",
+        "settlement": "Time-stamped goods ledger",
         "time": "User-added redistribution periods",
         "money": "No",
+    },
+    {
+        "version": "Economy 0.4",
+        "agents": "10 canonical / arbitrary engine populations",
+        "price formation": "Tâtonnement each period",
+        "settlement": "Goods leg + reverse money payment",
+        "time": "User-added redistribution periods",
+        "money": "Settlement asset; no liquidity constraint yet",
     },
 ]
 st.dataframe(comparison_rows, use_container_width=True, hide_index=True)
@@ -127,7 +150,7 @@ with left:
     st.subheader("What never gets hidden")
     st.write(
         "At every stage, the simulator keeps the economic process inspectable: "
-        "opening stocks, agent choices, market-clearing logic, physical transfers, "
+        "opening stocks, agent choices, market-clearing logic, transfers and payments, "
         "closing stocks, and accounting checks."
     )
     st.info(
@@ -138,12 +161,11 @@ with left:
 with right:
     st.subheader("Current boundary")
     st.write(
-        "Economy 0.3 has explicit repeated periods, but each added period is an "
-        "exogenous redistribution chosen by the user. Previous market closing stocks "
-        "are not carried forward. There is still no saving, money, production, "
-        "banking, government, or randomness."
+        "Economy 0.4 has explicit money balances and monetary payment legs, but money "
+        "does not enter utility or constrain purchases yet. The real X/Y equilibrium "
+        "is therefore unchanged by the amount of opening money."
     )
     st.caption(
-        "That boundary is intentional: new mechanisms are introduced only when their "
-        "economic role can be isolated and tested."
+        "There is still no cash-in-advance constraint, banking, credit, interest, "
+        "production, government, money creation, or intertemporal saving."
     )

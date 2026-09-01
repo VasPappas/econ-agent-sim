@@ -6,6 +6,7 @@ PERMANENT_PAGES = (
     "pages/2_Economy_0_1_Walrasian_Price_Discovery.py",
     "pages/3_Economy_0_2_Many_Agent_Exchange.py",
     "pages/4_Economy_0_3_Repeated_Exchange.py",
+    "pages/5_Economy_0_4_Monetary_Settlement.py",
 )
 
 
@@ -113,3 +114,26 @@ def test_economy_0_3_page_avoids_new_helper_imports_for_cloud_hot_reload() -> No
     )
     assert "    baseline_period_populations,\n" not in source
     assert "    redistribute_y,\n" not in source
+
+
+def test_economy_0_4_is_mobile_first_and_makes_money_settlement_explicit() -> None:
+    source = (APP_ROOT / PERMANENT_PAGES[4]).read_text()
+
+    assert 'layout="centered"' in source
+    assert 'initial_sidebar_state="collapsed"' in source
+    assert "st.sidebar" not in source
+    assert 'st.title("Money settles the trade")' in source
+    assert "settings_placeholder = st.empty()" in source
+    assert '"Opening money per agent"' in source
+    assert "redistribution_placeholder = st.empty()" in source
+    assert '"Add a redistribution"' in source
+    assert 'options=("Overview", "Settlement", "Audit")' in source
+    assert 'key="economy04_view_picker"' in source
+    assert '.st-key-economy04_mobile_nav' in source
+    assert 'st.caption("SELECTED RESULT")' in source
+    assert 'st.subheader("Settlement")' in source
+    assert '"money payment"' in source
+    assert 'with st.expander("Settlement ledger")' in source
+    assert 'with st.expander("Stock-flow accounts")' in source
+    assert 'with st.expander("Model boundary")' in source
+    assert "Money does not enter utility" in source
