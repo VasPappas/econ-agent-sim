@@ -29,6 +29,21 @@ def test_economy_0_4_opens_on_monetary_overview() -> None:
     assert has_selected_result(app)
 
 
+def test_economy_0_4_can_apply_even_agent_count() -> None:
+    app = open_economy_0_4()
+
+    agent_count = next(item for item in app.number_input if item.label == "Number of agents")
+    agent_count.set_value(2)
+    apply_button = next(item for item in app.button if item.label == "Apply and close")
+    apply_button.click()
+    app.run(timeout=10)
+
+    assert not app.exception
+    assert app.session_state["economy04_agent_count"] == 2
+    assert len(app.session_state["economy04_period_populations"][0]) == 2
+    assert any("2 agents" in item.value for item in app.caption)
+
+
 def test_economy_0_4_settlement_and_audit_hide_overview_controls() -> None:
     app = open_economy_0_4()
 
