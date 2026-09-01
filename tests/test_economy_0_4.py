@@ -2,6 +2,7 @@ from math import isclose
 
 import pytest
 
+from econ_agent_sim.economy_0_2 import canonical_population
 from econ_agent_sim.economy_0_3 import baseline_period_populations, redistribute_y
 from econ_agent_sim.economy_0_4 import (
     ASSETS,
@@ -24,6 +25,24 @@ def test_default_economy_0_4_preserves_the_ten_agent_baseline() -> None:
     )
     assert isclose(period.prices["Y"], 1.0, abs_tol=1e-12)
     assert isclose(period.prices["X"], 1.0, abs_tol=1e-5)
+
+
+def test_economy_0_4_supports_even_mirrored_population_sizes() -> None:
+    for agent_count in (2, 6, 10, 20):
+        population = canonical_population(agent_count)
+        result = run_economy_0_4(
+            Economy04Config(period_populations=(population,))
+        )
+        period = result.periods[0]
+
+        assert len(period.population) == agent_count
+        assert len(period.opening_stocks) == agent_count
+        assert isclose(period.prices["X"], 1.0, abs_tol=1e-5)
+        assert isclose(
+            sum(row[MONEY] for row in period.opening_stocks.values()),
+            10.0 * agent_count,
+            abs_tol=1e-10,
+        )
 
 
 def test_opening_money_does_not_change_preferences_prices_or_real_allocation() -> None:
