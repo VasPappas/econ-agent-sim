@@ -12,6 +12,10 @@ def open_economy_0_3() -> AppTest:
     return app.switch_page(ECONOMY_03_PAGE).run(timeout=10)
 
 
+def has_model_boundary(app: AppTest) -> bool:
+    return any(item.label == "Model boundary" for item in app.expander)
+
+
 def test_economy_0_3_mobile_view_nav_is_scoped_and_phone_safe() -> None:
     source = PAGE_SOURCE.read_text()
 
@@ -37,3 +41,21 @@ def test_economy_0_3_view_navigation_still_switches_all_views() -> None:
         app.run(timeout=10)
         assert not app.exception
         assert any(item.value == view for item in app.subheader)
+
+
+def test_economy_0_3_model_boundary_is_overview_only() -> None:
+    app = open_economy_0_3()
+
+    assert not app.exception
+    assert has_model_boundary(app)
+
+    for view in ("Market", "Audit"):
+        app.session_state["economy03_view_picker"] = view
+        app.run(timeout=10)
+        assert not app.exception
+        assert not has_model_boundary(app)
+
+    app.session_state["economy03_view_picker"] = "Overview"
+    app.run(timeout=10)
+    assert not app.exception
+    assert has_model_boundary(app)
