@@ -38,13 +38,21 @@ Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
 
 ## Economy 0.3 — Repeated pure exchange
 
-Economy 0.3 introduces explicit time while preserving the Economy 0.2 market inside each period. The default experiment now begins with a single baseline period. The user may then add as many new periods as desired by moving a chosen amount of Y from one agent to another while total X, total Y, identities, and preferences remain fixed.
+Economy 0.3 introduces explicit time while preserving the Economy 0.2 market inside each period. The default experiment begins with a single baseline period. The user may then add as many new periods as desired by moving a chosen amount of Y from one agent to another while total X, total Y, identities, and preferences remain fixed.
 
 Each added period starts from that user-defined exogenous endowment schedule, runs its own tâtonnement process, settles only after convergence, and records all physical transfers with explicit period labels. Closing stocks are not carried into the next period yet, so time is introduced without also introducing saving, inventory accumulation, or intertemporal wealth dynamics.
 
 The original deterministic four-period rotating-Y schedule remains available in the engine as a legacy reproducible example, but it is no longer the default app experience.
 
 Read [`docs/economies/economy_0_3.md`](docs/economies/economy_0_3.md).
+
+## Economy 0.4 — Money and monetary settlement
+
+Economy 0.4 preserves the repeated X/Y exchange economy and introduces Money as a third balance-sheet stock and the unit used to settle trades. Every goods transfer is paired with an explicit reverse money-payment leg under the same trade ID.
+
+Money is deliberately passive at this stage: it does not enter Cobb-Douglas utility, does not enlarge the real demand budget, and does not constrain purchases. Changing the opening money balance therefore leaves the real equilibrium unchanged. The purpose of Economy 0.4 is to establish monetary prices, payment flows, and three-asset stock-flow accounting before liquidity, credit, or banking are introduced.
+
+Read [`docs/economies/economy_0_4.md`](docs/economies/economy_0_4.md).
 
 ## Hosted browser app
 
