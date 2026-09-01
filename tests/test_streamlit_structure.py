@@ -38,7 +38,8 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert "st.sidebar" not in source
     assert 'st.title("Redistribution experiment")' in source
     assert 'st.popover("Settings"' not in source
-    assert 'settings_panel = st.expander(' in source
+    assert "settings_placeholder = st.empty()" in source
+    assert 'settings_panel = settings_placeholder.expander(' in source
     assert '"Settings",' in source
     assert 'key="economy03_settings_open"' in source
     assert 'on_change="rerun"' in source
@@ -61,7 +62,9 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert 'f"Agent {first_agent} opening Y"' in source
     assert '"Apply and close"' in source
     assert "st.session_state.economy03_settings_open = False" in source
-    assert 'with st.expander("Add a redistribution"' in source
+    assert "redistribution_placeholder = st.empty()" in source
+    assert "with redistribution_placeholder.expander(" in source
+    assert '"Add a redistribution"' in source
     assert '"Move Y from"' in source
     assert '"Move Y to"' in source
     assert '"Add as next period"' in source
