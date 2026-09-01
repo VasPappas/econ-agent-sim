@@ -240,7 +240,8 @@ with st.container(horizontal=True, wrap=False, gap="small"):
         width="content",
     )
 
-settings_panel = st.expander(
+settings_placeholder = st.empty()
+settings_panel = settings_placeholder.expander(
     "Settings",
     key="economy03_settings_open",
     on_change="rerun",
@@ -346,7 +347,10 @@ period_populations = st.session_state.economy03_period_populations
 latest_population = period_populations[-1]
 agent_names = [agent.name for agent in latest_population]
 
-with st.expander("Add a redistribution", expanded=len(period_populations) == 1):
+redistribution_placeholder = st.empty()
+with redistribution_placeholder.expander(
+    "Add a redistribution", expanded=len(period_populations) == 1
+):
     st.caption(
         "Create the next period by moving Y from one agent to another. Total Y stays "
         "fixed, so this is redistribution rather than creation or destruction."
@@ -394,7 +398,8 @@ if add_redistribution:
     st.session_state.economy03_view_picker = "Overview"
     st.rerun()
 
-if len(period_populations) > 1 and st.button(
+remove_redistribution_placeholder = st.empty()
+if len(period_populations) > 1 and remove_redistribution_placeholder.button(
     "Remove last redistribution", width="stretch"
 ):
     st.session_state.economy03_period_populations = period_populations[:-1]
@@ -445,6 +450,11 @@ with st.container(key="economy03_mobile_nav"):
         label_visibility="collapsed",
     )
 
+if view != "Overview":
+    settings_placeholder.empty()
+    redistribution_placeholder.empty()
+    remove_redistribution_placeholder.empty()
+
 rows = accounting_rows(period)
 accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
 market_ok = final_step.market_error <= config.tolerance
@@ -458,21 +468,21 @@ price_change = (
     else None
 )
 
-with st.container(border=True):
-    st.caption("SELECTED RESULT")
-    if price_change is None:
-        st.markdown(f"### pX {period.prices['X']:.4f}")
-        result_change = "Baseline"
-    else:
-        st.markdown(f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%")
-        result_change = f"vs {previous_price:.4f} in the previous step"
-    st.caption(
-        f"{len(period.population)} agents · {result_change} · "
-        f"Market cleared {'✓' if market_ok else '!'} · "
-        f"Accounts balanced {'✓' if accounting_ok else '!'}"
-    )
-
 if view == "Overview":
+    with st.container(border=True):
+        st.caption("SELECTED RESULT")
+        if price_change is None:
+            st.markdown(f"### pX {period.prices['X']:.4f}")
+            result_change = "Baseline"
+        else:
+            st.markdown(f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%")
+            result_change = f"vs {previous_price:.4f} in the previous step"
+        st.caption(
+            f"{len(period.population)} agents · {result_change} · "
+            f"Market cleared {'✓' if market_ok else '!'} · "
+            f"Accounts balanced {'✓' if accounting_ok else '!'}"
+        )
+
     st.subheader("Overview")
     price_history = [
         {
