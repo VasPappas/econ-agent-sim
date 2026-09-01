@@ -176,11 +176,11 @@ st.markdown(
     @media (max-width: 768px) {
         .st-key-economy03_mobile_nav {
             position: fixed;
-            left: max(0.75rem, env(safe-area-inset-left));
-            right: max(0.75rem, env(safe-area-inset-right));
-            bottom: max(0.75rem, env(safe-area-inset-bottom));
+            left: max(1rem, env(safe-area-inset-left));
+            right: max(1rem, env(safe-area-inset-right));
+            bottom: calc(5.25rem + env(safe-area-inset-bottom));
             z-index: 1000000;
-            padding: 0.35rem;
+            padding: 0.4rem;
             border: 1px solid rgba(128, 128, 128, 0.28);
             border-radius: 1rem;
             background: var(--background-color);
@@ -195,7 +195,7 @@ st.markdown(
         }
 
         [data-testid="stAppViewContainer"] .main .block-container {
-            padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+            padding-bottom: calc(12rem + env(safe-area-inset-bottom));
         }
     }
     </style>

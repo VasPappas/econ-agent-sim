@@ -18,8 +18,10 @@ def test_economy_0_3_mobile_view_nav_is_scoped_and_phone_safe() -> None:
     assert '@media (max-width: 768px)' in source
     assert '.st-key-economy03_mobile_nav' in source
     assert 'position: fixed;' in source
-    assert 'env(safe-area-inset-bottom)' in source
-    assert 'padding-bottom: calc(6rem + env(safe-area-inset-bottom));' in source
+    assert 'bottom: calc(5.25rem + env(safe-area-inset-bottom));' in source
+    assert 'left: max(1rem, env(safe-area-inset-left));' in source
+    assert 'right: max(1rem, env(safe-area-inset-right));' in source
+    assert 'padding-bottom: calc(12rem + env(safe-area-inset-bottom));' in source
     assert 'with st.container(key="economy03_mobile_nav"):' in source
     assert 'label_visibility="collapsed"' in source
 
