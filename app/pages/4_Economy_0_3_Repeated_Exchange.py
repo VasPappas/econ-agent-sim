@@ -588,6 +588,18 @@ if view == "Overview":
 
     st.caption(f"Final market error: {final_step.market_error:.1e}")
 
+    with st.expander("Model boundary"):
+        st.write(
+            "Economy 0.3 adds repeated periods with user-chosen exogenous "
+            "redistribution. The baseline population is built from mirrored agent "
+            "pairs. There is still no carry-over inventory, consumption, saving, "
+            "production, money, credit, banking, government, or randomness."
+        )
+        st.caption(
+            "Each added period starts from the latest user-defined endowment "
+            "schedule, not from the previous period's market closing stocks."
+        )
+
 elif view == "Market":
     st.subheader("Market")
     total_x = sum(spec.x for spec in period.population)
@@ -735,15 +747,3 @@ else:
         with st.expander("Full multi-period ledger"):
             st.caption("Transaction IDs remain unique across the entire experiment.")
             st.dataframe(transaction_rows(result), width="stretch", hide_index=True)
-
-with st.expander("Model boundary"):
-    st.write(
-        "Economy 0.3 adds repeated periods with user-chosen exogenous redistribution. "
-        "The baseline population is built from mirrored agent pairs. There is still "
-        "no carry-over inventory, consumption, saving, production, money, credit, "
-        "banking, government, or randomness."
-    )
-    st.caption(
-        "Each added period starts from the latest user-defined endowment schedule, "
-        "not from the previous period's market closing stocks."
-    )
