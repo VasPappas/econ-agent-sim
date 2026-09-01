@@ -1,14 +1,36 @@
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import streamlit as st
 
-from econ_agent_sim.economy_0_3 import baseline_period_populations, redistribute_y
+from econ_agent_sim.economy_0_2 import canonical_population
+from econ_agent_sim.economy_0_3 import redistribute_y
 from econ_agent_sim.economy_0_4 import ASSETS, MONEY, Economy04Config, run_economy_0_4
 
-UI_SCHEMA_VERSION = 1
+UI_SCHEMA_VERSION = 2
+
+
+def baseline_period_populations(agent_count: int = 10):
+    """Build a balanced Economy 0.4 baseline from complete mirrored pairs."""
+
+    if agent_count < 2 or agent_count > 20 or agent_count % 2:
+        raise ValueError("agent count must be an even number from 2 through 20")
+
+    templates = canonical_population()
+    population = tuple(
+        replace(
+            templates[index % len(templates)],
+            name=f"Agent {index + 1}",
+        )
+        for index in range(agent_count)
+    )
+    return (population,)
 
 
 def apply_settings() -> None:
+    new_agent_count = int(st.session_state.economy04_agent_count_input)
+    population_changed = new_agent_count != st.session_state.economy04_agent_count
+
+    st.session_state.economy04_agent_count = new_agent_count
     st.session_state.economy04_opening_money = float(
         st.session_state.economy04_opening_money_input
     )
@@ -18,6 +40,20 @@ def apply_settings() -> None:
     st.session_state.economy04_adjustment_speed = float(
         st.session_state.economy04_adjustment_speed_input
     )
+
+    if population_changed:
+        st.session_state.economy04_period_populations = baseline_period_populations(
+            new_agent_count
+        )
+        st.session_state.economy04_period_picker = "Baseline"
+        st.session_state.economy04_view_picker = "Overview"
+        for key in (
+            "economy04_sender",
+            "economy04_receiver",
+            "economy04_redistribution_amount",
+        ):
+            st.session_state.pop(key, None)
+
     st.session_state.economy04_settings_open = False
 
 
@@ -81,7 +117,9 @@ st.markdown(
 
 if st.session_state.get("economy04_ui_schema") != UI_SCHEMA_VERSION:
     st.session_state.economy04_ui_schema = UI_SCHEMA_VERSION
-    st.session_state.economy04_period_populations = baseline_period_populations()
+    st.session_state.economy04_agent_count = 10
+    st.session_state.economy04_agent_count_input = 10
+    st.session_state.economy04_period_populations = baseline_period_populations(10)
     st.session_state.economy04_opening_money = 10.0
     st.session_state.economy04_initial_price_x = 0.5
     st.session_state.economy04_adjustment_speed = 1.0
@@ -112,10 +150,21 @@ settings_panel = settings_placeholder.expander(
 )
 with settings_panel:
     st.caption(
-        "Opening money changes the balance sheet only. Initial pX and λ change the "
-        "numerical search path. None of these settings changes preferences."
+        "Agent count changes the real economy and resets redistributions. Opening "
+        "money changes the balance sheet only. Initial pX and λ change the numerical "
+        "search path."
     )
     with st.form("economy04_settings"):
+        st.number_input(
+            "Number of agents",
+            min_value=2,
+            max_value=20,
+            step=2,
+            key="economy04_agent_count_input",
+        )
+        st.caption(
+            "Agents come in complete mirrored pairs, preserving the balanced baseline."
+        )
         st.number_input(
             "Opening money per agent",
             min_value=0.1,
@@ -147,7 +196,9 @@ with settings_panel:
         key="economy04_reset_experiment",
         width="stretch",
     ):
-        st.session_state.economy04_period_populations = baseline_period_populations()
+        st.session_state.economy04_period_populations = baseline_period_populations(
+            int(st.session_state.economy04_agent_count)
+        )
         st.session_state.economy04_period_picker = "Baseline"
         st.session_state.economy04_view_picker = "Overview"
         st.session_state.economy04_settings_open = False
