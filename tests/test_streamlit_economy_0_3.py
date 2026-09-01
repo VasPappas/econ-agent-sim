@@ -42,6 +42,30 @@ def test_economy_0_3_user_redistribution_views_run_without_exceptions() -> None:
         assert any(item.value == view for item in app.subheader)
 
 
+def test_economy_0_3_hides_baseline_step_selector_until_redistribution_exists() -> None:
+    app = open_economy_0_3()
+
+    assert not app.exception
+    assert len(app.pills) == 1
+    assert app.pills[0].label == "View"
+
+    baseline = baseline_period_populations()[0]
+    second = redistribute_y(
+        baseline,
+        sender_name="Agent 2",
+        receiver_name="Agent 1",
+        amount=0.5,
+    )
+    app.session_state["economy03_period_populations"] = (baseline, second)
+    app.session_state["economy03_period_picker"] = "Redistribution 1"
+    app.run(timeout=10)
+
+    assert not app.exception
+    assert len(app.pills) == 2
+    assert any(item.label == "Experiment step" for item in app.pills)
+    assert any(item.label == "View" for item in app.pills)
+
+
 def test_economy_0_3_settings_apply_and_close() -> None:
     app = open_economy_0_3()
 

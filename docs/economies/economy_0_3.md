@@ -187,6 +187,8 @@ The Number of agents control sits before the calibration form and is reactive. C
 
 Submitting **Apply and close** applies the settings and closes the panel. Changing agent count, any pair endowment, or any pair alpha resets redistribution history to Baseline; changing only Initial pX or lambda preserves the existing redistribution history because those two settings change only the numerical price-search path.
 
+When Baseline is the only experiment step, the step selector is hidden because there is nothing to choose. After the first redistribution is added, the **Experiment step** control appears and lets the user switch between Baseline and every redistribution step created so far.
+
 The selected result is shown in one full-width responsive block rather than several narrow metric cards. It displays the number of agents, exact equilibrium `pX`, percentage change from the previous step when relevant, and market/accounting status.
 
 When multiple redistributions exist, the Overview price-history chart uses a disclosed zoomed vertical axis so small relative-price changes remain visible. The exact numerical `pX` remains visible above the chart, so the zoom improves readability without replacing the quantitative result.
