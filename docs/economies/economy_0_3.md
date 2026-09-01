@@ -108,6 +108,8 @@ The initial trial price is a **numerical starting point for the price search**, 
 
 The adjustment-speed parameter `lambda` controls the size of each price response to excess demand. Smaller lambda means smaller price moves and therefore more tâtonnement adjustments, while the equilibrium for a fixed period remains unchanged.
 
+Economy 0.3 uses a default clearing tolerance of `1e-6` for the normalized market error. This is intentionally less strict than the historical `1e-10` defaults preserved in Economies 0.1 and 0.2. The app displays equilibrium `pX` to four decimal places, so continuing the search until residual market errors are around `1e-10` adds many iterations without changing the economically visible result. A `1e-6` stopping rule still requires both markets to clear to roughly one part in a million, while keeping the iteration history easier to read. The final market error remains visible in the app so the numerical approximation is explicit.
+
 Pair endowments and pair alpha are different from Initial pX and lambda: they change the economy itself by changing agents' wealth and/or preferences. The mirrored-pair construction keeps the unredistributed Baseline at `pX = 1`, but after Y is redistributed the chosen endowments and alphas determine how strongly the new distribution affects demand pressure and equilibrium price.
 
 No physical transfer occurs during price discovery. Agents repeatedly calculate optimal demands at trial prices, aggregate excess demand is measured, and the relative price changes until both markets clear within tolerance.
