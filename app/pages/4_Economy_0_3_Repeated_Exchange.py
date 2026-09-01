@@ -458,21 +458,21 @@ price_change = (
     else None
 )
 
-with st.container(border=True):
-    st.caption("SELECTED RESULT")
-    if price_change is None:
-        st.markdown(f"### pX {period.prices['X']:.4f}")
-        result_change = "Baseline"
-    else:
-        st.markdown(f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%")
-        result_change = f"vs {previous_price:.4f} in the previous step"
-    st.caption(
-        f"{len(period.population)} agents · {result_change} · "
-        f"Market cleared {'✓' if market_ok else '!'} · "
-        f"Accounts balanced {'✓' if accounting_ok else '!'}"
-    )
-
 if view == "Overview":
+    with st.container(border=True):
+        st.caption("SELECTED RESULT")
+        if price_change is None:
+            st.markdown(f"### pX {period.prices['X']:.4f}")
+            result_change = "Baseline"
+        else:
+            st.markdown(f"### pX {period.prices['X']:.4f} · {price_change:+.1f}%")
+            result_change = f"vs {previous_price:.4f} in the previous step"
+        st.caption(
+            f"{len(period.population)} agents · {result_change} · "
+            f"Market cleared {'✓' if market_ok else '!'} · "
+            f"Accounts balanced {'✓' if accounting_ok else '!'}"
+        )
+
     st.subheader("Overview")
     price_history = [
         {
