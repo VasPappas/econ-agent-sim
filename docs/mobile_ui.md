@@ -10,4 +10,6 @@ The mobile navigation is scoped to the Economy 0.3 view selector through the Str
 
 On wider screens, the same view selector remains in the normal document flow. No economic model, settings, redistribution behavior, accounting, or ledger logic changes as part of this UI step.
 
+To keep each view focused, the `Model boundary` explanation belongs to `Overview` only. `Market` is reserved for price discovery and clearing, while `Audit` is reserved for decisions, accounts, and ledgers.
+
 Future phone-oriented improvements such as a primary redistribution action, a more compact header, and phone-specific Audit summaries should be evaluated separately rather than bundled into this change.
