@@ -2,7 +2,7 @@ from math import isclose
 
 import pytest
 
-from econ_agent_sim.economy_0_2 import ExchangeAgentConfig
+from econ_agent_sim.economy_0_2 import Economy02Config, ExchangeAgentConfig
 from econ_agent_sim.economy_0_3 import (
     Economy03Config,
     baseline_period_populations,
@@ -47,13 +47,18 @@ def test_legacy_canonical_schedule_remains_reproducible() -> None:
     )
 
 
+def test_economy_0_3_uses_practical_default_tolerance_only() -> None:
+    assert Economy03Config().tolerance == 1e-6
+    assert Economy02Config().tolerance == 1e-10
+
+
 def test_default_scenario_is_the_single_baseline_period() -> None:
     result = run_economy_0_3()
 
     assert len(result.periods) == 1
     period = result.periods[0]
-    assert isclose(period.prices["X"], 1.0, abs_tol=1e-8)
-    assert isclose(period.prices["X"], period.benchmark_price_x, abs_tol=1e-8)
+    assert isclose(period.prices["X"], 1.0, abs_tol=1e-5)
+    assert isclose(period.prices["X"], period.benchmark_price_x, abs_tol=1e-5)
     assert period.steps[-1].market_error <= result.config.tolerance
 
 
@@ -87,8 +92,9 @@ def test_user_can_define_any_number_of_redistribution_periods() -> None:
 
     assert len(result.periods) == 3
     for period in result.periods:
-        assert isclose(period.prices["X"], period.benchmark_price_x, abs_tol=1e-8)
+        assert isclose(period.prices["X"], period.benchmark_price_x, abs_tol=1e-5)
         assert period.steps[-1].market_error <= result.config.tolerance
+        assert round(period.prices["X"], 4) == round(period.benchmark_price_x, 4)
 
     prices = [period.prices["X"] for period in result.periods]
     assert len({round(price, 6) for price in prices}) > 1
@@ -106,7 +112,7 @@ def test_configured_initial_price_starts_every_period_tatonnement() -> None:
         assert isclose(
             period.prices["X"],
             period.benchmark_price_x,
-            abs_tol=1e-8,
+            abs_tol=1e-5,
         )
 
     assert result.periods[0].steps[-1].iteration > 0
@@ -121,16 +127,16 @@ def test_lower_lambda_slows_tatonnement_without_changing_equilibrium() -> None:
         assert isclose(
             slow_period.prices["X"],
             fast_period.prices["X"],
-            abs_tol=1e-8,
+            abs_tol=1e-5,
         )
         assert isclose(
             slow_period.prices["X"],
             slow_period.benchmark_price_x,
-            abs_tol=1e-8,
+            abs_tol=1e-5,
         )
 
-    assert fast.periods[0].steps[-1].iteration == 25
-    assert slow.periods[0].steps[-1].iteration == 355
+    assert fast.periods[0].steps[-1].iteration == 14
+    assert slow.periods[0].steps[-1].iteration == 205
 
 
 def test_next_period_uses_user_endowment_reset_not_previous_closing_stocks() -> None:
