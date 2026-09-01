@@ -385,15 +385,19 @@ step_labels = ["Baseline"] + [
 if st.session_state.get("economy03_period_picker") not in step_labels:
     st.session_state.economy03_period_picker = step_labels[-1]
 
-selected_label = st.pills(
-    "Experiment step",
-    options=step_labels,
-    default="Baseline",
-    required=True,
-    key="economy03_period_picker",
-    width="stretch",
-)
-selected_index = step_labels.index(selected_label)
+if len(step_labels) > 1:
+    selected_label = st.pills(
+        "Experiment step",
+        options=step_labels,
+        default="Baseline",
+        required=True,
+        key="economy03_period_picker",
+        width="stretch",
+    )
+    selected_index = step_labels.index(selected_label)
+else:
+    selected_label = "Baseline"
+    selected_index = 0
 period = result.periods[selected_index]
 final_step = period.steps[-1]
 
