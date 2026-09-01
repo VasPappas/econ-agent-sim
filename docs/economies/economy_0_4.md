@@ -131,11 +131,13 @@ net Money + pX × net X + pY × net Y = 0
 
 This identity follows mechanically because every goods transfer has an equal-value reverse money payment.
 
-## Repeated periods remain available
+## Population size and repeated periods
 
-Economy 0.4 preserves Economy 0.3's period structure. The default app starts with the same ten-agent mirrored baseline and allows the user to add redistribution periods by moving Y between agents.
+Economy 0.4 preserves Economy 0.3's mirrored-pair population design and period structure. The app defaults to ten agents, but the user may choose any even population from **2 through 20 agents**. Complete mirrored pairs are always retained, so the untouched baseline remains balanced with analytic `pX = 1`.
 
-Each period independently:
+Changing the number of agents changes the real economy, so the app resets any existing redistributions and returns to a fresh baseline for the newly selected population. Changing only opening Money, initial trial `pX`, or `lambda` does not reset the redistribution experiment.
+
+The user may add redistribution periods by moving Y between agents. Each period independently:
 
 1. receives its exogenous X/Y opening endowments,
 2. starts with the configured opening Money balance per agent,
@@ -151,6 +153,7 @@ Money is reset to the configured opening amount at the start of each exogenous p
 The default app uses:
 
 - the ten-agent Economy 0.2 mirrored population,
+- an optional even agent count from 2 through 20,
 - one baseline period initially,
 - `10.0 Money` opening balance per agent,
 - `pY = 1`,
@@ -158,7 +161,7 @@ The default app uses:
 - adjustment speed `lambda = 1.0`,
 - market-clearing tolerance `1e-6`.
 
-The mirrored baseline still has an analytic equilibrium `pX = 1`. The amount of opening Money does not affect that benchmark in Economy 0.4.
+The mirrored baseline has an analytic equilibrium `pX = 1` for every supported even population size. The amount of opening Money does not affect that benchmark in Economy 0.4.
 
 ## Model boundary
 
@@ -166,6 +169,7 @@ Economy 0.4 includes:
 
 - heterogeneous optimizing agents,
 - two real goods,
+- a selectable mirrored population of 2–20 agents in the app,
 - repeated exogenous redistribution periods,
 - Walrasian price discovery,
 - explicit money balances,
