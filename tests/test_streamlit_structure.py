@@ -69,6 +69,8 @@ def test_economy_0_3_is_mobile_first_user_driven_redistribution() -> None:
     assert "baseline_period_populations" in source
     assert "redistribute_y(" in source
     assert source.count("st.pills(") == 2
+    assert "if len(step_labels) > 1:" in source
+    assert '"Experiment step"' in source
     assert 'options=("Overview", "Market", "Audit")' in source
     assert "horizontal=True, wrap=False" in source
     assert 'if view == "Overview"' in source
