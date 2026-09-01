@@ -124,6 +124,13 @@ def test_economy_0_4_is_mobile_first_and_makes_money_settlement_explicit() -> No
     assert "st.sidebar" not in source
     assert 'st.title("Money settles the trade")' in source
     assert "settings_placeholder = st.empty()" in source
+    assert '"Number of agents"' in source
+    assert "min_value=2" in source
+    assert "max_value=20" in source
+    assert "step=2" in source
+    assert 'key="economy04_agent_count_input"' in source
+    assert "population_changed =" in source
+    assert "baseline_period_populations(new_agent_count)" in source.replace("\n", " ")
     assert '"Opening money per agent"' in source
     assert "redistribution_placeholder = st.empty()" in source
     assert '"Add a redistribution"' in source
