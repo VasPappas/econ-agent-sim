@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from econ_agent_sim.economy_0_2 import Economy02Config, ExchangeAgentConfig, run_economy_0_2
+from econ_agent_sim.economy_0_2 import (
+    Economy02Config,
+    ExchangeAgentConfig,
+    run_economy_0_2,
+)
 from econ_agent_sim.economy_0_3 import (
     Economy03Config,
     baseline_period_populations,
