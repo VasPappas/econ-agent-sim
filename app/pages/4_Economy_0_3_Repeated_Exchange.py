@@ -170,6 +170,39 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+st.markdown(
+    """
+    <style>
+    @media (max-width: 768px) {
+        .st-key-economy03_mobile_nav {
+            position: fixed;
+            left: max(0.75rem, env(safe-area-inset-left));
+            right: max(0.75rem, env(safe-area-inset-right));
+            bottom: max(0.75rem, env(safe-area-inset-bottom));
+            z-index: 1000000;
+            padding: 0.35rem;
+            border: 1px solid rgba(128, 128, 128, 0.28);
+            border-radius: 1rem;
+            background: var(--background-color);
+            background: color-mix(in srgb, var(--background-color) 94%, transparent);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+            -webkit-backdrop-filter: blur(14px);
+            backdrop-filter: blur(14px);
+        }
+
+        .st-key-economy03_mobile_nav [data-testid="stPills"] {
+            margin: 0;
+        }
+
+        [data-testid="stAppViewContainer"] .main .block-container {
+            padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 if st.session_state.get("economy03_ui_schema") != UI_SCHEMA_VERSION:
     st.session_state.economy03_ui_schema = UI_SCHEMA_VERSION
     st.session_state.economy03_agent_count = 10
@@ -401,14 +434,16 @@ else:
 period = result.periods[selected_index]
 final_step = period.steps[-1]
 
-view = st.pills(
-    "View",
-    options=("Overview", "Market", "Audit"),
-    default="Overview",
-    required=True,
-    key="economy03_view_picker",
-    width="stretch",
-)
+with st.container(key="economy03_mobile_nav"):
+    view = st.pills(
+        "View",
+        options=("Overview", "Market", "Audit"),
+        default="Overview",
+        required=True,
+        key="economy03_view_picker",
+        width="stretch",
+        label_visibility="collapsed",
+    )
 
 rows = accounting_rows(period)
 accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
