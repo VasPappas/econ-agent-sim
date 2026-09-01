@@ -104,7 +104,7 @@ class Economy03Config:
     )
     initial_price_x: float = 0.5
     adjustment_speed: float = 1.0
-    tolerance: float = 1e-10
+    tolerance: float = 1e-6
     max_iterations: int = 5000
 
     def __post_init__(self) -> None:
