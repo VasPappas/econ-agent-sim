@@ -240,7 +240,8 @@ with st.container(horizontal=True, wrap=False, gap="small"):
         width="content",
     )
 
-settings_panel = st.expander(
+settings_placeholder = st.empty()
+settings_panel = settings_placeholder.expander(
     "Settings",
     key="economy03_settings_open",
     on_change="rerun",
@@ -346,7 +347,10 @@ period_populations = st.session_state.economy03_period_populations
 latest_population = period_populations[-1]
 agent_names = [agent.name for agent in latest_population]
 
-with st.expander("Add a redistribution", expanded=len(period_populations) == 1):
+redistribution_placeholder = st.empty()
+with redistribution_placeholder.expander(
+    "Add a redistribution", expanded=len(period_populations) == 1
+):
     st.caption(
         "Create the next period by moving Y from one agent to another. Total Y stays "
         "fixed, so this is redistribution rather than creation or destruction."
@@ -394,7 +398,8 @@ if add_redistribution:
     st.session_state.economy03_view_picker = "Overview"
     st.rerun()
 
-if len(period_populations) > 1 and st.button(
+remove_redistribution_placeholder = st.empty()
+if len(period_populations) > 1 and remove_redistribution_placeholder.button(
     "Remove last redistribution", width="stretch"
 ):
     st.session_state.economy03_period_populations = period_populations[:-1]
@@ -444,6 +449,11 @@ with st.container(key="economy03_mobile_nav"):
         width="stretch",
         label_visibility="collapsed",
     )
+
+if view != "Overview":
+    settings_placeholder.empty()
+    redistribution_placeholder.empty()
+    remove_redistribution_placeholder.empty()
 
 rows = accounting_rows(period)
 accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
