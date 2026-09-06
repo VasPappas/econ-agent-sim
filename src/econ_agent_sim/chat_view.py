@@ -33,22 +33,25 @@ def render_chat(result, selected_index, revision):
     period = result.periods[selected_index]
     identity = (revision, selected_index)
     if st.session_state.get("economy04_chat_trade_identity") != identity:
-        st.session_state.economy04_chat_trade = None
+        st.session_state.economy04_chat_trade = -1
         st.session_state.economy04_chat_trade_identity = identity
-    options = [None, *range(len(period.trades))]
+    if st.session_state.get("economy04_chat_trade") is None:
+        st.session_state.economy04_chat_trade = -1
+    options = [-1, *range(len(period.trades))]
     trade_index = st.selectbox(
         "Focus",
         options,
         key="economy04_chat_trade",
         format_func=lambda i: (
             "Whole experiment"
-            if i is None
+        if i == -1
             else (
                 f"Trade {i + 1} of {len(period.trades)} · "
                 f"{period.trades[i].seller} → {period.trades[i].buyer}"
             )
         ),
     )
+    trade_index = None if trade_index == -1 else trade_index
     context = experiment_context(result, selected_index, trade_index)
     fingerprint = context_id(context)
     # Starting afresh prevents past assistant claims being applied to new results.

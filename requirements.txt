@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.4 experiment questions
+# Rebuild marker: Economy 0.4 experiment questions with explicit whole-experiment focus
 -e .[app]
