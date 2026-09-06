@@ -9,6 +9,7 @@ from econ_agent_sim.economy_0_4 import Economy04Config, run_economy_0_4
 from econ_agent_sim.experiment_chat import (
     ChatUnavailable,
     answer_question,
+    api_error_message,
     context_id,
     experiment_context,
     reserve_request,
@@ -136,10 +137,13 @@ def test_api_sends_bounded_context_and_no_tools_or_remote_storage(tmp_path):
 @pytest.mark.parametrize("status", [401, 429, 500, 302])
 def test_api_errors_are_safe_and_never_retried(tmp_path, status):
     connection = fake_connection(status=status)
-    with patch(
-        "econ_agent_sim.experiment_chat.http.client.HTTPSConnection",
-        return_value=connection,
-    ), pytest.raises(ChatUnavailable) as caught:
+    with (
+        patch(
+            "econ_agent_sim.experiment_chat.http.client.HTTPSConnection",
+            return_value=connection,
+        ),
+        pytest.raises(ChatUnavailable) as caught,
+    ):
         answer_question("Why?", {}, [], **request_args(tmp_path))
     assert "test-secret" not in str(caught.value)
     connection.request.assert_called_once()
@@ -157,8 +161,31 @@ def test_missing_key_and_invalid_question_never_call_api(tmp_path):
 
 def test_incomplete_response_is_not_presented_as_an_answer(tmp_path):
     connection = fake_connection(body={"status": "incomplete", "output": []})
-    with patch(
-        "econ_agent_sim.experiment_chat.http.client.HTTPSConnection",
-        return_value=connection,
-    ), pytest.raises(ChatUnavailable, match="completed"):
+    with (
+        patch(
+            "econ_agent_sim.experiment_chat.http.client.HTTPSConnection",
+            return_value=connection,
+        ),
+        pytest.raises(ChatUnavailable, match="completed"),
+    ):
         answer_question("Why?", {}, [], **request_args(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "status, code, expected",
+    [
+        (401, "invalid_api_key", "rejected the API key"),
+        (401, None, "authentication failed"),
+        (429, "insufficient_quota", "credits or usage limits"),
+        (429, "credit_balance_exhausted", "credits or usage limits"),
+        (429, "rate_limit_exceeded", "busy"),
+        (404, "model_not_found", "service or model"),
+        (400, None, "configuration"),
+    ],
+)
+def test_api_diagnostics_never_expose_provider_error_text(status, code, expected):
+    raw = json.dumps({"error": {"code": code, "message": "SECRET-API-KEY"}})
+    message = api_error_message(status, raw)
+    assert expected in message
+    assert "SECRET" not in message
+    assert "SECRET" not in api_error_message(status, "SECRET invalid JSON")

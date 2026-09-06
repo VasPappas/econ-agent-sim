@@ -39,6 +39,34 @@ class ChatUnavailable(Exception):
     """An intentionally safe message suitable for display to the visitor."""
 
 
+def api_error_message(status, body):
+    """Map error categories to fixed text; provider messages may contain secrets."""
+    try:
+        error = json.loads(body).get("error", {})
+        code = error.get("code")
+    except (ValueError, AttributeError, TypeError):
+        code = None
+    if code == "invalid_api_key":
+        return "OpenAI rejected the API key. The app owner needs to replace it in Streamlit Secrets."
+    if status == 401:
+        return "OpenAI authentication failed. The app owner needs to check the API key and project access."
+    if code in (
+        "insufficient_quota",
+        "credit_balance_exhausted",
+        "organization_spend_limit_exceeded",
+        "project_spend_limit_exceeded",
+        "organization_usage_limit_exceeded",
+    ):
+        return "OpenAI API credits or usage limits need attention. The app owner needs to check API billing and limits."
+    if status == 429:
+        return "The assistant is busy. Please try again later."
+    if status in (403, 404):
+        return "OpenAI denied access to the requested service or model. The app owner needs to check API access."
+    if status == 400:
+        return "OpenAI rejected the request configuration. The app owner needs to check the model settings."
+    return "The assistant couldn't connect. Please try again later."
+
+
 def experiment_context(result, selected_index, trade_index=None):
     """Use the selected population, never the latest playground editor population."""
     period = result.periods[selected_index]
@@ -190,11 +218,9 @@ def answer_question(
             },
         )
         response = connection.getresponse()
-        if response.status == 429:
-            raise ChatUnavailable("The assistant is busy. Please try again later.")
         if response.status != 200:
             raise ChatUnavailable(
-                "The assistant couldn't connect. Please try again later."
+                api_error_message(response.status, response.read(16000))
             )
         data = json.loads(response.read(100001))
         if data.get("status") != "completed":
