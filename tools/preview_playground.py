@@ -30,6 +30,7 @@ const root=document.createElement('div'); root.className='playground-root';host.
 let config, data, cleanup;
 const initial=await (await fetch('/initial')).json(); config=initial.config; data=initial.data;
 function draw(){cleanup?.();cleanup=render({parentElement:host,data,setTriggerValue:async(name,action)=>{
+  if(name==='question'){alert('Open the full Streamlit app to use the Ask view.');return;}
   const response=await fetch('/run',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({config,revision:data.revision,action})});
   const next=await response.json();if(next.config)config=next.config;

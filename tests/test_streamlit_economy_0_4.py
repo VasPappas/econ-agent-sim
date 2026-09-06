@@ -158,3 +158,79 @@ def test_component_actions_are_processed_once_and_stale_actions_are_rejected() -
     assert not app.exception
     assert len(app.session_state["economy04_period_populations"]) == 2
     assert "experiment changed" in app.session_state["economy04_error"]
+
+
+def test_chat_without_key_is_disabled_and_preserves_the_economy():
+    with patch("econ_agent_sim.chat_view.chat_setting", return_value=""):
+        app = open_economy_0_4()
+        app.session_state["economy04_view_picker"] = "Ask"
+        app.run()
+        assert not app.exception
+        assert app.chat_input[0].disabled
+        assert any("not connected" in item.value for item in app.info)
+        assert len(app.session_state["economy04_period_populations"]) == 1
+
+
+def enabled_settings(name, default=""):
+    return {"OPENAI_API_KEY": "fake-key", "ECON_CHAT_ENABLED": "true"}.get(
+        name, default
+    )
+
+
+def test_chat_followups_stay_in_session_and_context_changes_reset_history():
+    with (
+        patch("econ_agent_sim.chat_view.chat_setting", side_effect=enabled_settings),
+        patch(
+            "econ_agent_sim.chat_view.answer_question", return_value="Y is fixed at 1."
+        ) as answer,
+    ):
+        app = open_economy_0_4()
+        app.session_state["economy04_view_picker"] = "Ask"
+        app.run()
+        app.chat_input[0].set_value("Why is Y fixed?").run()
+        assert not app.exception
+        assert len(app.session_state["economy04_chat_messages"]) == 2
+        app.run()
+        assert answer.call_count == 1
+        app.chat_input[0].set_value("What about X?").run()
+        assert answer.call_count == 2
+        assert len(app.session_state["economy04_chat_messages"]) == 4
+        next(s for s in app.selectbox if s.label == "Focus").set_value(0).run()
+        assert app.session_state["economy04_chat_messages"] == []
+        app.session_state["economy04_view_picker"] = "Overview"
+        app.run()
+        assert not app.exception
+        assert app.session_state["economy04_revision"] == 0
+
+
+def test_component_can_open_chat_about_the_actual_selected_trade():
+    app = open_economy_0_4()
+    event = {"id": "ask-one", "revision": 0, "selected_index": 0, "trade_index": 5}
+    with patch(
+        "econ_agent_sim.playground_component.render_playground",
+        return_value=SimpleNamespace(action=None, question=event),
+    ):
+        app.run()
+    assert not app.exception
+    assert app.session_state["economy04_view_picker"] == "Ask"
+    assert next(s for s in app.selectbox if s.label == "Focus").value == 5
+
+
+def test_chat_failure_does_not_pollute_history_or_change_simulation():
+    from econ_agent_sim.experiment_chat import ChatUnavailable
+
+    with (
+        patch("econ_agent_sim.chat_view.chat_setting", side_effect=enabled_settings),
+        patch(
+            "econ_agent_sim.chat_view.answer_question",
+            side_effect=ChatUnavailable("The assistant is busy."),
+        ),
+    ):
+        app = open_economy_0_4()
+        app.session_state["economy04_view_picker"] = "Ask"
+        app.run()
+        app.chat_input[0].set_value("Explain").run()
+        assert not app.exception
+        assert app.session_state["economy04_chat_messages"] == []
+        assert app.session_state["economy04_revision"] == 0
+        assert any("busy" in w.value for w in app.warning)
