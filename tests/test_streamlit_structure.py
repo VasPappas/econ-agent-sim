@@ -116,32 +116,17 @@ def test_economy_0_3_page_avoids_new_helper_imports_for_cloud_hot_reload() -> No
     assert "    redistribute_y,\n" not in source
 
 
-def test_economy_0_4_is_mobile_first_and_makes_money_settlement_explicit() -> None:
+def test_economy_0_4_keeps_audits_and_uses_a_component_adapter() -> None:
     source = (APP_ROOT / PERMANENT_PAGES[4]).read_text()
 
     assert 'layout="centered"' in source
     assert 'initial_sidebar_state="collapsed"' in source
     assert "st.sidebar" not in source
-    assert 'st.title("Money settles the trade")' in source
-    assert "settings_placeholder = st.empty()" in source
-    assert '"Number of agents"' in source
-    assert "min_value=2" in source
-    assert "max_value=20" in source
-    assert "step=2" in source
-    assert 'key="economy04_agent_count_input"' in source
-    assert "population_changed =" in source
-    assert "baseline_period_populations(" in source
-    assert "new_agent_count" in source
-    assert '"Opening money per agent"' in source
-    assert "redistribution_placeholder = st.empty()" in source
-    assert '"Add a redistribution"' in source
+    assert "render_playground(data)" in source
+    assert "apply_transfer(" in source
+    assert "cached_economy(config)" in source
     assert 'options=("Overview", "Settlement", "Audit")' in source
-    assert 'key="economy04_view_picker"' in source
-    assert '.st-key-economy04_mobile_nav' in source
-    assert 'st.caption("SELECTED RESULT")' in source
-    assert 'st.subheader("Settlement")' in source
-    assert '"money payment"' in source
     assert 'with st.expander("Settlement ledger")' in source
     assert 'with st.expander("Stock-flow accounts")' in source
     assert 'with st.expander("Model boundary")' in source
-    assert "Money does not enter utility" in source
+    assert 'st.session_state.setdefault(widget, st.session_state[setting])' in source

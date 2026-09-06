@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.3 paired-agent Cloud compatibility
+# Rebuild marker: Economy 0.4 mobile playground deployment
 -e .[app]
