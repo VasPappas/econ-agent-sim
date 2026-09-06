@@ -3,8 +3,10 @@ from uuid import uuid4
 
 import streamlit as st
 
+from econ_agent_sim.chat_view import render_chat
 from econ_agent_sim.economy_0_2 import canonical_population
 from econ_agent_sim.economy_0_4 import ASSETS, MONEY, Economy04Config
+from econ_agent_sim.experiment_chat import validate_chat_target
 from econ_agent_sim.playground import apply_transfer, playground_data
 from econ_agent_sim.playground_component import cached_economy, render_playground
 
@@ -199,10 +201,12 @@ with st.container(horizontal=True, wrap=False, gap="small"):
         label="← Economy 0.3",
         width="content",
     )
+if st.session_state.pop("economy04_open_chat", False):
+    st.session_state.economy04_view_picker = "Ask"
 with st.container(key="economy04_mobile_nav"):
     view = st.pills(
         "View",
-        options=("Overview", "Settlement", "Audit"),
+        options=("Overview", "Settlement", "Audit", "Ask"),
         required=True,
         default="Overview",
         key="economy04_view_picker",
@@ -237,6 +241,21 @@ if view == "Overview":
     )
     data["error"] = st.session_state.economy04_error
     component = render_playground(data)
+    chat_event = getattr(component, "question", None)
+    if validate_chat_target(
+        chat_event,
+        st.session_state.economy04_revision,
+        selected_index,
+        len(period.trades),
+    ) and chat_event["id"] != st.session_state.get("economy04_last_chat_event"):
+        st.session_state.economy04_last_chat_event = chat_event["id"]
+        st.session_state.economy04_chat_trade = chat_event.get("trade_index")
+        st.session_state.economy04_chat_trade_identity = (
+            st.session_state.economy04_revision,
+            selected_index,
+        )
+        st.session_state.economy04_open_chat = True
+        st.rerun()
     if component.action and (
         not isinstance(component.action, dict)
         or component.action.get("id") != st.session_state.economy04_last_action_id
@@ -405,6 +424,9 @@ elif view == "Settlement":
         width="stretch",
         hide_index=True,
     )
+
+elif view == "Ask":
+    render_chat(result, selected_index, st.session_state.economy04_revision)
 
 else:
     st.subheader("Audit")

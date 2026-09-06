@@ -28,6 +28,7 @@ def render_playground(data):
         data=data,
         key="economy04_playground",
         on_action_change=lambda: None,
+        on_question_change=lambda: None,
         height="content",
         width="stretch",
     )

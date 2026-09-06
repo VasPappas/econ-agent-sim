@@ -53,6 +53,10 @@ export default function render({ data, parentElement, setTriggerValue }) {
   };
   const stop = () => { animations.forEach(a => a.cancel()); animations = []; };
   const focus = selector => root.querySelector(selector)?.focus();
+  const ask = tradeIndex => setTriggerValue('question', {
+    id: crypto.randomUUID(), revision: data.revision,
+    selected_index: data.selected_index, trade_index: tradeIndex,
+  });
   function renderCard(name, stocks, side, picker) {
     const card = el('article', `agent-card ${side}`);
     const top = el('div', 'agent-top');
@@ -181,17 +185,18 @@ export default function render({ data, parentElement, setTriggerValue }) {
       shell.append(el('p', 'micro', 'This transfer starts from the latest experiment, not the older result selected above.'));
     }
     const footer = el('div', 'editor-footer');
-    footer.append(el('span', '', `Current X price ${fmt(data.price, 4)} M`));
+    footer.append(el('span', '', `X price ${fmt(data.price, 4)} M · Y fixed at 1`));
     footer.append(button('See trades ↗', 'text-button', () => {
       state.mode = 'result'; draw(); focus('.replay-button');
     }));
     shell.append(footer, el('p', 'boundary', `All ${data.agent_count} agents participate. Money settles trades; it does not limit purchases here.`));
+    shell.append(button('Ask about this experiment', 'replay-button', () => ask(null)));
     validate();
   }
   function drawResult(shell) {
     const price = el('div', 'price-panel');
     const values = el('div', 'price-values');
-    values.append(el('span', 'eyebrow', `${data.label.toUpperCase()} · PRICE OF X`));
+    values.append(el('span', 'eyebrow', `${data.label.toUpperCase()} · PRICE OF X · Y FIXED AT 1`));
     const number = el('div', 'price-number', `${fmt(data.price, 4)} `);
     number.append(el('span', '', 'M / X'));
     values.append(number);
@@ -215,7 +220,7 @@ export default function render({ data, parentElement, setTriggerValue }) {
     const trade = data.trades[state.tradeIndex % data.trades.length];
     if (trade) {
       const tradeHead = el('div', 'trade-heading');
-      tradeHead.append(el('span', 'eyebrow', `TRADE ${trade.trade_id} · ${state.tradeIndex + 1} OF ${data.trades.length}`));
+      tradeHead.append(el('span', 'eyebrow', `TRADE ${state.tradeIndex + 1} OF ${data.trades.length}`));
       const next = button('Next trade →', 'text-button', () => {
         state.tradeIndex = (state.tradeIndex + 1) % data.trades.length;
         draw(); focus('.next-trade');
@@ -247,6 +252,7 @@ export default function render({ data, parentElement, setTriggerValue }) {
       const replay = button('▶ Replay trade', 'replay-button', () => play());
       stage.append(replay, el('p', 'micro', 'One batch, shown visually. Animation order is not payment timing.'));
       shell.append(stage);
+      shell.append(button('Ask about this trade', 'text-button', () => ask(state.tradeIndex)));
       const details = el('details', 'details');
       details.append(el('summary', '', 'Inspect agent balances'));
       const toggle = el('div', 'balance-toggle');

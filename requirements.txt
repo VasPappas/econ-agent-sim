@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.4 mobile playground deployment
+# Rebuild marker: Economy 0.4 experiment questions
 -e .[app]
