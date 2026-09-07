@@ -1,4 +1,5 @@
 from dataclasses import replace
+from math import isfinite
 from uuid import uuid4
 
 import streamlit as st
@@ -78,8 +79,8 @@ def apply_settings():
 
 
 def clear_redistributions():
-    st.session_state.economy04_period_populations = baseline_period_populations(
-        st.session_state.economy04_agent_count
+    st.session_state.economy04_period_populations = (
+        st.session_state.economy04_period_populations[0],
     )
     st.session_state.economy04_period_picker = "Baseline"
     for key in (
@@ -103,8 +104,70 @@ def restore_defaults():
         st.session_state[f"economy04_{name}"] = value
     for widget, setting in SETTINGS_INPUTS.items():
         st.session_state[widget] = st.session_state[setting]
+    st.session_state.economy04_period_populations = baseline_period_populations()
     reset_to_baseline()
     st.session_state.economy04_reset_notice = "Original population, allocations, and model settings restored."
+
+
+def use_starting_economy():
+    """Commit a complete draft only after the real engine accepts it."""
+    baseline = st.session_state.economy04_period_populations[0]
+    draft = [
+        {good: st.session_state.get(f"economy04_baseline_quantity_{i}_{good}", row[good])
+         for good in ("x", "y")}
+        for i, row in enumerate(st.session_state.economy04_baseline_draft)
+    ]
+    try:
+        if any(not isfinite(v) or v < 0 for row in draft for v in row.values()):
+            raise ValueError("Starting quantities must be finite and nonnegative.")
+        if any(sum(row[good] for row in draft) <= 0 for good in ("x", "y")):
+            raise ValueError("The economy needs a positive total of both X and Y.")
+        population = tuple(replace(a, **row) for a, row in zip(baseline, draft, strict=True))
+        candidate = replace(current_config(), period_populations=(population,))
+        cached_economy(candidate)
+    except (ValueError, TypeError, RuntimeError, AssertionError, OverflowError) as error:
+        st.session_state.economy04_baseline_error = f"Starting economy was not changed: {error}"
+        return
+    st.session_state.economy04_period_populations = candidate.period_populations
+    st.session_state.economy04_baseline_error = None
+    reset_to_baseline()
+    st.session_state.economy04_reset_notice = "Your starting economy is now the baseline. Previous transfers were removed."
+
+
+def render_starting_editor(baseline):
+    with st.expander("Edit starting economy"):
+        st.caption("Edit one or more agents, then apply the draft. This can change total resources; preferences stay the same.")
+        identity = tuple((a.name, a.x, a.y) for a in baseline.population)
+        if st.session_state.get("economy04_baseline_draft_identity") != identity:
+            st.session_state.economy04_baseline_draft_identity = identity
+            st.session_state.economy04_baseline_draft = [{"x": a.x, "y": a.y} for a in baseline.population]
+            st.session_state.economy04_baseline_error = None
+            for key in list(st.session_state):
+                if key.startswith("economy04_baseline_quantity_"):
+                    st.session_state.pop(key, None)
+            st.session_state.pop("economy04_baseline_agent", None)
+        draft = st.session_state.economy04_baseline_draft
+        index = st.selectbox(
+            "Agent to edit", list(range(len(baseline.population))),
+            format_func=lambda i: baseline.population[i].name,
+            key="economy04_baseline_agent",
+        )
+        for good in ("x", "y"):
+            key = f"economy04_baseline_quantity_{index}_{good}"
+            st.session_state.setdefault(key, draft[index][good])
+            draft[index][good] = st.number_input(
+                f"Starting {good.upper()}", min_value=0.0, step=0.1,
+                format="%.4f", key=key,
+            )
+        st.write(f"Draft totals: {sum(row['x'] for row in draft):g} X · {sum(row['y'] for row in draft):g} Y")
+        changed = [a.name for a, row in zip(baseline.population, draft, strict=True)
+                   if a.x != row['x'] or a.y != row['y']]
+        if changed:
+            st.caption("Edited agents: " + ", ".join(changed))
+        st.caption("Use as baseline replaces your starting allocation and removes previous transfers. Reset will return here; Restore defaults brings back the original setup. Saved for this browser session.")
+        st.button("Use as baseline", on_click=use_starting_economy, type="primary", width="stretch")
+        if error := st.session_state.get("economy04_baseline_error"):
+            st.error(error)
 
 
 def add_transfer(action):
@@ -256,6 +319,7 @@ if view == "Experiment":
                 st.markdown(f"**{agent.name} · {preference}**")
                 st.write(f"{agent.x:g} X · {agent.y:g} Y · {config.opening_money_per_agent:g} Money")
                 st.caption(f"Spends {agent.alpha:.0%} of goods wealth on X and {1-agent.alpha:.0%} on Y.")
+    render_starting_editor(baseline)
     source = "Baseline" if latest_index == 0 else f"Experiment {latest_index}"
     st.markdown(f"**Next: Experiment {latest_index + 1} · starting from {source}’s endowments**")
     st.caption("Your transfer changes these opening goods. Every settlement starts with fresh money; closing balances never carry forward.")
@@ -364,6 +428,7 @@ if view == "Experiment":
         "Settings", key="economy04_settings_open", on_change="rerun"
     )
     with settings_panel:
+        st.caption("Changing the number of agents starts a new standard allocation. Other settings keep your saved baseline quantities.")
         st.caption(
             "Agent count changes the economy and clears redistributions. "
             "Opening money affects settlement balances only."

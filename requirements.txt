@@ -1,2 +1,2 @@
-# Rebuild marker: explicit baseline and visible reset
+# Rebuild marker: editable starting allocations and custom baseline reset
 -e .[app]

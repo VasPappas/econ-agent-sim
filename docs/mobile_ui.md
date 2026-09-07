@@ -2,6 +2,13 @@
 
 ## Current workspace — September 2026
 
+**Edit starting economy** lets users draft X/Y allocations agent by agent, with
+live draft totals, then apply them using **Use as baseline**. The full candidate
+is validated and solved before replacing the baseline and clearing transfers.
+Drafts and baselines are session-local. Reset preserves this custom allocation;
+Restore defaults restores the canonical allocation. Changing the agent count
+also creates a fresh canonical population; other settings retain quantities.
+
 Experiment now shows an explicit baseline summary with actual configured totals
 and an expandable list of every agent's baseline holdings and spending shares.
 The next experiment names the opening allocation it builds on. Historical views

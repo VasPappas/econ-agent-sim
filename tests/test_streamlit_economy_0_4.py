@@ -257,6 +257,42 @@ def enabled_settings(name, default=""):
     )
 
 
+def test_custom_starting_quantities_survive_reset_but_not_restore_defaults():
+    app = open_economy_0_4()
+    next(n for n in app.number_input if n.label == "Starting X").set_value(2.5).run()
+    next(s for s in app.selectbox if s.label == "Agent to edit").set_value(1).run()
+    next(n for n in app.number_input if n.label == "Starting Y").set_value(2.0).run()
+    next(b for b in app.button if b.label == "Use as baseline").click().run()
+    assert not app.exception
+    baseline = app.session_state["economy04_period_populations"][0]
+    assert baseline[0].x == 2.5
+    assert baseline[1].y == 2.0
+    assert baseline[0].alpha == .2
+    next(b for b in app.button if b.label == "Add as next period").click().run()
+    next(b for b in app.button if b.label == "Reset to baseline").click().run()
+    assert app.session_state["economy04_period_populations"] == (baseline,)
+    next(b for b in app.button if b.label == "Restore default settings").click().run()
+    assert not app.exception
+    assert app.session_state["economy04_period_populations"][0][0].x == 1.8
+    assert app.session_state["economy04_period_populations"][0][1].y == 1.8
+
+
+def test_invalid_starting_economy_does_not_replace_saved_baseline():
+    app = open_economy_0_4()
+    next(n for n in app.number_input if n.label == "Number of agents").set_value(2)
+    next(b for b in app.button if b.label == "Apply and close").click().run()
+    original = app.session_state["economy04_period_populations"]
+    revision = app.session_state["economy04_revision"]
+    next(n for n in app.number_input if n.label == "Starting X").set_value(0.0).run()
+    next(s for s in app.selectbox if s.label == "Agent to edit").set_value(1).run()
+    next(n for n in app.number_input if n.label == "Starting X").set_value(0.0)
+    next(b for b in app.button if b.label == "Use as baseline").click().run()
+    assert not app.exception
+    assert app.session_state["economy04_period_populations"] == original
+    assert app.session_state["economy04_revision"] == revision
+    assert any("positive total" in e.value for e in app.error)
+
+
 def test_chat_followups_stay_in_session_and_context_changes_reset_history():
     with (
         patch("econ_agent_sim.chat_view.chat_setting", side_effect=enabled_settings),
