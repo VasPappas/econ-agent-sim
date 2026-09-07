@@ -1,14 +1,16 @@
-from dataclasses import asdict, replace
+from dataclasses import replace
 from uuid import uuid4
 
 import streamlit as st
 
 from econ_agent_sim.chat_view import render_chat
 from econ_agent_sim.economy_0_2 import canonical_population
-from econ_agent_sim.economy_0_4 import ASSETS, MONEY, Economy04Config
+from econ_agent_sim.economy_0_4 import ASSETS, Economy04Config
+from econ_agent_sim.evidence_view import render_evidence
 from econ_agent_sim.experiment_chat import validate_chat_target
 from econ_agent_sim.playground import apply_transfer, playground_data
 from econ_agent_sim.playground_component import cached_economy, render_playground
+from econ_agent_sim.workspace_style import apply_workspace_style
 
 
 def baseline_period_populations(agent_count: int = 10):
@@ -121,6 +123,7 @@ def add_transfer(action):
     st.session_state.economy04_period_populations = candidate.period_populations
     st.session_state.economy04_period_picker = f"Redistribution {len(populations)}"
     invalidate_playground()
+    st.session_state.economy04_next_view = "Results"
     st.session_state.economy04_last_transfer = {
         key: action[key] for key in ("sender", "receiver", "amount")
     }
@@ -164,7 +167,7 @@ for name, value in {
         st.session_state.economy04_agent_count
     ),
     "period_picker": "Baseline",
-    "view_picker": "Overview",
+    "view_picker": "Experiment",
     "settings_open": False,
     "revision": 0,
     "last_transfer": None,
@@ -178,40 +181,23 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed",
 )
-st.markdown(
-    """
-<style>
-.block-container { padding-top: 1.5rem; }
-h1 { font-size: 1.5rem !important; letter-spacing: -0.03em; }
-.st-key-economy04_mobile_nav { margin-bottom: 0.25rem; }
-@media (max-width: 768px) {
-    .block-container { padding-left: 0.75rem; padding-right: 0.75rem; padding-bottom: 2rem; }
-    h1 { font-size: 1.25rem !important; }
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-st.caption("ECONOMY 0.4")
-st.title("Money settles the trade")
-with st.container(horizontal=True, wrap=False, gap="small"):
-    st.page_link("streamlit_app.py", label="← Home", width="content")
-    st.page_link(
-        "pages/4_Economy_0_3_Repeated_Exchange.py",
-        label="← Economy 0.3",
-        width="content",
-    )
+apply_workspace_style()
+st.caption("TINY ECONOMY · MONEY")
+st.page_link("streamlit_app.py", label="← Explore economies", width="content")
 if st.session_state.pop("economy04_open_chat", False):
-    st.session_state.economy04_view_picker = "Ask"
+    st.session_state.economy04_view_picker = "Ask why"
+pending_view = st.session_state.pop("economy04_next_view", None)
+if pending_view:
+    st.session_state.economy04_view_picker = pending_view
+# Migrate sessions open during deployment.
+st.session_state.economy04_view_picker = {
+    "Overview": "Experiment", "Settlement": "Results", "Audit": "Results", "Ask": "Ask why",
+}.get(st.session_state.economy04_view_picker, st.session_state.economy04_view_picker)
 with st.container(key="economy04_mobile_nav"):
     view = st.pills(
-        "View",
-        options=("Overview", "Settlement", "Audit", "Ask"),
-        required=True,
-        default="Overview",
-        key="economy04_view_picker",
-        label_visibility="collapsed",
-        width="stretch",
+        "View", options=("Experiment", "Results", "Ask why"), required=True,
+        default="Experiment", key="economy04_view_picker",
+        label_visibility="collapsed", width="stretch",
     )
 
 config = current_config()
@@ -223,16 +209,16 @@ if st.session_state.get("economy04_period_picker") not in step_labels:
     st.session_state.economy04_period_picker = step_labels[-1]
 if len(step_labels) > 1:
     selected_label = st.selectbox(
-        "Experiment step", step_labels, key="economy04_period_picker"
+        "Your experiments", step_labels, key="economy04_period_picker",
+        format_func=lambda label: label.replace("Redistribution", "Experiment")
     )
     selected_index = step_labels.index(selected_label)
 else:
     selected_index = 0
 period = result.periods[selected_index]
-final_step = period.steps[-1]
 rows = accounting_rows(period)
 
-if view == "Overview":
+if view in ("Experiment", "Results"):
     data = playground_data(
         result,
         selected_index,
@@ -240,7 +226,26 @@ if view == "Overview":
         st.session_state.economy04_last_transfer,
     )
     data["error"] = st.session_state.economy04_error
+    data["view"] = view
+    selection = st.session_state.get("economy04_selected_trade")
+    if validate_chat_target(selection, st.session_state.economy04_revision,
+                            selected_index, len(period.trades)):
+        data["selected_trade"] = selection.get("trade_index")
     component = render_playground(data)
+    selection = getattr(component, "selection", None)
+    if (validate_chat_target(selection, st.session_state.economy04_revision,
+                             selected_index, len(period.trades))
+            and selection["id"] != st.session_state.get("economy04_last_selection")):
+        st.session_state.economy04_last_selection = selection["id"]
+        st.session_state.economy04_selected_trade = selection
+    navigation = getattr(component, "navigation", None)
+    if (validate_chat_target(navigation, st.session_state.economy04_revision,
+                             selected_index, len(period.trades))
+            and navigation.get("view") in ("Experiment", "Results")
+            and navigation["id"] != st.session_state.get("economy04_last_navigation")):
+        st.session_state.economy04_last_navigation = navigation["id"]
+        st.session_state.economy04_next_view = navigation["view"]
+        st.rerun()
     chat_event = getattr(component, "question", None)
     if validate_chat_target(
         chat_event,
@@ -254,6 +259,8 @@ if view == "Overview":
             st.session_state.economy04_revision,
             selected_index,
         )
+        if chat_event.get("trade_index") is not None:
+            st.session_state.economy04_selected_trade = chat_event
         st.session_state.economy04_open_chat = True
         st.rerun()
     if component.action and (
@@ -263,7 +270,8 @@ if view == "Overview":
         add_transfer(component.action)
         st.rerun()
 
-    # Native controls remain as an accessible fallback, not the first screen.
+if view == "Experiment":
+    # Native controls remain as an accessible fallback.
     with st.expander("Add a redistribution", expanded=False):
         st.caption("Alternative controls. Transfers use the latest opening endowments.")
         latest_population = st.session_state.economy04_period_populations[-1]
@@ -365,129 +373,12 @@ if view == "Overview":
             "a visual explanation, not a funding sequence."
         )
 
-elif view == "Settlement":
-    st.subheader("Settlement")
-    with st.container(border=True):
-        st.markdown(
-            f"**Price search:** pX {period.steps[0].price_x:.3f} → "
-            f"{period.prices['X']:.4f}"
-        )
-        st.caption(
-            f"λ {config.adjustment_speed:.1f} · {period.steps[-1].iteration} "
-            f"adjustments · final market error {final_step.market_error:.1e}"
-        )
 
-    st.markdown("**Monetary trades**")
-    st.caption(
-        "Each row is one goods trade. In the audit ledger it appears as two legs: "
-        "the good moves to the buyer and Money moves back to the seller."
-    )
-    st.dataframe(
-        [
-            {
-                "trade": trade.trade_id,
-                "good": trade.good,
-                "quantity": round(trade.quantity, 6),
-                "price": round(trade.unit_price, 6),
-                "seller": trade.seller,
-                "buyer": trade.buyer,
-                "money payment": round(trade.payment, 6),
-            }
-            for trade in period.trades
-        ],
-        width="stretch",
-        hide_index=True,
-    )
-    st.caption(
-        f"{len(period.trades)} trades · {len(period.transactions)} ledger legs · "
-        f"gross money payments {period.gross_money_payments:.4f}"
-    )
-
-    total_x = sum(spec.x for spec in period.population)
-    total_y = sum(spec.y for spec in period.population)
-    st.markdown("**Final clearing check**")
-    st.dataframe(
-        [
-            {
-                "good": "X",
-                "supply": round(total_x, 6),
-                "demand": round(final_step.demand_x, 6),
-                "excess": round(final_step.excess_demand_x, 8),
-            },
-            {
-                "good": "Y",
-                "supply": round(total_y, 6),
-                "demand": round(final_step.demand_y, 6),
-                "excess": round(final_step.excess_demand_y, 8),
-            },
-        ],
-        width="stretch",
-        hide_index=True,
-    )
-
-elif view == "Ask":
+if view == "Results":
+    with st.expander("Inspect the evidence", expanded=False):
+        render_evidence(result, selected_index, rows)
+elif view == "Ask why":
     render_chat(result, selected_index, st.session_state.economy04_revision)
-
-else:
-    st.subheader("Audit")
-    st.caption("Every real transfer and every money payment remains inspectable.")
-
-    with st.expander("Agent decisions"):
-        st.dataframe(
-            [
-                {
-                    "agent": spec.name,
-                    "alpha": spec.alpha,
-                    "opening X": spec.x,
-                    "opening Y": spec.y,
-                    "opening Money": period.opening_stocks[spec.name][MONEY],
-                    "desired X": period.desired_bundles[spec.name]["X"],
-                    "desired Y": period.desired_bundles[spec.name]["Y"],
-                    "closing Money": period.closing_stocks[spec.name][MONEY],
-                }
-                for spec in period.population
-            ],
-            width="stretch",
-            hide_index=True,
-        )
-        st.caption(
-            "Opening Money is shown on the balance sheet but is deliberately excluded "
-            "from Cobb-Douglas demand in Economy 0.4."
-        )
-
-    with st.expander("Stock-flow accounts"):
-        st.caption("Identity: closing stock = opening stock + ledgered net flow.")
-        st.dataframe(rows, width="stretch", hide_index=True)
-
-    with st.expander("Settlement ledger"):
-        st.dataframe(
-            [asdict(transaction) for transaction in period.transactions],
-            width="stretch",
-            hide_index=True,
-        )
-
-    with st.expander("Price-discovery iterations"):
-        st.dataframe(
-            [
-                {
-                    "iteration": step.iteration,
-                    "pX": step.price_x,
-                    "X excess": step.excess_demand_x,
-                    "Y excess": step.excess_demand_y,
-                    "market error": step.market_error,
-                    "next pX": step.next_price_x,
-                }
-                for step in period.steps
-            ],
-            width="stretch",
-            hide_index=True,
-        )
-
-    if len(result.periods) > 1:
-        with st.expander("Full multi-period monetary ledger"):
-            st.caption("Transaction and trade IDs remain unique across the experiment.")
-            st.dataframe(
-                [asdict(transaction) for transaction in result.transactions],
-                width="stretch",
-                hide_index=True,
-            )
+    if st.button("← Back to results", width="stretch"):
+        st.session_state.economy04_next_view = "Results"
+        st.rerun()

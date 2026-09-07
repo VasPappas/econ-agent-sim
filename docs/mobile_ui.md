@@ -1,5 +1,29 @@
 # Mobile UI evolution
 
+## Current workspace — September 2026
+
+The home page starts with an exploration action and names the five existing
+economies Exchange, Price discovery, Many agents, Redistribution, and Money.
+Economy 0.4 uses **Experiment / Results / Ask why**. Results contain the opening
+endowment changes, price comparison with the preceding experiment, conservation
+checks, and selected trade. Settlement and audit tables are under **Inspect the
+evidence**. The earlier economy pages and economic engines are preserved.
+
+Common explanations are generated directly from model values, without API calls.
+Only typed follow-up questions use OpenAI. Returning from Ask why restores the
+selected trade; bounded conversations are retained separately per context.
+
+Transfers continue to build on the latest opening endowments. Each settlement is
+independent and starts with fresh money; closing balances do not carry forward.
+Unlike the standalone design preview, the live UI supports arbitrary agent pairs,
+amounts, settings, and historical experiments rather than four fixed examples.
+
+The cream/teal styling spans home, controls, results, evidence, and chat. Labels
+are enlarged, containers reflow, and navigation remains in normal document flow
+to avoid covering browser controls or the phone keyboard. Replay is user-initiated.
+
+The sections below describe earlier implementation stages.
+
 The Streamlit simulator is designed mobile-first. Changes to the phone experience are introduced incrementally so each interaction can be tested before adding the next one.
 
 ## Step 1 — persistent view navigation
