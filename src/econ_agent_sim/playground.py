@@ -5,6 +5,7 @@ from math import isfinite
 
 from econ_agent_sim.economy_0_3 import redistribute_y
 from econ_agent_sim.economy_0_4 import ASSETS, MONEY, Economy04Result
+from econ_agent_sim.explanations import built_in_explanations
 
 
 def apply_transfer(population, action: dict, revision: int):
@@ -60,6 +61,13 @@ def playground_data(
         "label": "Baseline" if not selected_index else f"Experiment {selected_index}",
         "price": period.prices["X"],
         "previous_price": previous.prices["X"] if previous else None,
+        "explanations": built_in_explanations(result, selected_index),
+        "changes": [
+            {"name": agent.name, "before": old.y, "after": agent.y}
+            for agent in period.population
+            for old in (previous.population if previous else ())
+            if agent.name == old.name and abs(agent.y - old.y) > 1e-10
+        ],
         "agent_count": len(period.population),
         "agents": [asdict(agent) for agent in result.config.period_populations[-1]],
         "opening_money": result.config.opening_money_per_agent,

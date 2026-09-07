@@ -125,8 +125,10 @@ def test_economy_0_4_keeps_audits_and_uses_a_component_adapter() -> None:
     assert "render_playground(data)" in source
     assert "apply_transfer(" in source
     assert "cached_economy(config)" in source
-    assert 'options=("Overview", "Settlement", "Audit", "Ask")' in source
-    assert 'with st.expander("Settlement ledger")' in source
-    assert 'with st.expander("Stock-flow accounts")' in source
+    assert 'options=("Experiment", "Results", "Ask why")' in source
+    assert 'with st.expander("Inspect the evidence"' in source
+    evidence = (APP_ROOT.parent / "src/econ_agent_sim/evidence_view.py").read_text()
+    assert 'with st.expander("Settlement ledger")' in evidence
+    assert 'with st.expander("Stock-flow accounts")' in evidence
     assert 'with st.expander("Model boundary")' in source
     assert 'st.session_state.setdefault(widget, st.session_state[setting])' in source

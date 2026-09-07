@@ -21,7 +21,7 @@ def test_economy_0_4_opens_on_monetary_overview() -> None:
     app = open_economy_0_4()
 
     assert not app.exception
-    assert any(item.value == "Money settles the trade" for item in app.title)
+    assert app.session_state["economy04_view_picker"] == "Experiment"
     assert any(item.value == "What changed in 0.4?" for item in app.subheader)
     assert {"Settings", "Add a redistribution", "Model boundary"} <= expander_labels(
         app
@@ -49,12 +49,12 @@ def test_economy_0_4_can_apply_even_agent_count() -> None:
 def test_economy_0_4_settlement_and_audit_hide_overview_controls() -> None:
     app = open_economy_0_4()
 
-    for view in ("Settlement", "Audit"):
+    for view in ("Results", "Results"):
         app.session_state["economy04_view_picker"] = view
         app.run(timeout=10)
 
         assert not app.exception
-        assert any(item.value == view for item in app.subheader)
+        assert "Inspect the evidence" in expander_labels(app)
         assert "Settings" not in expander_labels(app)
         assert "Add a redistribution" not in expander_labels(app)
         assert "Model boundary" not in expander_labels(app)
@@ -62,7 +62,7 @@ def test_economy_0_4_settlement_and_audit_hide_overview_controls() -> None:
 
 def test_economy_0_4_audit_exposes_money_stock_flow_and_ledger() -> None:
     app = open_economy_0_4()
-    app.session_state["economy04_view_picker"] = "Audit"
+    app.session_state["economy04_view_picker"] = "Results"
     app.run(timeout=10)
 
     assert not app.exception
@@ -80,7 +80,7 @@ def test_settings_survive_hidden_views_and_page_navigation() -> None:
     ).set_value(20)
     next(item for item in app.button if item.label == "Apply and close").click()
     app.run(timeout=10)
-    for view in ("Audit", "Settlement", "Overview"):
+    for view in ("Results", "Results", "Experiment"):
         app.session_state["economy04_view_picker"] = view
         app.run(timeout=10)
     assert not app.exception
@@ -112,6 +112,8 @@ def test_native_transfer_and_reset_have_distinct_semantics() -> None:
     next(item for item in app.button if item.label == "Add as next period").click()
     app.run(timeout=10)
     assert len(app.session_state["economy04_period_populations"]) == 2
+    app.session_state["economy04_view_picker"] = "Experiment"
+    app.run()
     next(item for item in app.button if item.label == "Clear redistributions").click()
     app.run(timeout=10)
     assert len(app.session_state["economy04_period_populations"]) == 1
@@ -163,12 +165,69 @@ def test_component_actions_are_processed_once_and_stale_actions_are_rejected() -
 def test_chat_without_key_is_disabled_and_preserves_the_economy():
     with patch("econ_agent_sim.chat_view.chat_setting", return_value=""):
         app = open_economy_0_4()
-        app.session_state["economy04_view_picker"] = "Ask"
+        app.session_state["economy04_view_picker"] = "Ask why"
         app.run()
         assert not app.exception
         assert app.chat_input[0].disabled
         assert any("not connected" in item.value for item in app.info)
         assert len(app.session_state["economy04_period_populations"]) == 1
+
+
+def test_builtin_explanations_work_without_an_api_key_or_request():
+    with (
+        patch("econ_agent_sim.chat_view.chat_setting", return_value=""),
+        patch("econ_agent_sim.chat_view.answer_question") as answer,
+    ):
+        app = open_economy_0_4()
+        app.session_state["economy04_view_picker"] = "Ask why"
+        app.run()
+        assert not app.exception
+        assert "Why did X change but not Y?" in expander_labels(app)
+        assert "Was any money created?" in expander_labels(app)
+        assert any("100.0000 Money" in item.value for item in app.markdown)
+        answer.assert_not_called()
+
+
+def test_return_from_chat_restores_the_selected_trade():
+    app = open_economy_0_4()
+    event = {"id": "trade-six", "revision": 0, "selected_index": 0, "trade_index": 5}
+    with patch(
+        "econ_agent_sim.playground_component.render_playground",
+        return_value=SimpleNamespace(action=None, question=event),
+    ):
+        app.run()
+    next(b for b in app.button if b.label == "← Back to results").click()
+    with patch(
+        "econ_agent_sim.playground_component.render_playground",
+        return_value=SimpleNamespace(action=None),
+    ) as component:
+        app.run()
+    assert not app.exception
+    assert app.session_state["economy04_view_picker"] == "Results"
+    assert component.call_args.args[0]["selected_trade"] == 5
+    app.session_state["economy04_view_picker"] = "Ask why"
+    app.run()
+    assert next(s for s in app.selectbox if s.label == "Focus").value == 5
+
+
+def test_component_navigation_is_validated_and_does_not_change_model():
+    app = open_economy_0_4()
+    event = {"id": "results", "revision": 0, "selected_index": 0, "view": "Results"}
+    with patch(
+        "econ_agent_sim.playground_component.render_playground",
+        return_value=SimpleNamespace(action=None, navigation=event),
+    ):
+        app.run()
+    assert not app.exception
+    assert app.session_state["economy04_view_picker"] == "Results"
+    assert app.session_state["economy04_revision"] == 0
+    event = {**event, "id": "stale", "revision": -1, "view": "Experiment"}
+    with patch(
+        "econ_agent_sim.playground_component.render_playground",
+        return_value=SimpleNamespace(action=None, navigation=event),
+    ):
+        app.run()
+    assert app.session_state["economy04_view_picker"] == "Results"
 
 
 def enabled_settings(name, default=""):
@@ -185,7 +244,7 @@ def test_chat_followups_stay_in_session_and_context_changes_reset_history():
         ) as answer,
     ):
         app = open_economy_0_4()
-        app.session_state["economy04_view_picker"] = "Ask"
+        app.session_state["economy04_view_picker"] = "Ask why"
         app.run()
         app.chat_input[0].set_value("Why is Y fixed?").run()
         assert not app.exception
@@ -197,7 +256,9 @@ def test_chat_followups_stay_in_session_and_context_changes_reset_history():
         assert len(app.session_state["economy04_chat_messages"]) == 4
         next(s for s in app.selectbox if s.label == "Focus").set_value(0).run()
         assert app.session_state["economy04_chat_messages"] == []
-        app.session_state["economy04_view_picker"] = "Overview"
+        next(s for s in app.selectbox if s.label == "Focus").set_value(-1).run()
+        assert len(app.session_state["economy04_chat_messages"]) == 4
+        app.session_state["economy04_view_picker"] = "Experiment"
         app.run()
         assert not app.exception
         assert app.session_state["economy04_revision"] == 0
@@ -212,7 +273,7 @@ def test_component_can_open_chat_about_the_actual_selected_trade():
     ):
         app.run()
     assert not app.exception
-    assert app.session_state["economy04_view_picker"] == "Ask"
+    assert app.session_state["economy04_view_picker"] == "Ask why"
     assert next(s for s in app.selectbox if s.label == "Focus").value == 5
 
 
@@ -227,7 +288,7 @@ def test_chat_failure_does_not_pollute_history_or_change_simulation():
         ),
     ):
         app = open_economy_0_4()
-        app.session_state["economy04_view_picker"] = "Ask"
+        app.session_state["economy04_view_picker"] = "Ask why"
         app.run()
         app.chat_input[0].set_value("Explain").run()
         assert not app.exception

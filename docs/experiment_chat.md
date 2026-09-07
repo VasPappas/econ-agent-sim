@@ -1,9 +1,11 @@
 # Ask about this experiment
 
-Economy 0.4 has a dedicated **Ask** view and buttons in the playground to ask about
+Economy 0.4 has a dedicated **Ask why** view and buttons in the playground to ask about
 the whole experiment or the displayed trade. The selected trade is validated in
 Python and all context comes from the actual model result. Opening chat does not
-call OpenAI; only sending a question or selecting a suggested question does.
+call OpenAI. Common explanations are deterministic text derived from the selected
+model result; opening them never calls OpenAI. Only submitting a typed question
+uses the API allowance. Built-in explanations remain available without an API key.
 
 ## Activation on Streamlit Community Cloud
 
@@ -39,9 +41,10 @@ Official setup: https://docs.streamlit.io/deploy/streamlit-community-cloud/deplo
   and uncertainty, and suggest manual experiments for uncomputed counterfactuals.
   It has no tools and cannot change the simulation. Grounding and instructions
   reduce mistakes; they do not guarantee explanation accuracy.
-- History is session-local and bounded to 20 messages; the last six are sent for
-  follow-ups. Changing the experiment data or trade focus clears history. Clearing
-  the conversation does not reset the usage allowance.
+- History is session-local and bounded to 20 messages per context; the last six
+  are sent for follow-ups. The 12 most recently visited experiment/trade contexts
+  retain separate conversations, restored when returning to the same context.
+  Clearing a conversation does not reset the usage allowance.
 - Messages are displayed as plain text, without model-generated links, media, or
   HTML. Questions are not automatically sent when opening the view.
 

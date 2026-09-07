@@ -15,6 +15,7 @@ from econ_agent_sim.experiment_chat import (
     context_id,
     experiment_context,
 )
+from econ_agent_sim.explanations import built_in_explanations
 
 
 def chat_setting(name, default=""):
@@ -28,12 +29,15 @@ def chat_setting(name, default=""):
 
 
 def render_chat(result, selected_index, revision):
-    st.subheader("Ask about this experiment")
+    st.subheader("Let’s make sense of it.")
     st.write("Make sense of the prices, the trades, and what changed.")
     period = result.periods[selected_index]
     identity = (revision, selected_index)
-    if st.session_state.get("economy04_chat_trade_identity") != identity:
-        st.session_state.economy04_chat_trade = -1
+    base_fingerprint = context_id(experiment_context(result, selected_index))
+    saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
+    if (st.session_state.get("economy04_chat_trade_identity") != identity
+            or "economy04_chat_trade" not in st.session_state):
+        st.session_state.economy04_chat_trade = saved_focus.get(base_fingerprint, -1)
         st.session_state.economy04_chat_trade_identity = identity
     if st.session_state.get("economy04_chat_trade") is None:
         st.session_state.economy04_chat_trade = -1
@@ -51,21 +55,40 @@ def render_chat(result, selected_index, revision):
             )
         ),
     )
+    saved_focus[base_fingerprint] = trade_index
+    while len(saved_focus) > 12:
+        saved_focus.pop(next(iter(saved_focus)))
     trade_index = None if trade_index == -1 else trade_index
     context = experiment_context(result, selected_index, trade_index)
     fingerprint = context_id(context)
-    # Starting afresh prevents past assistant claims being applied to new results.
-    if st.session_state.get("economy04_chat_context") != fingerprint:
-        st.session_state.economy04_chat_context = fingerprint
-        st.session_state.economy04_chat_messages = []
-    history = st.session_state.economy04_chat_messages
+    # Restore the matching conversation; never apply another result's history.
+    conversations = st.session_state.setdefault("economy04_conversations", {})
+    history = conversations.setdefault(fingerprint, [])
+    # Bound session memory, preserving the most recently visited contexts.
+    conversations.pop(fingerprint)
+    conversations[fingerprint] = history
+    while len(conversations) > 12:
+        conversations.pop(next(iter(conversations)))
+    st.session_state.economy04_chat_context = fingerprint
+    st.session_state.economy04_chat_messages = history
+    if trade_index is not None:
+        st.session_state.economy04_selected_trade = {
+            "id": "chat-focus", "revision": revision,
+            "selected_index": selected_index, "trade_index": trade_index,
+        }
     st.session_state.setdefault("economy04_chat_session", str(uuid4()))
     with st.container(border=True):
         st.markdown(
             f"**{context['experiment']}** · {len(period.population)} agents · "
             f"X price **{period.prices['X']:.4f}** · Y fixed at **1**"
         )
-        st.caption("Changing the experiment or focus starts a fresh conversation.")
+        st.caption("Your conversation stays with this experiment and trade focus.")
+    st.markdown("**Explore the explanation**")
+    st.caption("From the model · instant · no AI usage")
+    for title, explanation in built_in_explanations(result, selected_index, trade_index).items():
+        with st.expander(title):
+            st.write(explanation)
+    st.markdown("**Ask a deeper question**")
     key = str(chat_setting("OPENAI_API_KEY"))
     enabled = str(chat_setting("ECON_CHAT_ENABLED", "false")).lower() == "true"
     ready = enabled and bool(key.strip())
@@ -76,29 +99,12 @@ def render_chat(result, selected_index, revision):
     st.caption(
         "Powered by OpenAI · When you send a question, your recent chat and this "
         "experiment's data go to OpenAI. Avoid personal information. AI explanations "
-        "can be mistaken; check the results in Audit."
+        "can be mistaken; inspect the evidence in Results. Sending uses the app’s AI allowance."
     )
     for message in history:
         with st.chat_message(message["role"]):
             # Plain text avoids model-generated HTML, links or tracking images.
             st.text(message["content"])
-    suggestion = None
-    if not history:
-        questions = [
-            "Explain this trade."
-            if trade_index is not None
-            else "What happened in this experiment?",
-            "Why is Y's price fixed at 1?",
-            "What could I try next?",
-        ]
-        for i, question in enumerate(questions):
-            if st.button(
-                question,
-                key=f"economy04_suggestion_{i}",
-                disabled=not ready,
-                width="stretch",
-            ):
-                suggestion = question
     with st.container():
         typed = st.chat_input(
             "Ask a question…",
@@ -106,7 +112,7 @@ def render_chat(result, selected_index, revision):
             max_chars=MAX_QUESTION,
             disabled=not ready,
         )
-    question = typed or suggestion
+    question = typed
     if question and ready:
         try:
             limit = int(chat_setting("ECON_CHAT_DAILY_LIMIT", "100"))
@@ -138,8 +144,10 @@ def render_chat(result, selected_index, revision):
                     {"role": "assistant", "content": answer},
                 ]
             )
-            st.session_state.economy04_chat_messages = history[-20:]
+            history[:] = history[-20:]
+            st.session_state.economy04_chat_messages = history
             st.rerun()
     if history and st.button("Clear conversation", width="stretch"):
-        st.session_state.economy04_chat_messages = []
+        history.clear()
+        st.session_state.economy04_chat_messages = history
         st.rerun()

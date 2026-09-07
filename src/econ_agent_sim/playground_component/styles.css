@@ -99,3 +99,51 @@ summary { min-height: 44px; padding: 12px 0; font-weight: 650; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* One calm workspace, with touch-sized controls and readable mobile labels. */
+.playground { --ink: #173f3b; --muted: #526761; border: 0; border-radius: 0;
+  padding: 12px 0 16px; max-width: 680px; overflow-wrap: anywhere; }
+.playground, .playground * { min-width: 0; }
+h2 { font-weight: 500; font-size: clamp(28px, 6vw, 38px); line-height: 1.15; max-width: 20ch; }
+.intro { font-size: 16px; max-width: 54ch; }
+.eyebrow, .agent-label, .asset-label, .asset-dot, .flow-person small { font-size: 12px; }
+.eyebrow { letter-spacing: .04em; font-weight: 500; }
+.micro, .boundary, .validation, .editor-footer, .price-delta small, .check { font-size: 13px; }
+.agent-card { background: #e6eee5; border: 0; padding: 18px 14px; }
+.agent-card.from, .agent-card.to { border: 0; }
+.agent-top { display: block; }
+.avatar, .to .avatar { background: #fff; color: #173f3b; border-radius: 50%; width: 38px; height: 38px; margin-bottom: 10px; font-size: 16px; }
+.agent-select { font-size: 16px; }
+.preference { margin: 0; font-size: 15px; }
+.agent-card .micro { margin: 4px 0 12px; }
+.asset-row { font-size: 16px; }
+.asset-row dd { font-weight: 500; }
+.amount-label, .text-button, .replay-button, .details, .balance-toggle button { font-size: 15px; }
+.primary { box-shadow: none; font-weight: 500; font-size: 16px; margin-top: 16px; background: #174e44; }
+.primary:active:not(:disabled) { box-shadow: none; }
+.editor-footer { flex-wrap: wrap; }
+.price-panel { border: 0; background: transparent; border-radius: 0; padding: 12px 0; flex-wrap: wrap; }
+.price-number { font-size: 38px; font-weight: 500; }
+.price-number span { font-size: 14px; }
+.price-delta { color: #a2482e; font-weight: 500; }
+.experiment-receipt { background: #e6eee5; padding: 16px; border-radius: 14px; margin: 16px 0; }
+.experiment-receipt p { margin: 6px 0 0; font-size: 15px; }
+.transfer-receipt { display: none; }
+.constants p { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.built-in { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.built-in summary { font-size: 16px; color: #174e44; }
+.checks { gap: 8px 14px; }
+.trade-heading { flex-wrap: wrap; margin-top: 16px; }
+.trade-controls { display: flex; gap: 12px; }
+.flow-stage { padding: 16px 0; background: transparent; border: 0; border-radius: 0; }
+.flow-person { font-size: 17px; font-weight: 500; }
+.lane-label { font-size: 16px; font-weight: 500; }
+.flow-lane { margin-top: 18px; }
+.replay-button { min-height: 48px; font-weight: 500; }
+.all-agent-row { font-size: 14px; flex-wrap: wrap; }
+@media(max-width: 360px) {
+ .agent-pair { gap: 8px; }
+ .agent-card { padding: 14px 10px; }
+ .price-number { font-size: 32px; }
+ .step-button { flex-basis: 44px; }
+}

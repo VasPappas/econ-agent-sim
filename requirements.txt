@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.4 safe API activation diagnostics
+# Rebuild marker: mobile experiment workspace and built-in explanations
 -e .[app]
