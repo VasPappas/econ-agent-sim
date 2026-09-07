@@ -2,6 +2,14 @@
 
 ## Current workspace — September 2026
 
+Experiment now shows an explicit baseline summary with actual configured totals
+and an expandable list of every agent's baseline holdings and spending shares.
+The next experiment names the opening allocation it builds on. Historical views
+are labeled as viewing only. Reset to baseline is visible in every view (disabled
+when already at baseline), removes transfers, keeps configured settings, restores
+the editor, and returns to Experiment. Restore defaults remains in Settings and
+also restores the original population, opening money, and price-search settings.
+
 The home page starts with an exploration action and names the five existing
 economies Exchange, Price discovery, Many agents, Redistribution, and Money.
 Economy 0.4 uses **Experiment / Results / Ask why**. Results contain the opening

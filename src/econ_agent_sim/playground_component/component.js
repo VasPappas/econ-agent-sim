@@ -29,6 +29,13 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     autoReplay = Boolean(data.last_transfer);
   }
   if (data.view) state.mode = data.view === 'Experiment' ? 'edit' : 'result';
+  if (data.reset_revision != null && state.resetRevision !== data.reset_revision) {
+    state.sender = data.agents[0].name;
+    state.receiver = data.agents[1].name;
+    state.amount = '0.10';
+    state.tradeIndex = 0;
+    state.resetRevision = data.reset_revision;
+  }
   if (initial && Number.isInteger(data.selected_trade)) state.tradeIndex = data.selected_trade;
   state.tradeIndex = Math.max(0, Math.min(state.tradeIndex, data.trades.length - 1));
   if (data.error) state.pending = false;

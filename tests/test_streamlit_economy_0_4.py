@@ -45,6 +45,10 @@ def test_economy_0_4_can_apply_even_agent_count() -> None:
     assert len(app.session_state["economy04_period_populations"][0]) == 2
     assert app.session_state["economy04_revision"] == 1
 
+    assert any("2 agents · 2 X and 2 Y" in item.value for item in app.markdown)
+    assert "Meet the agents at baseline" in expander_labels(app)
+    assert next(b for b in app.button if b.label == "Reset to baseline").disabled
+
 
 def test_economy_0_4_settlement_and_audit_hide_overview_controls() -> None:
     app = open_economy_0_4()
@@ -114,10 +118,13 @@ def test_native_transfer_and_reset_have_distinct_semantics() -> None:
     assert len(app.session_state["economy04_period_populations"]) == 2
     app.session_state["economy04_view_picker"] = "Experiment"
     app.run()
-    next(item for item in app.button if item.label == "Clear redistributions").click()
+    next(item for item in app.button if item.label == "Reset to baseline").click()
     app.run(timeout=10)
     assert len(app.session_state["economy04_period_populations"]) == 1
     assert app.session_state["economy04_opening_money"] == 20
+    assert app.session_state["economy04_period_picker"] == "Baseline"
+    assert app.session_state["economy04_view_picker"] == "Experiment"
+    assert any("Back at baseline" in item.value for item in app.success)
     next(
         item for item in app.button if item.label == "Restore default settings"
     ).click()
@@ -228,6 +235,20 @@ def test_component_navigation_is_validated_and_does_not_change_model():
     ):
         app.run()
     assert app.session_state["economy04_view_picker"] == "Results"
+
+
+def test_viewing_history_does_not_reset_and_reset_works_from_results():
+    app = open_economy_0_4()
+    next(b for b in app.button if b.label == "Add as next period").click().run()
+    assert app.session_state["economy04_view_picker"] == "Results"
+    next(s for s in app.selectbox if s.label == "Your experiments").set_value("Baseline").run()
+    assert any("Viewing a past experiment" in i.value for i in app.info)
+    assert len(app.session_state["economy04_period_populations"]) == 2
+    next(b for b in app.button if b.label == "Reset to baseline").click().run()
+    assert not app.exception
+    assert app.session_state["economy04_view_picker"] == "Experiment"
+    assert len(app.session_state["economy04_period_populations"]) == 1
+    assert app.session_state["economy04_period_picker"] == "Baseline"
 
 
 def enabled_settings(name, default=""):

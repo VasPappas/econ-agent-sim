@@ -91,12 +91,20 @@ def clear_redistributions():
     invalidate_playground()
 
 
+def reset_to_baseline():
+    clear_redistributions()
+    st.session_state.economy04_reset_revision = st.session_state.economy04_revision
+    st.session_state.economy04_next_view = "Experiment"
+    st.session_state.economy04_reset_notice = "Back at baseline. Transfers removed; your settings are unchanged."
+
+
 def restore_defaults():
     for name, value in DEFAULTS.items():
         st.session_state[f"economy04_{name}"] = value
     for widget, setting in SETTINGS_INPUTS.items():
         st.session_state[widget] = st.session_state[setting]
-    clear_redistributions()
+    reset_to_baseline()
+    st.session_state.economy04_reset_notice = "Original population, allocations, and model settings restored."
 
 
 def add_transfer(action):
@@ -218,6 +226,50 @@ else:
 period = result.periods[selected_index]
 rows = accounting_rows(period)
 
+latest_index = len(result.periods) - 1
+st.button(
+    "Reset to baseline", on_click=reset_to_baseline, width="stretch",
+    disabled=latest_index == 0,
+    help="Remove all transfers and return to the starting allocation. Keep your chosen settings.",
+)
+if latest_index:
+    st.caption("Reset removes transfers and keeps your settings.")
+else:
+    st.caption("You are at baseline. No transfers to reset.")
+if notice := st.session_state.pop("economy04_reset_notice", None):
+    st.success(notice)
+
+if view == "Experiment":
+    baseline = result.periods[0]
+    with st.container(border=True):
+        st.markdown("**Your starting point · Baseline**")
+        st.write(
+            f"{len(baseline.population)} agents · "
+            f"{sum(a.x for a in baseline.population):g} X and "
+            f"{sum(a.y for a in baseline.population):g} Y in total · "
+            f"{config.opening_money_per_agent:g} Money per agent"
+        )
+        st.caption("The baseline is the starting allocation before any of your transfers, using your chosen settings.")
+        with st.expander("Meet the agents at baseline"):
+            for agent in baseline.population:
+                preference = "Prefers X" if agent.alpha > .5 else "Prefers Y" if agent.alpha < .5 else "Equal spending shares"
+                st.markdown(f"**{agent.name} · {preference}**")
+                st.write(f"{agent.x:g} X · {agent.y:g} Y · {config.opening_money_per_agent:g} Money")
+                st.caption(f"Spends {agent.alpha:.0%} of goods wealth on X and {1-agent.alpha:.0%} on Y.")
+    source = "Baseline" if latest_index == 0 else f"Experiment {latest_index}"
+    st.markdown(f"**Next: Experiment {latest_index + 1} · starting from {source}’s endowments**")
+    st.caption("Your transfer changes these opening goods. Every settlement starts with fresh money; closing balances never carry forward.")
+elif selected_index:
+    source = "Baseline" if selected_index == 1 else f"Experiment {selected_index - 1}"
+    st.caption(f"Experiment {selected_index} · starting from {source}’s endowments, then applying its transfer.")
+else:
+    st.caption("Baseline · the market outcome before any transfers.")
+if selected_index < latest_index:
+    st.info(
+        "Viewing a past experiment. This does not reset the economy. "
+        f"Your next transfer still starts from Experiment {latest_index}’s opening endowments."
+    )
+
 if view in ("Experiment", "Results"):
     data = playground_data(
         result,
@@ -227,6 +279,7 @@ if view in ("Experiment", "Results"):
     )
     data["error"] = st.session_state.economy04_error
     data["view"] = view
+    data["reset_revision"] = st.session_state.get("economy04_reset_revision")
     selection = st.session_state.get("economy04_selected_trade")
     if validate_chat_target(selection, st.session_state.economy04_revision,
                             selected_index, len(period.trades)):
@@ -346,9 +399,7 @@ if view == "Experiment":
             st.form_submit_button(
                 "Apply and close", on_click=apply_settings, width="stretch"
             )
-        st.button(
-            "Clear redistributions", on_click=clear_redistributions, width="stretch"
-        )
+        st.caption("Restore defaults also resets the population, opening money, and price-search settings.")
         st.button(
             "Restore default settings", on_click=restore_defaults, width="stretch"
         )

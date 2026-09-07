@@ -1,2 +1,2 @@
-# Rebuild marker: verified mobile workspace with final navigation polish
+# Rebuild marker: explicit baseline and visible reset
 -e .[app]
