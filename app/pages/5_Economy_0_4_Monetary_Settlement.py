@@ -4,15 +4,11 @@ from dataclasses import asdict
 import streamlit as st
 
 from econ_agent_sim.chat_view import render_chat
-from econ_agent_sim.economy_0_4 import ASSETS
 from econ_agent_sim.evidence_view import render_evidence
-from econ_agent_sim.experiment_chat import validate_chat_target
-from econ_agent_sim.playground import playground_data
 from econ_agent_sim.playground_component import cached_economy, render_playground
 from econ_agent_sim.run_workspace import (
+    SubmittedRun,
     default_agents,
-    run_changes,
-    run_explanations,
     setup_config,
 )
 from econ_agent_sim.workspace_style import apply_workspace_style
@@ -90,6 +86,7 @@ result = st.session_state.lab_result
 previous = st.session_state.lab_previous
 number = st.session_state.lab_number
 revision = st.session_state.lab_generation
+submitted = SubmittedRun(result, previous, number, revision) if result else None
 dirty = result is not None and (
     st.session_state.lab_agents != [asdict(a) for a in result.periods[0].population]
     or st.session_state.lab_money != result.config.opening_money_per_agent
@@ -141,44 +138,33 @@ elif view == "Results":
     st.subheader(f"Run {number}")
     st.caption(f"Compared with Run {number - 1}." if previous else "Your first calculated result.")
     with st.expander("What changed in the setup?", expanded=bool(previous)):
-        for change in run_changes(result, previous):
+        for change in submitted.data["setup_changes"]:
             st.write(change)
-    data = playground_data(result, 0, revision)
-    data.update(label=f"Run {number}",
-                previous_price=previous.periods[0].prices["X"] if previous else None,
-                setup_summary=f"Run {number} · submitted setup",
-                explanations=run_explanations(result, previous))
+    data = dict(submitted.data)
     saved = st.session_state.get("economy04_selected_trade")
-    if validate_chat_target(saved, revision, 0, len(result.trades)):
-        data["selected_trade"] = saved.get("trade_index")
+    if submitted.valid_event(saved):
+        data["selected_trade_index"] = saved.get("trade_index")
     component = render_playground(data)
     selection = getattr(component, "selection", None)
-    if (validate_chat_target(selection, revision, 0, len(result.trades))
+    if (submitted.valid_event(selection)
             and selection["id"] != st.session_state.get("lab_last_selection")):
         st.session_state.economy04_selected_trade = selection
         st.session_state.lab_last_selection = selection["id"]
     question = getattr(component, "question", None)
-    if (validate_chat_target(question, revision, 0, len(result.trades))
+    if (submitted.valid_event(question)
             and question["id"] != st.session_state.get("lab_last_question")):
         st.session_state.lab_last_question = question["id"]
         st.session_state.economy04_chat_trade = question.get("trade_index")
-        st.session_state.economy04_chat_trade_identity = (revision, 0)
+        st.session_state.economy04_chat_trade_identity = revision
         if question.get("trade_index") is not None:
             st.session_state.economy04_selected_trade = question
         st.session_state.lab_next_view = "Ask why"
         st.rerun()
-    period = result.periods[0]
     with st.expander("Inspect the evidence"):
-        rows = [
-            {"agent": name, "asset": asset, "opening": opening[asset],
-             "net flow": period.flows[name][asset], "closing": period.closing_stocks[name][asset],
-             "check": opening[asset] + period.flows[name][asset] - period.closing_stocks[name][asset]}
-            for name, opening in period.opening_stocks.items() for asset in ASSETS
-        ]
-        render_evidence(result, 0, rows)
+        render_evidence(submitted)
 
 else:
-    render_chat(result, 0, revision, previous_result=previous, run_number=number)
+    render_chat(submitted)
     if st.button("← Back to results", width="stretch"):
         st.session_state.lab_next_view = "Results"
         st.rerun()

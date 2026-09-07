@@ -153,7 +153,7 @@ def test_chat_receives_submitted_run_and_previous_run_only():
         app.chat_input[0].set_value("What changed?").run()
         assert not app.exception
         context = answer.call_args.args[1]
-        assert context["experiment"] == "Run 2"
+        assert context["label"] == "Run 2"
         assert context["agents"][0]["opening"]["X"] == 1
         assert context["agents"][0]["alpha"] == .8
         assert context["previous_run"]["agents"][0]["alpha"] == .5
@@ -168,7 +168,7 @@ def test_trade_chat_roundtrip_and_stale_event_rejection():
     app.number_input(key="lab_alpha_0").set_value(.8).run()
     button(app, "Run").click().run()
     revision = app.session_state.lab_generation
-    event = {"id": "trade", "revision": revision, "selected_index": 0, "trade_index": 0}
+    event = {"id": "trade", "revision": revision, "trade_index": 0}
     with patch("econ_agent_sim.playground_component.render_playground", return_value=SimpleNamespace(question=event)):
         app.run()
     assert not app.exception
@@ -176,7 +176,7 @@ def test_trade_chat_roundtrip_and_stale_event_rejection():
     button(app, "← Back to results").click()
     with patch("econ_agent_sim.playground_component.render_playground", return_value=SimpleNamespace()) as component:
         app.run()
-    assert component.call_args.args[0]["selected_trade"] == 0
+    assert component.call_args.args[0]["selected_trade_index"] == 0
     with patch("econ_agent_sim.playground_component.render_playground", return_value=SimpleNamespace(question={**event, "id": "stale", "revision": -1})):
         app.run()
     assert app.session_state.lab_view == "Results"

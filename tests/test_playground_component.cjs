@@ -29,10 +29,10 @@ const host = new Element('host');
 const root = new Element('div'); root.className = 'playground-root'; host.append(root);
 const stocks = { 'Agent 1': {X:1.8,Y:.2,Money:10}, 'Agent 2': {X:.2,Y:1.8,Money:10} };
 const data = {
-  revision:0, selected_index:0, label:'Run 1', setup_summary:'Run 1 · submitted setup',
-  agent_count:2, price:1, previous_price:null,
-  opening:stocks, closing:stocks, checks:{market:true,money:true,accounts:true},
-  explanations:{'Why did X change but not Y?':'Baseline explanation'},
+  revision:0, label:'Run 1',
+  settings:{agent_count:2}, prices:{X:1,Y:1}, previous_run:null,
+  agents:Object.entries(stocks).map(([name,s])=>({name,opening:s,closing:s})),
+  totals:{opening:{X:2,Y:2,Money:20}}, checks:{market:true,money:true,accounts:true},
   trades:[
     {seller:'Agent 1',buyer:'Agent 2',good:'X',quantity:1.4,payment:1.4,unit_price:1},
     {seller:'Agent 2',buyer:'Agent 1',good:'Y',quantity:1.4,payment:1.4,unit_price:1},
@@ -45,7 +45,7 @@ root.querySelector('.next-trade').onclick();
 assert.equal(events.at(-1)[0],'selection');
 assert.equal(events.at(-1)[1].trade_index,1);
 // The Python rerun can briefly echo the preceding selection. Do not rewind.
-data.selected_trade=0; render();
+data.selected_trade_index=0; render();
 assert.equal(root.playgroundState.tradeIndex,1);
 root.querySelectorAll('button').find(b=>b.textContent==='Ask about this trade').onclick();
 assert.equal(events.at(-1)[0],'question');
@@ -53,14 +53,15 @@ assert.equal(events.at(-1)[1].trade_index,1);
 assert.equal(root.querySelector('.try-again'),undefined);
 assert.equal(root.querySelectorAll('summary').some(e=>e.textContent==='Why did the price move?'),false);
 // A remount restores the server's remembered trade.
-delete root.playgroundState; data.selected_trade=1; render();
+delete root.playgroundState; data.selected_trade_index=1; render();
 assert.equal(root.playgroundState.tradeIndex,1);
 assert.equal(root.querySelector('.next-trade').disabled,true);
-// Zero-trade Results show the outcome, not the explanation or a duplicate CTA.
+// A new submitted run resets trade selection.
+data.revision=1; render();
+assert.equal(root.playgroundState.tradeIndex,0);
+// Zero-trade Results show the outcome, not a duplicate CTA.
 data.trades=[];
-data.explanations['Why is there no trade?']='Detailed no-trade explanation';
 render();
 assert.equal(root.querySelectorAll('p').some(e=>e.textContent==='0 trades · starting balances unchanged.'),true);
-assert.equal(root.querySelectorAll('p').some(e=>e.textContent==='Detailed no-trade explanation'),false);
 assert.equal(root.querySelectorAll('button').some(e=>e.textContent==='Ask why no trade is needed'),false);
 console.log('Component selection, remount, and no-trade checks passed.');

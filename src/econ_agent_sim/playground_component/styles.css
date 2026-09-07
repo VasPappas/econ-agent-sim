@@ -105,8 +105,6 @@ h2 { font-weight: 500; font-size: clamp(28px, 6vw, 38px); line-height: 1.15; max
 .experiment-receipt { background: #e6eee5; padding: 16px; border-radius: 14px; margin: 16px 0; }
 .experiment-receipt p { margin: 6px 0 0; font-size: 15px; }
 .constants p { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
-.built-in { border-bottom: 1px solid var(--line); padding: 4px 0; }
-.built-in summary { font-size: 16px; color: #174e44; }
 .checks { gap: 8px 14px; }
 .trade-heading { flex-wrap: wrap; margin-top: 16px; }
 .trade-controls { display: flex; gap: 12px; }

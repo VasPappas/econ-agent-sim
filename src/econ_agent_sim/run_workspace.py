@@ -1,12 +1,11 @@
 """Independent runs: editable setups never mutate a calculated result."""
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from functools import cached_property
 from math import isfinite
 
 from econ_agent_sim.economy_0_2 import ExchangeAgentConfig
-from econ_agent_sim.economy_0_4 import Economy04Config
-from econ_agent_sim.experiment_chat import experiment_context
-from econ_agent_sim.explanations import built_in_explanations
+from econ_agent_sim.economy_0_4 import ASSETS, MONEY, Economy04Config, Economy04Result
 
 
 def default_agents(count=2):
@@ -29,7 +28,7 @@ def setup_config(agents, money=10.0):
     )
 
 
-def run_changes(result, previous):
+def _setup_changes(result, previous):
     if previous is None:
         return ["First run · no previous result to compare."]
     before = {a.name: a for a in previous.periods[0].population}
@@ -52,41 +51,99 @@ def run_changes(result, previous):
     return changes or ["Same setup as the previous run."]
 
 
-def run_context(result, previous, number, trade_index=None):
-    context = experiment_context(result, 0, trade_index)
-    context["experiment"] = f"Run {number}"
-    context["setup_changes"] = run_changes(result, previous)
-    context["previous_run"] = (
-        {"prices": previous.periods[0].prices,
-         "agents": [asdict(a) for a in previous.periods[0].population],
-         "opening_money_per_agent": previous.config.opening_money_per_agent}
-        if previous else None
-    )
-    context["previous_prices"] = previous.periods[0].prices if previous else None
-    context["price_x_change_percent"] = (
-        100 * (result.periods[0].prices["X"] / previous.periods[0].prices["X"] - 1)
-        if previous else None
-    )
-    context["run_rule"] = "Independent submitted setups. Quantities, preferences, and agent count can all change. No balances carry forward. Ledger trade IDs restart within each run."
-    return context
 
+@dataclass(frozen=True)
+class SubmittedRun:
+    """One submitted outcome, shared by Results, evidence, and explanations."""
 
-def run_explanations(result, previous, trade_index=None):
-    answers = built_in_explanations(result, 0, trade_index)
-    p = result.periods[0]
-    text = f"X clears at {p.prices['X']:.4f} Money per unit. Y is the reference good, with its price fixed at 1. "
-    if previous:
-        text += f"The previous run's X price was {previous.periods[0].prices['X']:.4f}. "
-    text += (
-        "The clearing price depends on starting goods and spending preferences across all agents. "
-        "Changing quantities, preferences, or population can change demand and supply. "
-        "When several inputs change, the comparison alone does not isolate one cause."
-    )
-    answers["Why did X change but not Y?"] = text
-    if not p.trades:
-        answers = {"Why is there no trade?": (
-            "At the clearing prices, each agent already holds their desired bundle, "
-            "within the model's numerical tolerance. No exchange is needed. "
-            "Two agents with 1 X, 1 Y and equal spending preferences are such a case at equal prices."
-        ), **answers}
-    return answers
+    result: Economy04Result
+    previous: Economy04Result | None
+    number: int
+    revision: int
+
+    def __post_init__(self):
+        if any(len(r.periods) != 1 for r in (self.result, self.previous) if r is not None):
+            raise ValueError("A submitted run must contain exactly one independent outcome.")
+
+    @property
+    def period(self):
+        return self.result.periods[0]
+
+    @cached_property
+    def accounting_rows(self):
+        p = self.period
+        return [
+            {"agent": name, "asset": asset, "opening": opening[asset],
+             "net flow": p.flows[name][asset], "closing": p.closing_stocks[name][asset],
+             "check": opening[asset] + p.flows[name][asset] - p.closing_stocks[name][asset]}
+            for name, opening in p.opening_stocks.items() for asset in ASSETS
+        ]
+
+    @cached_property
+    def data(self):
+        p, config = self.period, self.result.config
+        prior = self.previous.periods[0] if self.previous else None
+        totals = {
+            snapshot: {asset: sum(s[asset] for s in stocks.values()) for asset in ASSETS}
+            for snapshot, stocks in (("opening", p.opening_stocks), ("closing", p.closing_stocks))
+        }
+        return {
+            "label": f"Run {self.number}",
+            "run_number": self.number,
+            "revision": self.revision,
+            "settings": {
+                "agent_count": len(p.population),
+                "opening_money_per_agent": config.opening_money_per_agent,
+                "initial_trial_price_x": config.initial_price_x,
+                "adjustment_speed": config.adjustment_speed,
+            },
+            "prices": dict(p.prices),
+            "previous_run": (
+                {"number": self.number - 1, "prices": dict(prior.prices),
+                 "agents": [asdict(a) for a in prior.population],
+                 "opening_money_per_agent": self.previous.config.opening_money_per_agent}
+                if prior else None
+            ),
+            "price_x_change_percent": (
+                100 * (p.prices["X"] / prior.prices["X"] - 1) if prior else None
+            ),
+            "setup_changes": _setup_changes(self.result, self.previous),
+            "agents": [
+                {"name": a.name, "alpha": a.alpha,
+                 "opening": dict(p.opening_stocks[a.name]),
+                 "closing": dict(p.closing_stocks[a.name]),
+                 "desired": dict(p.desired_bundles[a.name])}
+                for a in p.population
+            ],
+            "trades": [dict(ordinal=i + 1, **asdict(t)) for i, t in enumerate(p.trades)],
+            "totals": totals,
+            "market_error": p.steps[-1].market_error,
+            "clearing_tolerance": config.tolerance,
+            "gross_money_payments": p.gross_money_payments,
+            "checks": {
+                "market": p.steps[-1].market_error <= config.tolerance,
+                "money": abs(totals["opening"][MONEY] - totals["closing"][MONEY]) < 1e-10,
+                "accounts": all(abs(row["check"]) < 1e-10 for row in self.accounting_rows),
+            },
+            "run_rule": (
+                "Independent submitted setups. Quantities, preferences, and agent count can all change. "
+                "No balances carry forward. Ledger trade IDs restart within each run."
+            ),
+        }
+
+    def context(self, trade_index=None):
+        trades = self.data["trades"]
+        selected = (trades[trade_index]
+                    if type(trade_index) is int and 0 <= trade_index < len(trades) else None)
+        return {**self.data, "selected_trade": selected}
+
+    def valid_event(self, event):
+        """Browser events choose context; they never provide model facts."""
+        return (
+            isinstance(event, dict)
+            and isinstance(event.get("id"), str) and 0 < len(event["id"]) <= 100
+            and type(event.get("revision")) is int and event["revision"] == self.revision
+            and (event.get("trade_index") is None
+                 or (type(event["trade_index"]) is int
+                     and 0 <= event["trade_index"] < len(self.period.trades)))
+        )

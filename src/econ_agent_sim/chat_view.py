@@ -13,10 +13,8 @@ from econ_agent_sim.experiment_chat import (
     ChatUnavailable,
     answer_question,
     context_id,
-    experiment_context,
 )
 from econ_agent_sim.explanations import built_in_explanations
-from econ_agent_sim.run_workspace import run_context, run_explanations
 
 
 def chat_setting(name, default=""):
@@ -29,17 +27,12 @@ def chat_setting(name, default=""):
         return default
 
 
-def render_chat(result, selected_index, revision, *, previous_result=None, run_number=None):
+def render_chat(run):
     st.subheader("Let’s make sense of it.")
     st.write("Make sense of the prices, the trades, and what changed.")
-    period = result.periods[selected_index]
-    identity = (revision, selected_index)
-    def make_context(trade=None):
-        if run_number is not None:
-            return run_context(result, previous_result, run_number, trade)
-        return experiment_context(result, selected_index, trade)
-
-    base_fingerprint = context_id(make_context())
+    period = run.period
+    identity = run.revision
+    base_fingerprint = context_id(run.context())
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
     if (st.session_state.get("economy04_chat_trade_identity") != identity
             or "economy04_chat_trade" not in st.session_state):
@@ -53,7 +46,7 @@ def render_chat(result, selected_index, revision, *, previous_result=None, run_n
         options,
         key="economy04_chat_trade",
         format_func=lambda i: (
-            "Whole experiment"
+            "Whole run"
         if i == -1
             else (
                 f"Trade {i + 1} of {len(period.trades)} · "
@@ -65,7 +58,7 @@ def render_chat(result, selected_index, revision, *, previous_result=None, run_n
     while len(saved_focus) > 12:
         saved_focus.pop(next(iter(saved_focus)))
     trade_index = None if trade_index == -1 else trade_index
-    context = make_context(trade_index)
+    context = run.context(trade_index)
     fingerprint = context_id(context)
     # Restore the matching conversation; never apply another result's history.
     conversations = st.session_state.setdefault("economy04_conversations", {})
@@ -79,23 +72,18 @@ def render_chat(result, selected_index, revision, *, previous_result=None, run_n
     st.session_state.economy04_chat_messages = history
     if trade_index is not None:
         st.session_state.economy04_selected_trade = {
-            "id": "chat-focus", "revision": revision,
-            "selected_index": selected_index, "trade_index": trade_index,
+            "id": "chat-focus", "revision": run.revision, "trade_index": trade_index,
         }
     st.session_state.setdefault("economy04_chat_session", str(uuid4()))
     with st.container(border=True):
         st.markdown(
-            f"**{context['experiment']}** · {len(period.population)} agents · "
+            f"**{context['label']}** · {len(period.population)} agents · "
             f"X price **{period.prices['X']:.4f}** · Y fixed at **1**"
         )
-        st.caption("Your conversation stays with this experiment and trade focus.")
+        st.caption("Your conversation stays with this run and trade focus.")
     st.markdown("**Explore the explanation**")
     st.caption("From the model · instant · no AI usage")
-    explanations = (run_explanations(result, previous_result, trade_index)
-                    if run_number is not None else built_in_explanations(result, selected_index, trade_index))
-    for title, explanation in explanations.items():
-        if title == "Why did X change but not Y?":
-            title = "Why did the price move?"
+    for title, explanation in built_in_explanations(context).items():
         with st.expander(title):
             st.write(explanation)
     st.markdown("**Ask a deeper question**")
@@ -108,7 +96,7 @@ def render_chat(result, selected_index, revision, *, previous_result=None, run_n
         )
     st.caption(
         "Powered by OpenAI · When you send a question, your recent chat and this "
-        "experiment's data go to OpenAI. Avoid personal information. AI explanations "
+        "run's data go to OpenAI. Avoid personal information. AI explanations "
         "can be mistaken; inspect the evidence in Results. Sending uses the app’s AI allowance."
     )
     for message in history:
@@ -126,7 +114,7 @@ def render_chat(result, selected_index, revision, *, previous_result=None, run_n
     if question and ready:
         try:
             limit = int(chat_setting("ECON_CHAT_DAILY_LIMIT", "100"))
-            with st.spinner("Looking at your experiment…"):
+            with st.spinner("Looking at your run…"):
                 answer = answer_question(
                     question,
                     context,

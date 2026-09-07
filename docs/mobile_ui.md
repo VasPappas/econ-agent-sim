@@ -38,6 +38,17 @@ selection, remounts, and component events.
 
 ## Results component
 
+`SubmittedRun` in `run_workspace.py` is the shared presentation boundary. It holds
+one independent engine outcome and the preceding submitted outcome. Results and
+Ask why use the same run data, including prices, totals, agents, setup changes,
+and trade ordinals. Evidence receives that same submitted run for its detailed
+ledger and price-search records. Unsubmitted setup values never enter this data.
+
+Free explanations are generated once through `built_in_explanations(context)`.
+Trade explanations live in Ask why, reached through the selected trade's button.
+Browser events identify the submitted revision and trade index; there is no
+legacy period selector or parallel baseline adapter in this flow.
+
 The bundled component displays submitted outcomes: prices, checks, trades,
 replay, and opening/closing balances. It emits only trade-selection state and
 questions about a selected trade. Setup and view navigation belong to Streamlit.

@@ -1,2 +1,2 @@
-# Rebuild marker: remove retired component editor
+# Rebuild marker: shared submitted-run data and explanations
 -e .[app]

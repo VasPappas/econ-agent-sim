@@ -1,17 +1,21 @@
 // All model data is inserted as text, never interpreted as HTML or code.
 export default function render({ data, parentElement, setTriggerValue, setStateValue }) {
   const root = parentElement.querySelector('.playground-root');
+  const priceX = data.prices.X;
+  const previousPrice = data.previous_run?.prices.X ?? null;
+  const balances = Object.fromEntries(['opening', 'closing'].map(snapshot => [
+    snapshot, Object.fromEntries(data.agents.map(a => [a.name, a[snapshot]])),
+  ]));
   const initial = !root.playgroundState;
   const state = root.playgroundState || {
     tradeIndex: 0, balances: 'closing',
-    revision: data.revision, selected: data.selected_index,
+    revision: data.revision,
   };
-  if (state.revision !== data.revision || state.selected !== data.selected_index) {
+  if (state.revision !== data.revision) {
     state.tradeIndex = 0;
     state.revision = data.revision;
-    state.selected = data.selected_index;
   }
-  if (initial && Number.isInteger(data.selected_trade)) state.tradeIndex = data.selected_trade;
+  if (initial && Number.isInteger(data.selected_trade_index)) state.tradeIndex = data.selected_trade_index;
   state.tradeIndex = Math.max(0, Math.min(state.tradeIndex, data.trades.length - 1));
   root.playgroundState = state;
   let animations = [];
@@ -35,11 +39,11 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
   const focus = selector => root.querySelector(selector)?.focus();
   const rememberTrade = () => setStateValue?.('selection', {
     id: crypto.randomUUID(), revision: data.revision,
-    selected_index: data.selected_index, trade_index: state.tradeIndex,
+    trade_index: state.tradeIndex,
   });
   const ask = tradeIndex => setTriggerValue('question', {
     id: crypto.randomUUID(), revision: data.revision,
-    selected_index: data.selected_index, trade_index: tradeIndex,
+    trade_index: tradeIndex,
   });
   function renderCard(name, stocks, side) {
     const card = el('article', `agent-card ${side}`);
@@ -65,13 +69,13 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     const shell = el('section', 'playground');
     shell.setAttribute('aria-label', 'Interactive monetary economy');
     const top = el('div', 'topline');
-    top.append(el('span', 'eyebrow', `Money · ${data.agent_count} agents`));
+    top.append(el('span', 'eyebrow', `Money · ${data.settings.agent_count} agents`));
     shell.append(top);
     const head = el('div', 'stage-heading');
     head.append(el('h2', '', !data.trades.length ? 'No trade needed.'
-      : data.previous_price === null ? 'Your market result.'
-      : Math.abs(data.price - data.previous_price) < 1e-6 ? 'The price held steady.'
-      : data.price > data.previous_price ? 'X became more expensive.' : 'X became less expensive.'));
+      : previousPrice === null ? 'Your market result.'
+      : Math.abs(priceX - previousPrice) < 1e-6 ? 'The price held steady.'
+      : priceX > previousPrice ? 'X became more expensive.' : 'X became less expensive.'));
     const sub = (data.trades.length ? 'See what changed, then follow a trade.' : 'See the outcome here. Explore the explanation in Ask why.');
     shell.append(head, el('p', 'intro', sub));
     drawResult(shell);
@@ -81,25 +85,22 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     const price = el('div', 'price-panel');
     const values = el('div', 'price-values');
     values.append(el('span', 'eyebrow', `${data.label.toUpperCase()} · PRICE OF X · Y FIXED AT 1`));
-    const number = el('div', 'price-number', `${fmt(data.price, 4)} `);
+    const number = el('div', 'price-number', `${fmt(priceX, 4)} `);
     number.append(el('span', '', 'M / X'));
     values.append(number);
     price.append(values);
-    if (data.previous_price !== null) {
-      const change = (data.price / data.previous_price - 1) * 100;
+    if (previousPrice !== null) {
+      const change = data.price_x_change_percent;
       const delta = el('div', 'price-delta', `${change >= 0 ? '+' : ''}${fmt(change, 2)}%`);
-      delta.append(el('small', '', `from ${fmt(data.previous_price, 4)}`));
+      delta.append(el('small', '', `from ${fmt(previousPrice, 4)}`));
       price.append(delta);
     }
     const receipt = el('div', 'experiment-receipt');
     receipt.append(el('span', 'eyebrow', data.label));
-    for (const c of (data.changes || [])) {
-      receipt.append(el('p', '', `${c.name}: ${fmt(c.before)} → ${fmt(c.after)} Y`));
-    }
-    if (!(data.changes || []).length) receipt.append(el('p', '', data.setup_summary || 'Baseline opening endowments'));
+    receipt.append(el('p', '', `${data.label} · submitted setup`));
     shell.append(receipt, price);
     const constants = el('div', 'constants');
-    const total = asset => Object.values(data.opening).reduce((sum, stocks) => sum + stocks[asset], 0);
+    const total = asset => data.totals.opening[asset];
     constants.append(el('p', '', 'Y price · 1.0000 · fixed reference'),
       el('p', '', `Total goods · ${fmt(total('X'))} X + ${fmt(total('Y'))} Y`),
       el('p', '', `Total money · ${fmt(total('Money'))} · ${data.checks.money ? 'conserved' : 'check failed'}`));
@@ -152,11 +153,7 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       const replay = button('▶ Replay trade', 'replay-button', () => play());
       stage.append(replay, el('p', 'micro', 'One batch, shown visually. Animation order is not payment timing.'));
       shell.append(stage);
-      const tradeHelp = el('details', 'built-in');
-      tradeHelp.append(el('summary', '', 'Explain this trade'),
-        el('p', 'intro', `${trade.seller} sells ${fmt(trade.quantity, 4)} ${trade.good} to ${trade.buyer}. In return, ${trade.buyer} pays ${fmt(trade.payment, 4)} Money. Unit price: ${fmt(trade.unit_price, 4)}. Closing balances include all trades, not just this one.`),
-        el('p', 'micro', 'From the model · no AI usage'));
-      shell.append(tradeHelp, button('Ask about this trade', 'replay-button', () => ask(state.tradeIndex)));
+      shell.append(button('Ask about this trade', 'replay-button', () => ask(state.tradeIndex)));
       const details = el('details', 'details');
       details.append(el('summary', '', 'Inspect agent balances'));
       const toggle = el('div', 'balance-toggle');
@@ -175,13 +172,13 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       }
       details.append(toggle, el('p', 'micro', 'These are whole-market balances, not the effect of this one trade.'));
       const pair = el('div', 'agent-pair');
-      pair.append(renderCard(trade.seller, data[state.balances][trade.seller], 'from'));
-      pair.append(renderCard(trade.buyer, data[state.balances][trade.buyer], 'to'));
+      pair.append(renderCard(trade.seller, balances[state.balances][trade.seller], 'from'));
+      pair.append(renderCard(trade.buyer, balances[state.balances][trade.buyer], 'to'));
       details.append(pair);
       const all = el('details', 'all-agents');
-      all.append(el('summary', '', `All ${data.agent_count} agents`));
+      all.append(el('summary', '', `All ${data.settings.agent_count} agents`));
       const list = el('div', 'all-agent-list');
-      for (const [name, stocks] of Object.entries(data[state.balances])) {
+      for (const [name, stocks] of Object.entries(balances[state.balances])) {
         const row = el('div', 'all-agent-row');
         row.append(el('strong', '', name), el('span', '', `X ${fmt(stocks.X)} · Y ${fmt(stocks.Y)} · M ${fmt(stocks.Money)}`));
         list.append(row);

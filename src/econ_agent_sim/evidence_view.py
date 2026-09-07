@@ -7,9 +7,9 @@ import streamlit as st
 from econ_agent_sim.economy_0_4 import MONEY
 
 
-def render_evidence(result, selected_index, rows):
-    period = result.periods[selected_index]
-    config = result.config
+def render_evidence(run):
+    period = run.period
+    config = run.result.config
     final_step = period.steps[-1]
     st.subheader("Settlement")
     with st.container(border=True):
@@ -98,7 +98,7 @@ def render_evidence(result, selected_index, rows):
 
     with st.expander("Stock-flow accounts"):
         st.caption("Identity: closing stock = opening stock + ledgered net flow.")
-        st.dataframe(rows, width="stretch", hide_index=True)
+        st.dataframe(run.accounting_rows, width="stretch", hide_index=True)
 
     with st.expander("Settlement ledger"):
         st.dataframe(
@@ -123,13 +123,3 @@ def render_evidence(result, selected_index, rows):
             width="stretch",
             hide_index=True,
         )
-
-    if len(result.periods) > 1:
-        with st.expander("Full multi-period monetary ledger"):
-            st.caption("Transaction and trade IDs remain unique across the experiment.")
-            st.dataframe(
-                [asdict(transaction) for transaction in result.transactions],
-                width="stretch",
-                hide_index=True,
-            )
-

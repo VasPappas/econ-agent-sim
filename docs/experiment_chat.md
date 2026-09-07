@@ -30,6 +30,11 @@ Official setup: https://docs.streamlit.io/deploy/streamlit-community-cloud/deplo
 
 ## Context and behavior
 
+- `SubmittedRun.context()` supplies the same prices, agents, totals, changes,
+  and trade records shown in Results. Built-in explanations use this context
+  too. The selected trade adds focus without replacing the submitted facts.
+  There is no separate legacy baseline/period context builder. Ledger IDs
+  restart within each run, and the assistant instructions reflect that rule.
 - The current submitted run supplies settings, preferences, opening/closing stocks,
   desired bundles, trades, prices and clearing error. Its preceding submitted run
   supplies comparison prices and starting agents. Setup changes include quantities,

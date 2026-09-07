@@ -4,57 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from econ_agent_sim.economy_0_3 import redistribute_y
-from econ_agent_sim.economy_0_4 import Economy04Config, run_economy_0_4
+from econ_agent_sim.economy_0_4 import run_economy_0_4
 from econ_agent_sim.experiment_chat import (
     ChatUnavailable,
     answer_question,
     api_error_message,
-    context_id,
-    experiment_context,
     reserve_request,
-    validate_chat_target,
 )
-
-
-def experiment():
-    config = Economy04Config()
-    population = config.period_populations[0]
-    changed = redistribute_y(
-        population,
-        sender_name=population[0].name,
-        receiver_name=population[1].name,
-        amount=0.1,
-    )
-    return run_economy_0_4(Economy04Config(period_populations=(population, changed)))
-
-
-def test_context_tracks_selected_experiment_and_real_trade():
-    result = experiment()
-    baseline = experiment_context(result, 0)
-    changed = experiment_context(result, 1, 5)
-    assert baseline["agents"][0]["opening"]["Y"] == result.periods[0].population[0].y
-    assert changed["agents"][0]["opening_Y_change_from_previous"] == pytest.approx(-0.1)
-    assert changed["selected_trade"]["ordinal"] == 6
-    assert changed["selected_trade"]["trade_id"] == result.periods[1].trades[5].trade_id
-    assert changed["previous_prices"] == result.periods[0].prices
-    assert changed["prices"]["Y"] == 1
-    assert baseline["selected_trade"] is None
-    assert context_id(baseline) != context_id(changed)
-
-
-def test_untrusted_trade_selection_rejects_stale_and_invalid_context():
-    valid = {"id": "event", "revision": 3, "selected_index": 1, "trade_index": 5}
-    assert validate_chat_target(valid, 3, 1, 18)
-    for field, value in [
-        ("revision", 2),
-        ("trade_index", -1),
-        ("trade_index", 18),
-        ("trade_index", True),
-        ("selected_index", 0),
-        ("id", ""),
-    ]:
-        assert not validate_chat_target({**valid, field: value}, 3, 1, 18)
+from econ_agent_sim.run_workspace import SubmittedRun
 
 
 def test_budget_is_shared_atomic_and_expires(tmp_path):
@@ -119,7 +76,7 @@ def test_api_sends_bounded_context_and_no_tools_or_remote_storage(tmp_path):
     ) as factory:
         answer = answer_question(
             "Why?",
-            experiment_context(experiment(), 1),
+            SubmittedRun(run_economy_0_4(), None, 1, 1).context(),
             history,
             **request_args(tmp_path),
         )
