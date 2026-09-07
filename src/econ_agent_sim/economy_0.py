@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from econ_agent_sim.ledger import Ledger, Transaction
 from econ_agent_sim.model import Agent, CobbDouglasPreferences
+from econ_agent_sim.numerics import assert_close, require_finite
 
 GOODS = ("X", "Y")
 
@@ -22,6 +23,8 @@ class Economy0Config:
 
     def __post_init__(self) -> None:
         endowments = (self.alice_x, self.alice_y, self.bob_x, self.bob_y)
+        require_finite("endowments", *endowments,
+                       self.alice_x + self.bob_x, self.alice_y + self.bob_y)
         if any(quantity < 0 for quantity in endowments):
             raise ValueError("endowments cannot be negative")
         if self.alice_x + self.bob_x <= 0:
@@ -56,10 +59,13 @@ def equilibrium_prices(agents: list[Agent]) -> dict[str, float]:
         agent.preferences.alpha * agent.holdings["Y"] for agent in agents
     )
     denominator = total_x - alpha_x_endowment
+    require_finite("equilibrium aggregates", denominator, alpha_y_endowment)
     if denominator <= 0 or alpha_y_endowment <= 0:
         raise ValueError("endowments/preferences do not imply an interior equilibrium")
 
-    return {"X": alpha_y_endowment / denominator, "Y": 1.0}
+    price_x = alpha_y_endowment / denominator
+    require_finite("equilibrium price", price_x)
+    return {"X": price_x, "Y": 1.0}
 
 
 def _build_agents(config: Economy0Config) -> list[Agent]:
@@ -82,8 +88,7 @@ def _snapshot(agents: list[Agent]) -> dict[str, dict[str, float]]:
 
 
 def _assert_close(a: float, b: float, *, tolerance: float = 1e-10) -> None:
-    if abs(a - b) > tolerance:
-        raise AssertionError(f"accounting mismatch: {a} != {b}")
+    assert_close(a, b, tolerance=tolerance)
 
 
 def _settle_two_agent_trade(

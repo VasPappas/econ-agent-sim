@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from econ_agent_sim.economy_0 import GOODS, Economy0Config, equilibrium_prices
 from econ_agent_sim.ledger import Ledger, Transaction
 from econ_agent_sim.model import Agent, CobbDouglasPreferences
+from econ_agent_sim.numerics import assert_close as _assert_close
 from econ_agent_sim.price_discovery import TatonnementSettings, TatonnementStep
 from econ_agent_sim.price_discovery import (
     discover_price as discover_tatonnement_price,
@@ -61,11 +62,6 @@ def _build_agents(config: Economy0Config) -> list[Agent]:
 
 def _snapshot(agents: list[Agent]) -> dict[str, dict[str, float]]:
     return {agent.name: dict(agent.snapshot()) for agent in agents}
-
-
-def _assert_close(a: float, b: float, *, tolerance: float = 1e-8) -> None:
-    if abs(a - b) > tolerance:
-        raise AssertionError(f"accounting mismatch: {a} != {b}")
 
 
 def discover_price(

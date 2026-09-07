@@ -1,6 +1,7 @@
 import streamlit as st
 
 from econ_agent_sim import Economy0Config, run_economy_0
+from econ_agent_sim.numerics import balances_match
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
 st.set_page_config(page_title="Economy 0 — Pure Exchange", layout="wide")
@@ -250,8 +251,12 @@ with accounting_col:
     st.caption("This panel is displayed at every step.")
     current_rows = accounting_rows(result, executed_transactions)
     st.dataframe(current_rows, use_container_width=True, hide_index=True)
-    if all(abs(row["check"]) < 1e-12 for row in current_rows):
-        st.success("All row-level accounting checks = 0")
+    if any(row["check"] is None for row in current_rows):
+        st.caption("Balances reconstructed from the ledger; checked after settlement.")
+    elif all(balances_match(row["check"], 0.0) for row in current_rows):
+        st.success("Recorded balances match the ledger")
+    else:
+        st.error("Recorded balances do not match the ledger.")
 
 st.divider()
 st.subheader("Transaction ledger — executed so far")

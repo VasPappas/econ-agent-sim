@@ -5,7 +5,14 @@ from functools import cached_property
 from math import isfinite
 
 from econ_agent_sim.economy_0_2 import ExchangeAgentConfig
-from econ_agent_sim.economy_0_4 import ASSETS, MONEY, Economy04Config, Economy04Result
+from econ_agent_sim.economy_0_4 import (
+    ASSETS,
+    MONEY,
+    Economy04Config,
+    Economy04Result,
+    ledger_flows,
+)
+from econ_agent_sim.numerics import balances_match
 
 
 def default_agents(count=2):
@@ -72,10 +79,11 @@ class SubmittedRun:
     @cached_property
     def accounting_rows(self):
         p = self.period
+        flows = ledger_flows(tuple(p.opening_stocks), p.transactions)
         return [
             {"agent": name, "asset": asset, "opening": opening[asset],
-             "net flow": p.flows[name][asset], "closing": p.closing_stocks[name][asset],
-             "check": opening[asset] + p.flows[name][asset] - p.closing_stocks[name][asset]}
+             "net flow": flows[name][asset], "closing": p.closing_stocks[name][asset],
+             "check": opening[asset] + flows[name][asset] - p.closing_stocks[name][asset]}
             for name, opening in p.opening_stocks.items() for asset in ASSETS
         ]
 
@@ -122,8 +130,8 @@ class SubmittedRun:
             "gross_money_payments": p.gross_money_payments,
             "checks": {
                 "market": p.steps[-1].market_error <= config.tolerance,
-                "money": abs(totals["opening"][MONEY] - totals["closing"][MONEY]) < 1e-10,
-                "accounts": all(abs(row["check"]) < 1e-10 for row in self.accounting_rows),
+                "money": balances_match(totals["opening"][MONEY], totals["closing"][MONEY]),
+                "accounts": all(balances_match(row["check"], 0.0) for row in self.accounting_rows),
             },
             "run_rule": (
                 "Independent submitted setups. Quantities, preferences, and agent count can all change. "

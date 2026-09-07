@@ -10,6 +10,7 @@ from econ_agent_sim.economy_0_2 import (
     run_economy_0_2,
 )
 from econ_agent_sim.ledger import Transaction
+from econ_agent_sim.numerics import require_finite
 from econ_agent_sim.price_discovery import TatonnementStep
 
 LEGACY_CANONICAL_PERIOD_COUNT = 4
@@ -58,6 +59,7 @@ def redistribute_y(
 ) -> tuple[ExchangeAgentConfig, ...]:
     """Create a new period by moving an amount of Y between two existing agents."""
 
+    require_finite("redistribution amount", amount)
     if amount <= 0:
         raise ValueError("redistribution amount must be strictly positive")
     if sender_name == receiver_name:

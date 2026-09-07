@@ -11,6 +11,8 @@ from econ_agent_sim.economy_0_3 import (
     Economy03Config,
     baseline_period_populations,
 )
+from econ_agent_sim.numerics import assert_close as _assert_close
+from econ_agent_sim.numerics import require_finite
 from econ_agent_sim.price_discovery import TatonnementStep
 
 GOODS = ("X", "Y")
@@ -59,6 +61,9 @@ class Economy04Config:
     max_iterations: int = 5000
 
     def __post_init__(self) -> None:
+        require_finite("opening money", self.opening_money_per_agent)
+        for population in self.period_populations:
+            require_finite("total opening money", self.opening_money_per_agent * len(population))
         if self.opening_money_per_agent <= 0:
             raise ValueError("opening money per agent must be strictly positive")
 
@@ -96,11 +101,6 @@ class Economy04Result:
     transactions: tuple[MonetaryTransaction, ...]
 
 
-def _assert_close(a: float, b: float, *, tolerance: float = 1e-8) -> None:
-    if abs(a - b) > tolerance:
-        raise AssertionError(f"accounting mismatch: {a} != {b}")
-
-
 def _opening_stocks(
     local_opening: dict[str, dict[str, float]],
     *,
@@ -136,6 +136,7 @@ def _monetize_transactions(
     for local_transaction in local_transactions:
         unit_price = prices[local_transaction.good]
         payment = local_transaction.quantity * unit_price
+        require_finite("money payment", payment)
         trade = MonetaryTrade(
             trade_id=next_trade_id,
             period=period,
@@ -177,7 +178,7 @@ def _monetize_transactions(
     return tuple(trades), tuple(transactions)
 
 
-def _flows_from_transactions(
+def ledger_flows(
     names: tuple[str, ...],
     transactions: tuple[MonetaryTransaction, ...],
 ) -> dict[str, dict[str, float]]:
@@ -188,17 +189,23 @@ def _flows_from_transactions(
     return flows
 
 
-def _closing_stocks(
-    opening: dict[str, dict[str, float]],
-    flows: dict[str, dict[str, float]],
+def _settled_stocks(
+    local_closing: dict[str, dict[str, float]],
+    trades: tuple[MonetaryTrade, ...],
+    opening_money_per_agent: float,
 ) -> dict[str, dict[str, float]]:
-    return {
-        name: {
-            asset: opening[name][asset] + flows[name][asset]
-            for asset in ASSETS
-        }
-        for name in opening
-    }
+    """Keep physical settlement balances; settle money from the trade receipts.
+
+    These balances are independent of the asset ledger used to verify them.
+    Money can temporarily be negative: this model has no cash constraint.
+    """
+    closing = _opening_stocks(
+        local_closing, opening_money_per_agent=opening_money_per_agent,
+    )
+    for trade in trades:
+        closing[trade.seller][MONEY] += trade.payment
+        closing[trade.buyer][MONEY] -= trade.payment
+    return closing
 
 
 def _check_accounting(
@@ -254,12 +261,11 @@ def run_economy_0_4(config: Economy04Config | None = None) -> Economy04Result:
             first_transaction_id=next_transaction_id,
         )
         names = tuple(opening)
-        flows = _flows_from_transactions(names, transactions)
-        closing = _closing_stocks(opening, flows)
+        flows = ledger_flows(names, transactions)
+        closing = _settled_stocks(local.closing_stocks, trades, scenario.opening_money_per_agent)
 
         for name in names:
             for good in GOODS:
-                _assert_close(closing[name][good], local.closing_stocks[name][good])
                 _assert_close(flows[name][good], local.flows[name][good])
 
         _check_accounting(opening, flows, closing)

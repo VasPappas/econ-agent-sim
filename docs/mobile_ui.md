@@ -63,3 +63,21 @@ actual Streamlit page for visual checks, replay, view navigation, and keyboard
 interaction. The former standalone editor preview is no longer maintained.
 
 Earlier UI designs remain available in Git history.
+
+## Accounting and number validation
+
+Completed-run evidence reconstructs net transfers from the ledger and compares
+opening stocks plus those transfers with recorded closing balances. Monetary
+settlement retains the physical model's final goods balances and settles cash
+from trade receipts, independently of the asset ledger used for reconciliation.
+A partial replay in earlier chapters shows reconstructed balances with an empty
+check until the complete ledger can be compared with the recorded outcome.
+
+`numerics.py` centralizes finite-number validation and absolute accounting
+comparisons. The shared accounting tolerance is 1e-8 asset units; Economy 0 keeps
+its original, stricter 1e-10 engine tolerance. Market clearing uses normalized
+excess demand and the configured tolerance; the settlement threshold and the
+legacy ledger's display-only dust threshold retain their separate purposes.
+The monetary Results checks use the same accounting tolerance as its engine.
+NaN, infinity, overflowing aggregates, and non-integer iteration limits are
+rejected within the engine, including calls made without the Streamlit UI.

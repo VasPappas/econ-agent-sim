@@ -1,2 +1,2 @@
-# Rebuild marker: shared submitted-run data and explanations
+# Rebuild marker: independent accounting checks and finite engine inputs
 -e .[app]

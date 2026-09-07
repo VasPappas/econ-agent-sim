@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from econ_agent_sim.model import Agent
+from econ_agent_sim.numerics import require_finite
 
 
 @dataclass(frozen=True)
@@ -15,14 +16,16 @@ class TatonnementSettings:
     max_iterations: int = 5000
 
     def __post_init__(self) -> None:
+        require_finite("price-discovery settings", self.initial_price_x,
+                       self.adjustment_speed, self.tolerance)
         if self.initial_price_x <= 0:
             raise ValueError("initial_price_x must be strictly positive")
         if not 0.0 < self.adjustment_speed <= 1.0:
             raise ValueError("adjustment_speed must lie in (0, 1]")
         if self.tolerance <= 0:
             raise ValueError("tolerance must be strictly positive")
-        if self.max_iterations < 1:
-            raise ValueError("max_iterations must be at least 1")
+        if type(self.max_iterations) is not int or self.max_iterations < 1:
+            raise ValueError("max_iterations must be a positive integer")
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,7 @@ def discover_price(
 
     total_x = sum(agent.holdings["X"] for agent in agents)
     total_y = sum(agent.holdings["Y"] for agent in agents)
+    require_finite("aggregate supplies", total_x, total_y)
     if total_x <= 0 or total_y <= 0:
         raise ValueError("tatonnement requires positive aggregate supplies of X and Y")
 
@@ -71,6 +75,7 @@ def discover_price(
         bundles = [agent.optimal_bundle(prices) for agent in agents]
         demand_x = sum(bundle["X"] for bundle in bundles)
         demand_y = sum(bundle["Y"] for bundle in bundles)
+        require_finite("aggregate demand", demand_x, demand_y)
         excess_demand_x = demand_x - total_x
         excess_demand_y = demand_y - total_y
         normalized_x = excess_demand_x / total_x
@@ -99,6 +104,7 @@ def discover_price(
         next_price_x = price_x * (
             1.0 + settings.adjustment_speed * normalized_x
         )
+        require_finite("next price", next_price_x)
         if next_price_x <= 0:
             raise AssertionError("tatonnement produced a non-positive price")
 

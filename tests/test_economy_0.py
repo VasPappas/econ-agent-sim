@@ -75,7 +75,7 @@ def test_accounting_can_be_reconstructed_after_each_transaction() -> None:
     after_all = accounting_rows(result, len(result.transactions))
 
     assert all(isclose(row["net_flow_so_far"], 0.0) for row in before)
-    assert all(isclose(row["check"], 0.0, abs_tol=1e-12) for row in after_first)
+    assert all(row["check"] is None for row in after_first)
     assert all(isclose(row["check"], 0.0, abs_tol=1e-12) for row in after_all)
 
 

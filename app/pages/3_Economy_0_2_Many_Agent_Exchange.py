@@ -1,6 +1,7 @@
 import streamlit as st
 
 from econ_agent_sim.economy_0_2 import Economy02Config, run_economy_0_2
+from econ_agent_sim.numerics import balances_match
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
 st.set_page_config(page_title="Economy 0.2 — Many-Agent Exchange", layout="wide")
@@ -250,8 +251,12 @@ else:
     rows = accounting_rows(result)
 
 st.dataframe(rows, width="stretch", hide_index=True, height=390)
-if all(abs(row["check"]) < 1e-12 for row in rows):
-    st.success("All stock-flow checks = 0")
+if any(row["check"] is None for row in rows):
+    st.caption("Balances reconstructed from the ledger; checked after settlement.")
+elif all(balances_match(row["check"], 0.0) for row in rows):
+    st.success("Recorded balances match the ledger")
+else:
+    st.error("Recorded balances do not match the ledger.")
 
 st.divider()
 

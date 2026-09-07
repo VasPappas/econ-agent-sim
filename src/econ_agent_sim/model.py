@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from econ_agent_sim.numerics import require_finite
+
 
 @dataclass(frozen=True)
 class CobbDouglasPreferences:
@@ -18,14 +20,17 @@ class CobbDouglasPreferences:
     def demand(self, wealth: float, prices: Mapping[str, float]) -> dict[str, float]:
         px = prices["X"]
         py = prices["Y"]
+        require_finite("prices and wealth", px, py, wealth)
         if px <= 0 or py <= 0:
             raise ValueError("prices must be strictly positive")
         if wealth < 0:
             raise ValueError("wealth cannot be negative")
-        return {
+        bundle = {
             "X": self.alpha * wealth / px,
             "Y": (1.0 - self.alpha) * wealth / py,
         }
+        require_finite("demand", *bundle.values())
+        return bundle
 
 
 @dataclass
@@ -37,6 +42,7 @@ class Agent:
     def __post_init__(self) -> None:
         for good in ("X", "Y"):
             self.holdings.setdefault(good, 0.0)
+        require_finite("holdings", *self.holdings.values())
         if any(quantity < 0 for quantity in self.holdings.values()):
             raise ValueError("holdings cannot be negative")
 

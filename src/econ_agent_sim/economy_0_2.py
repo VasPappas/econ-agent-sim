@@ -5,6 +5,8 @@ from dataclasses import dataclass, field, replace
 from econ_agent_sim.economy_0 import GOODS, equilibrium_prices
 from econ_agent_sim.ledger import Ledger, Transaction
 from econ_agent_sim.model import Agent, CobbDouglasPreferences
+from econ_agent_sim.numerics import assert_close as _assert_close
+from econ_agent_sim.numerics import require_finite
 from econ_agent_sim.price_discovery import (
     TatonnementSettings,
     TatonnementStep,
@@ -24,6 +26,7 @@ class ExchangeAgentConfig:
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("agent name cannot be empty")
+        require_finite("agent endowments", self.x, self.y)
         if self.x < 0 or self.y < 0:
             raise ValueError("agent endowments cannot be negative")
         if not 0.0 < self.alpha < 1.0:
@@ -83,6 +86,8 @@ class Economy02Config:
         if len(names) != len(set(names)):
             raise ValueError("agent names must be unique")
 
+        require_finite("aggregate supplies", sum(a.x for a in self.agents),
+                       sum(a.y for a in self.agents))
         if sum(agent.x for agent in self.agents) <= 0:
             raise ValueError("the economy must contain some X")
         if sum(agent.y for agent in self.agents) <= 0:
@@ -129,11 +134,6 @@ def _build_agents(config: Economy02Config) -> list[Agent]:
 
 def _snapshot(agents: list[Agent]) -> dict[str, dict[str, float]]:
     return {agent.name: dict(agent.snapshot()) for agent in agents}
-
-
-def _assert_close(a: float, b: float, *, tolerance: float = 1e-8) -> None:
-    if abs(a - b) > tolerance:
-        raise AssertionError(f"accounting mismatch: {a} != {b}")
 
 
 def _settle_many_agent_trade(

@@ -5,6 +5,7 @@ import streamlit as st
 
 from econ_agent_sim.economy_0_2 import canonical_population
 from econ_agent_sim.economy_0_3 import Economy03Config, run_economy_0_3
+from econ_agent_sim.numerics import balances_match
 from econ_agent_sim.reporting import accounting_rows, transaction_rows
 
 UI_SCHEMA_VERSION = 6
@@ -456,7 +457,7 @@ if view != "Overview":
     remove_redistribution_placeholder.empty()
 
 rows = accounting_rows(period)
-accounting_ok = all(abs(row["check"]) < 1e-12 for row in rows)
+accounting_ok = all(row["check"] is not None and balances_match(row["check"], 0.0) for row in rows)
 market_ok = final_step.market_error <= config.tolerance
 start_price_x = period.steps[0].price_x
 adjustments = period.steps[-1].iteration

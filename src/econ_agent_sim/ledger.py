@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from econ_agent_sim.model import Agent
+from econ_agent_sim.numerics import require_finite
 
 
 @dataclass(frozen=True)
@@ -37,11 +38,15 @@ class Ledger:
         sender: Agent,
         receiver: Agent,
     ) -> Transaction:
+        require_finite("transfer quantity", quantity)
         if quantity <= 0:
             raise ValueError("transfer quantity must be strictly positive")
         if sender.holdings[good] + 1e-12 < quantity:
             raise ValueError(f"{sender.name} does not have enough {good}")
 
+        sender_balance = sender.holdings[good] - quantity
+        receiver_balance = receiver.holdings[good] + quantity
+        require_finite("transfer balances", sender_balance, receiver_balance)
         sender.holdings[good] -= quantity
         receiver.holdings[good] += quantity
         transaction = Transaction(

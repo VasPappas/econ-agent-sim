@@ -11,7 +11,10 @@ ECONOMY_03_LEDGER_DISPLAY_EPSILON = 1e-8
 def accounting_rows(
     result: Economy0Result, transaction_count: int | None = None
 ) -> list[dict[str, Any]]:
-    """Return opening stocks, cumulative flows, and current stocks."""
+    """Replay ledger flows; reconcile completed ledgers with recorded balances.
+
+    A partial replay has no independently recorded snapshot, so its check is None.
+    """
 
     count = len(result.transactions) if transaction_count is None else transaction_count
     if not 0 <= count <= len(result.transactions):
@@ -24,10 +27,12 @@ def accounting_rows(
         flows[transaction.sender][transaction.good] -= transaction.quantity
         flows[transaction.receiver][transaction.good] += transaction.quantity
 
+    complete = count == len(result.transactions)
     rows: list[dict[str, Any]] = []
     for agent, opening in result.opening_stocks.items():
         for good in GOODS:
-            current = opening[good] + flows[agent][good]
+            current = (result.closing_stocks[agent][good] if complete
+                       else opening[good] + flows[agent][good])
             rows.append(
                 {
                     "agent": agent,
@@ -35,7 +40,8 @@ def accounting_rows(
                     "opening_stock": opening[good],
                     "net_flow_so_far": flows[agent][good],
                     "current_stock": current,
-                    "check": opening[good] + flows[agent][good] - current,
+                    "check": (opening[good] + flows[agent][good] - current
+                              if complete else None),
                 }
             )
     return rows
