@@ -19,6 +19,8 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.5rem) !important; }
 .st-key-economy04_mobile_nav [data-testid="stButtonGroup"] { width: 100%; }
 .st-key-economy04_mobile_nav button { min-height: 48px; flex: 1; border-radius: 12px; }
 .st-key-economy04_mobile_nav button[aria-checked="true"] { background: #174e44 !important; color: white !important; border-color: #174e44 !important; }
+.st-key-economy_home_start a { background: #174e44; color: white; min-height: 52px; padding: 14px 18px; border-radius: 14px; justify-content: center; }
+.st-key-economy_home_start a p { color: white; font-size: 16px; }
 @media(max-width: 480px) {
  .block-container { padding: 1rem .85rem 2rem; }
  input, textarea, select { font-size: 16px !important; }

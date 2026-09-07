@@ -7,10 +7,11 @@ apply_workspace_style()
 st.caption("TINY ECONOMY")
 st.title("Explore a tiny economy.")
 st.write("Change one thing. Discover what follows.")
-st.page_link(
-    "pages/5_Economy_0_4_Monetary_Settlement.py",
-    label="Start exploring →", width="stretch",
-)
+with st.container(key="economy_home_start"):
+    st.page_link(
+        "pages/5_Economy_0_4_Monetary_Settlement.py",
+        label="Start exploring →", width="stretch",
+    )
 st.caption("Move a little Y. Watch prices respond. Follow the goods and money.")
 with st.expander("A first experiment"):
     st.write(
