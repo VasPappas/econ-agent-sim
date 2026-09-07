@@ -144,7 +144,7 @@ elif view == "Results":
         for change in run_changes(result, previous):
             st.write(change)
     data = playground_data(result, 0, revision)
-    data.update(view="Results", label=f"Run {number}",
+    data.update(label=f"Run {number}",
                 previous_price=previous.periods[0].prices["X"] if previous else None,
                 setup_summary=f"Run {number} · submitted setup",
                 explanations=run_explanations(result, previous))
@@ -166,13 +166,6 @@ elif view == "Results":
         if question.get("trade_index") is not None:
             st.session_state.economy04_selected_trade = question
         st.session_state.lab_next_view = "Ask why"
-        st.rerun()
-    navigation = getattr(component, "navigation", None)
-    if (validate_chat_target(navigation, revision, 0, len(result.trades))
-            and navigation.get("view") == "Experiment"
-            and navigation["id"] != st.session_state.get("lab_last_navigation")):
-        st.session_state.lab_last_navigation = navigation["id"]
-        st.session_state.lab_next_view = "Set up"
         st.rerun()
     period = result.periods[0]
     with st.expander("Inspect the evidence"):

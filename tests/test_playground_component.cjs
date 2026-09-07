@@ -21,7 +21,6 @@ class Element {
 const context = vm.createContext({
   document: { createElement: tag => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }) },
   crypto: { randomUUID: (() => { let id = 0; return () => `event-${++id}`; })() },
-  cancelAnimationFrame() {},
   window: { matchMedia: () => ({ matches: true }) },
 });
 const source = fs.readFileSync(path.join(__dirname, '../src/econ_agent_sim/playground_component/component.js'), 'utf8');
@@ -30,9 +29,8 @@ const host = new Element('host');
 const root = new Element('div'); root.className = 'playground-root'; host.append(root);
 const stocks = { 'Agent 1': {X:1.8,Y:.2,Money:10}, 'Agent 2': {X:.2,Y:1.8,Money:10} };
 const data = {
-  revision:0, selected_index:0, latest_index:0, view:'Experiment', label:'Baseline',
-  agents:[{name:'Agent 1',x:1.8,y:.2,alpha:.2},{name:'Agent 2',x:.2,y:1.8,alpha:.8}],
-  agent_count:2, opening_money:10, price:1, previous_price:null,
+  revision:0, selected_index:0, label:'Run 1', setup_summary:'Run 1 · submitted setup',
+  agent_count:2, price:1, previous_price:null,
   opening:stocks, closing:stocks, checks:{market:true,money:true,accounts:true},
   explanations:{'Why did X change but not Y?':'Baseline explanation'},
   trades:[
@@ -43,12 +41,6 @@ const data = {
 const events=[];
 const render = () => context.render({data,parentElement:host,setTriggerValue:(name,value)=>events.push([name,value]),setStateValue:(name,value)=>events.push([name,value])});
 render();
-assert.equal(root.querySelectorAll('.preference')[0].textContent,'Prefers Y');
-root.querySelector('.transfer-form').onsubmit({preventDefault(){}});
-assert.equal(events[0][0],'action');
-assert.equal(events[0][1].amount,.1);
-assert.equal(root.querySelector('.primary').disabled,true);
-data.view='Results'; data.revision=1; render();
 root.querySelector('.next-trade').onclick();
 assert.equal(events.at(-1)[0],'selection');
 assert.equal(events.at(-1)[1].trade_index,1);
@@ -71,4 +63,4 @@ render();
 assert.equal(root.querySelectorAll('p').some(e=>e.textContent==='0 trades · starting balances unchanged.'),true);
 assert.equal(root.querySelectorAll('p').some(e=>e.textContent==='Detailed no-trade explanation'),false);
 assert.equal(root.querySelectorAll('button').some(e=>e.textContent==='Ask why no trade is needed'),false);
-console.log('Component event, selection, pending-submit, remount, and no-trade checks passed.');
+console.log('Component selection, remount, and no-trade checks passed.');

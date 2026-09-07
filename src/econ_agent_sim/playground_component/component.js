@@ -3,48 +3,18 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
   const root = parentElement.querySelector('.playground-root');
   const initial = !root.playgroundState;
   const state = root.playgroundState || {
-    mode: 'edit', sender: data.agents[0].name, receiver: data.agents[1].name,
-    amount: '0.10', tradeIndex: 0, balances: 'closing', pending: false,
+    tradeIndex: 0, balances: 'closing',
     revision: data.revision, selected: data.selected_index,
   };
-  let autoReplay = false;
   if (state.revision !== data.revision || state.selected !== data.selected_index) {
-    state.pending = false;
-    state.mode = data.last_transfer || state.selected !== data.selected_index ? 'result' : 'edit';
     state.tradeIndex = 0;
-    if (data.last_transfer) {
-      state.sender = data.last_transfer.sender;
-      state.receiver = data.last_transfer.receiver;
-      const related = data.trades.findIndex(t =>
-        [t.seller, t.buyer].includes(state.sender) &&
-        [t.seller, t.buyer].includes(state.receiver));
-      state.tradeIndex = Math.max(0, related);
-      autoReplay = true;
-    }
     state.revision = data.revision;
     state.selected = data.selected_index;
   }
-  if (initial && data.selected_index > 0) {
-    state.mode = 'result';
-    autoReplay = Boolean(data.last_transfer);
-  }
-  if (data.view) state.mode = data.view === 'Experiment' ? 'edit' : 'result';
-  if (data.reset_revision != null && state.resetRevision !== data.reset_revision) {
-    state.sender = data.agents[0].name;
-    state.receiver = data.agents[1].name;
-    state.amount = '0.10';
-    state.tradeIndex = 0;
-    state.resetRevision = data.reset_revision;
-  }
   if (initial && Number.isInteger(data.selected_trade)) state.tradeIndex = data.selected_trade;
   state.tradeIndex = Math.max(0, Math.min(state.tradeIndex, data.trades.length - 1));
-  if (data.error) state.pending = false;
-  const names = data.agents.map(a => a.name);
-  if (!names.includes(state.sender)) state.sender = names[0];
-  if (!names.includes(state.receiver)) state.receiver = names[1];
   root.playgroundState = state;
   let animations = [];
-  let frame;
   const fmt = (n, places = 2) => Number(n).toLocaleString('en-US', {
     minimumFractionDigits: places, maximumFractionDigits: places,
   });
@@ -63,13 +33,6 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
   };
   const stop = () => { animations.forEach(a => a.cancel()); animations = []; };
   const focus = selector => root.querySelector(selector)?.focus();
-  const navigate = view => {
-    if (!data.view) { state.mode = view === 'Experiment' ? 'edit' : 'result'; draw(); return; }
-    setTriggerValue('navigation', {
-      id: crypto.randomUUID(), revision: data.revision,
-      selected_index: data.selected_index, view,
-    });
-  };
   const rememberTrade = () => setStateValue?.('selection', {
     id: crypto.randomUUID(), revision: data.revision,
     selected_index: data.selected_index, trade_index: state.tradeIndex,
@@ -78,39 +41,14 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     id: crypto.randomUUID(), revision: data.revision,
     selected_index: data.selected_index, trade_index: tradeIndex,
   });
-  function renderCard(name, stocks, side, picker) {
+  function renderCard(name, stocks, side) {
     const card = el('article', `agent-card ${side}`);
     const top = el('div', 'agent-top');
     top.append(el('span', 'avatar', name.replace('Agent ', '')));
-    if (picker) {
-      const label = el('label', 'agent-label', side === 'from' ? 'FROM' : 'TO');
-      const select = el('select', 'agent-select');
-      select.setAttribute('aria-label', side === 'from' ? 'Move Y from' : 'Move Y to');
-      for (const item of data.agents) {
-        const option = el('option', '', item.name);
-        option.value = item.name;
-        option.selected = item.name === name;
-        select.append(option);
-      }
-      select.onchange = () => {
-        state[side === 'from' ? 'sender' : 'receiver'] = select.value;
-        draw();
-        focus(side === 'from' ? '.from select' : '.to select');
-      };
-      label.append(select);
-      top.append(label);
-    } else {
-      top.append(el('div', 'agent-name', name));
-    }
+    top.append(el('div', 'agent-name', name));
     card.append(top);
-    if (picker) {
-      const agent = data.agents.find(a => a.name === name);
-      card.append(el('p', 'preference', agent.alpha > .5 ? 'Prefers X'
-        : agent.alpha < .5 ? 'Prefers Y' : 'Equal spending shares'));
-      card.append(el('p', 'micro', `${fmt(agent.alpha * 100, 0)}% of goods wealth to X`));
-    }
     const assets = el('dl', 'asset-list');
-    for (const asset of (picker ? ['X', 'Y'] : ['X', 'Y', 'Money'])) {
+    for (const asset of ['X', 'Y', 'Money']) {
       const row = el('div', 'asset-row');
       const title = el('dt', 'asset-label');
       title.append(el('span', `asset-dot ${asset.toLowerCase()}`, asset === 'Money' ? 'M' : asset));
@@ -130,99 +68,14 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     top.append(el('span', 'eyebrow', `Money · ${data.agent_count} agents`));
     shell.append(top);
     const head = el('div', 'stage-heading');
-    head.append(el('h2', '', state.mode === 'edit' ? 'A little less here. A little more there.'
-      : !data.trades.length ? 'No trade needed.'
+    head.append(el('h2', '', !data.trades.length ? 'No trade needed.'
       : data.previous_price === null ? 'Your market result.'
       : Math.abs(data.price - data.previous_price) < 1e-6 ? 'The price held steady.'
       : data.price > data.previous_price ? 'X became more expensive.' : 'X became less expensive.'));
-    const sub = state.mode === 'edit'
-      ? 'Change who starts with Y. See how the whole market responds.'
-      : (data.trades.length ? 'See what changed, then follow a trade.' : 'See the outcome here. Explore the explanation in Ask why.');
+    const sub = (data.trades.length ? 'See what changed, then follow a trade.' : 'See the outcome here. Explore the explanation in Ask why.');
     shell.append(head, el('p', 'intro', sub));
-    if (data.error) {
-      const error = el('p', 'error', data.error);
-      error.setAttribute('role', 'alert');
-      shell.append(error);
-    }
-    if (state.mode === 'edit') drawEditor(shell);
-    else drawResult(shell);
+    drawResult(shell);
     root.append(shell);
-  }
-  function drawEditor(shell) {
-    const from = data.agents.find(a => a.name === state.sender);
-    const to = data.agents.find(a => a.name === state.receiver);
-    const pair = el('div', 'agent-pair');
-    pair.append(
-      renderCard(from.name, { X: from.x, Y: from.y, Money: data.opening_money }, 'from', true),
-      renderCard(to.name, { X: to.x, Y: to.y, Money: data.opening_money }, 'to', true),
-    );
-    shell.append(pair, el('p', 'micro', 'Latest opening endowments. Transfers build on these; closing balances never carry forward.'));
-    const form = el('form', 'transfer-form');
-    const label = el('label', 'amount-label', 'Y to redistribute');
-    const inputId = `amount-${data.revision}`;
-    label.htmlFor = inputId;
-    const stepper = el('div', 'stepper');
-    const input = el('input', 'amount-input');
-    input.id = inputId;
-    input.type = 'number';
-    input.min = '0.01';
-    input.max = String(from.y);
-    input.step = 'any';
-    input.inputMode = 'decimal';
-    input.required = true;
-    input.value = state.amount;
-    const changeAmount = delta => {
-      const current = Number(state.amount) || 0;
-      state.amount = Math.max(0.01, Math.min(from.y, current + delta)).toFixed(2);
-      input.value = state.amount;
-      validate();
-    };
-    const minus = button('−', 'step-button', () => changeAmount(-0.1), 'Decrease Y by 0.10');
-    const plus = button('+', 'step-button', () => changeAmount(0.1), 'Increase Y by 0.10');
-    stepper.append(minus, input, plus);
-    const hint = el('p', 'validation');
-    hint.setAttribute('aria-live', 'polite');
-    const submit = el('button', 'primary', 'See what changes →');
-    submit.type = 'submit';
-    const validate = () => {
-      const amount = Number(input.value);
-      const valid = input.value !== '' && Number.isFinite(amount) && amount >= 0.01 && amount <= from.y;
-      hint.textContent = state.sender === state.receiver ? 'Choose two different agents.'
-        : from.y < 0.01 ? `${from.name} has no transferable Y left. Choose another sender.`
-        : !valid ? `${from.name} has ${fmt(from.y)} Y available. Move between 0.01 and ${fmt(from.y)}.`
-        : `${fmt(amount)} Y: ${from.name} → ${to.name}`;
-      submit.disabled = !valid || state.sender === state.receiver || state.pending;
-      minus.disabled = amount <= 0.01 || state.pending;
-      plus.disabled = amount >= from.y || state.pending;
-      input.disabled = state.pending;
-      if (state.pending) submit.textContent = 'Clearing the market…';
-    };
-    input.oninput = () => { state.amount = input.value; validate(); };
-    form.onsubmit = event => {
-      event.preventDefault();
-      validate();
-      if (submit.disabled) return;
-      state.pending = true;
-      validate();
-      root.querySelectorAll('select').forEach(s => { s.disabled = true; });
-      setTriggerValue('action', {
-        kind: 'redistribute', id: crypto.randomUUID(), revision: data.revision,
-        sender: state.sender, receiver: state.receiver, amount: Number(state.amount),
-      });
-    };
-    form.append(label, stepper, hint, submit);
-    shell.append(form);
-    if (data.selected_index !== data.latest_index) {
-      shell.append(el('p', 'micro', 'This transfer starts from the latest experiment, not the older result selected above.'));
-    }
-    const footer = el('div', 'editor-footer');
-    footer.append(el('span', '', `X price ${fmt(data.price, 4)} M · Y fixed at 1`));
-    footer.append(button('See trades ↗', 'text-button', () => {
-      navigate('Results');
-    }));
-    shell.append(footer, el('p', 'boundary', `All ${data.agent_count} agents participate. Money settles trades; it does not limit purchases here.`));
-
-    validate();
   }
   function drawResult(shell) {
     const price = el('div', 'price-panel');
@@ -251,16 +104,12 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       el('p', '', `Total goods · ${fmt(total('X'))} X + ${fmt(total('Y'))} Y`),
       el('p', '', `Total money · ${fmt(total('Money'))} · ${data.checks.money ? 'conserved' : 'check failed'}`));
     shell.append(constants);
-    if (data.last_transfer) {
-      const t = data.last_transfer;
-      shell.append(el('p', 'transfer-receipt', `You moved ${fmt(t.amount)} Y: ${t.sender} → ${t.receiver}.`));
-    }
     const checks = el('div', 'checks');
     for (const [key, label] of [['market', 'Market cleared'], ['money', 'Money conserved'], ['accounts', 'Accounts balanced']]) {
       checks.append(el('span', data.checks[key] ? 'check' : 'check failed', `${data.checks[key] ? '✓' : '!'} ${label}`));
     }
     shell.append(checks);
-    const trade = data.trades[state.tradeIndex % data.trades.length];
+    const trade = data.trades[state.tradeIndex];
     if (trade) {
       const tradeHead = el('div', 'trade-heading');
       tradeHead.append(el('span', 'eyebrow', `TRADE ${state.tradeIndex + 1} OF ${data.trades.length}`));
@@ -326,8 +175,8 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       }
       details.append(toggle, el('p', 'micro', 'These are whole-market balances, not the effect of this one trade.'));
       const pair = el('div', 'agent-pair');
-      pair.append(renderCard(trade.seller, data[state.balances][trade.seller], 'from', false));
-      pair.append(renderCard(trade.buyer, data[state.balances][trade.buyer], 'to', false));
+      pair.append(renderCard(trade.seller, data[state.balances][trade.seller], 'from'));
+      pair.append(renderCard(trade.buyer, data[state.balances][trade.buyer], 'to'));
       details.append(pair);
       const all = el('details', 'all-agents');
       all.append(el('summary', '', `All ${data.agent_count} agents`));
@@ -361,7 +210,5 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     });
   }
   draw();
-  // Replay is deliberate: the result summary remains the first thing to inspect.
-  void autoReplay;
-  return () => { stop(); cancelAnimationFrame(frame); };
+  return stop;
 }

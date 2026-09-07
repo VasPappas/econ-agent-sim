@@ -27,9 +27,7 @@ def render_playground(data):
     return component(
         data=data,
         key="economy04_playground",
-        on_action_change=lambda: None,
         on_question_change=lambda: None,
-        on_navigation_change=lambda: None,
         on_selection_change=lambda: None,
         height="content",
         width="stretch",

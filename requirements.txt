@@ -1,2 +1,2 @@
-# Rebuild marker: preference steppers and visible starting totals
+# Rebuild marker: remove retired component editor
 -e .[app]
