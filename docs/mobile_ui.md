@@ -2,44 +2,41 @@
 
 ## Current workspace — September 2026
 
-**Edit starting economy** lets users draft X/Y allocations agent by agent, with
-live draft totals, then apply them using **Use as baseline**. The full candidate
-is validated and solved before replacing the baseline and clearing transfers.
-Drafts and baselines are session-local. Reset preserves this custom allocation;
-Restore defaults restores the canonical allocation. Changing the agent count
-also creates a fresh canonical population; other settings retain quantities.
+Economy 0.4 uses **Set up / Results / Ask why**. It opens with two agents,
+each holding 1 X and 1 Y with equal preferences. Nothing is simulated until
+**Run**. The initial run clears at equal prices with exactly zero trades.
 
-Experiment now shows an explicit baseline summary with actual configured totals
-and an expandable list of every agent's baseline holdings and spending shares.
-The next experiment names the opening allocation it builds on. Historical views
-are labeled as viewing only. Reset to baseline is visible in every view (disabled
-when already at baseline), removes transfers, keeps configured settings, restores
-the editor, and returns to Experiment. Restore defaults remains in Settings and
-also restores the original population, opening money, and price-search settings.
+Set up edits a session-local draft: 2–20 agents (including odd counts), each
+agent's X/Y quantities and spending preference, plus opening money. Increasing
+population preserves existing agents and adds symmetric agents. Reducing it
+removes agents from the end. At least some X and Y must remain in aggregate.
 
-The home page starts with an exploration action and names the five existing
-economies Exchange, Price discovery, Many agents, Redistribution, and Money.
-Economy 0.4 uses **Experiment / Results / Ask why**. Results contain the opening
-endowment changes, price comparison with the preceding experiment, conservation
-checks, and selected trade. Settlement and audit tables are under **Inspect the
-evidence**. The earlier economy pages and economic engines are preserved.
+Each Run validates and solves an independent setup, then atomically saves it as
+the current result and retains the preceding result for comparison. Failed runs
+preserve both results. Draft edits do not alter Results or the assistant's
+context. Quantities, preferences, and agent count may differ between runs;
+these are independent scenarios, with no carryover of stocks or money.
 
-Common explanations are generated directly from model values, without API calls.
-Only typed follow-up questions use OpenAI. Returning from Ask why restores the
-selected trade; bounded conversations are retained separately per context.
+One **Reset** restores two symmetric agents and opening money of 10 each, clears
+current/previous results and conversations, and returns to Set up. API usage
+allowances are retained. There is no separate baseline or transfer history.
 
-Transfers continue to build on the latest opening endowments. Each settlement is
-independent and starts with fresh money; closing balances do not carry forward.
-Unlike the standalone design preview, the live UI supports arbitrary agent pairs,
-amounts, settings, and historical experiments rather than four fixed examples.
+Results show prices, submitted setup changes, accounting checks, and a trade
+explorer. Zero-trade runs explain why no exchange is needed. Detailed tables
+remain under **Inspect the evidence**. Ask why offers free computed explanations
+and optional typed AI questions grounded in submitted results.
 
-The cream/teal styling spans home, controls, results, evidence, and chat. Labels
-are enlarged, containers reflow, and navigation remains in normal document flow
-to avoid covering browser controls or the phone keyboard. Replay is user-initiated.
+The home page introduces this flow and retains the earlier runnable chapters.
+Economic engines and their invariants are unchanged. The main page uses a
+single-period engine call for each run rather than extending the older
+redistribution model to accept changing populations and preferences.
 
-The sections below describe earlier implementation stages.
+Verification: Streamlit integration tests cover explicit Run, exact zero trades,
+draft/result separation across views, preferences, added/removed agents, failed
+runs, reset, chat grounding, and stale component events. Frontend checks cover
+selection, remounts, and component events.
 
-The Streamlit simulator is designed mobile-first. Changes to the phone experience are introduced incrementally so each interaction can be tested before adding the next one.
+The sections below document earlier implementation stages and their former UI.
 
 ## Step 1 — persistent view navigation
 

@@ -16,6 +16,7 @@ from econ_agent_sim.experiment_chat import (
     experiment_context,
 )
 from econ_agent_sim.explanations import built_in_explanations
+from econ_agent_sim.run_workspace import run_context, run_explanations
 
 
 def chat_setting(name, default=""):
@@ -28,12 +29,17 @@ def chat_setting(name, default=""):
         return default
 
 
-def render_chat(result, selected_index, revision):
+def render_chat(result, selected_index, revision, *, previous_result=None, run_number=None):
     st.subheader("Let’s make sense of it.")
     st.write("Make sense of the prices, the trades, and what changed.")
     period = result.periods[selected_index]
     identity = (revision, selected_index)
-    base_fingerprint = context_id(experiment_context(result, selected_index))
+    def make_context(trade=None):
+        if run_number is not None:
+            return run_context(result, previous_result, run_number, trade)
+        return experiment_context(result, selected_index, trade)
+
+    base_fingerprint = context_id(make_context())
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
     if (st.session_state.get("economy04_chat_trade_identity") != identity
             or "economy04_chat_trade" not in st.session_state):
@@ -59,7 +65,7 @@ def render_chat(result, selected_index, revision):
     while len(saved_focus) > 12:
         saved_focus.pop(next(iter(saved_focus)))
     trade_index = None if trade_index == -1 else trade_index
-    context = experiment_context(result, selected_index, trade_index)
+    context = make_context(trade_index)
     fingerprint = context_id(context)
     # Restore the matching conversation; never apply another result's history.
     conversations = st.session_state.setdefault("economy04_conversations", {})
@@ -85,7 +91,9 @@ def render_chat(result, selected_index, revision):
         st.caption("Your conversation stays with this experiment and trade focus.")
     st.markdown("**Explore the explanation**")
     st.caption("From the model · instant · no AI usage")
-    for title, explanation in built_in_explanations(result, selected_index, trade_index).items():
+    explanations = (run_explanations(result, previous_result, trade_index)
+                    if run_number is not None else built_in_explanations(result, selected_index, trade_index))
+    for title, explanation in explanations.items():
         with st.expander(title):
             st.write(explanation)
     st.markdown("**Ask a deeper question**")

@@ -12,14 +12,15 @@ with st.container(key="economy_home_start"):
         "pages/5_Economy_0_4_Monetary_Settlement.py",
         label="Start exploring →", width="stretch",
     )
-st.caption("Move a little Y. Watch prices respond. Follow the goods and money.")
+st.caption("Set up your agents. Press Run. Follow the goods and money.")
 with st.expander("A first experiment"):
     st.write(
-        "Start with ten agents and move 0.10 Y from Agent 1 to Agent 2. "
-        "Agent 1 prefers Y; Agent 2 prefers X. Which price do you expect to change?"
+        "Start with two agents, each with 1 X, 1 Y, and equal preferences. "
+        "Press Run: neither needs to trade. Then change one agent's quantities "
+        "or preferences and Run again. What changes?"
     )
     st.write(
-        "Open Results to compare prices, inspect a trade, then use Ask why. "
+        "Results compare your latest run with the previous one. Inspect a trade, then use Ask why. "
         "The built-in explanations are instant; deeper questions use the AI assistant."
     )
 

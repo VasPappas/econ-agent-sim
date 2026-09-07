@@ -1,2 +1,2 @@
-# Rebuild marker: editable starting allocations and custom baseline reset
+# Rebuild marker: explicit runs from two symmetric agents
 -e .[app]

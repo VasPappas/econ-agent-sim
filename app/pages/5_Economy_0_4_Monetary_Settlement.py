@@ -1,500 +1,188 @@
-from dataclasses import replace
-from math import isfinite
-from uuid import uuid4
+"""Set up an economy, run it explicitly, then inspect immutable results."""
+from dataclasses import asdict
 
 import streamlit as st
 
 from econ_agent_sim.chat_view import render_chat
-from econ_agent_sim.economy_0_2 import canonical_population
-from econ_agent_sim.economy_0_4 import ASSETS, Economy04Config
+from econ_agent_sim.economy_0_4 import ASSETS
 from econ_agent_sim.evidence_view import render_evidence
 from econ_agent_sim.experiment_chat import validate_chat_target
-from econ_agent_sim.playground import apply_transfer, playground_data
+from econ_agent_sim.playground import playground_data
 from econ_agent_sim.playground_component import cached_economy, render_playground
+from econ_agent_sim.run_workspace import (
+    default_agents,
+    run_changes,
+    run_explanations,
+    setup_config,
+)
 from econ_agent_sim.workspace_style import apply_workspace_style
 
 
-def baseline_period_populations(agent_count: int = 10):
-    """Keep the historical mirrored baseline exactly as before."""
-    if agent_count < 2 or agent_count > 20 or agent_count % 2:
-        raise ValueError("agent count must be an even number from 2 through 20")
-    templates = canonical_population()
-    return (
-        tuple(
-            replace(templates[index % len(templates)], name=f"Agent {index + 1}")
-            for index in range(agent_count)
-        ),
-    )
+def capture_draft():
+    for i, agent in enumerate(st.session_state.lab_agents):
+        for key in ("x", "y", "alpha"):
+            value = st.session_state.get(f"lab_{key}_{i}", agent[key])
+            agent[key] = float(value)
+    st.session_state.lab_money = float(st.session_state.get("lab_money_input", st.session_state.lab_money))
 
 
-def current_config():
-    return Economy04Config(
-        period_populations=st.session_state.economy04_period_populations,
-        opening_money_per_agent=float(st.session_state.economy04_opening_money),
-        initial_price_x=float(st.session_state.economy04_initial_price_x),
-        adjustment_speed=float(st.session_state.economy04_adjustment_speed),
-    )
+def resize_agents():
+    capture_draft()
+    count = int(st.session_state.lab_count)
+    agents = st.session_state.lab_agents
+    st.session_state.lab_agents = [
+        agents[i] if i < len(agents) else default_agents(count)[i] for i in range(count)
+    ]
+    for i in range(count, 20):
+        for key in ("x", "y", "alpha"):
+            st.session_state.pop(f"lab_{key}_{i}", None)
 
 
-def invalidate_playground():
-    st.session_state.economy04_revision += 1
-    st.session_state.economy04_last_transfer = None
-    st.session_state.economy04_error = None
-
-
-def apply_settings():
-    new_agent_count = int(st.session_state.economy04_agent_count_input)
-    population_changed = new_agent_count != st.session_state.economy04_agent_count
-    candidate = replace(
-        current_config(),
-        period_populations=(
-            baseline_period_populations(new_agent_count)
-            if population_changed
-            else st.session_state.economy04_period_populations
-        ),
-        opening_money_per_agent=float(st.session_state.economy04_opening_money_input),
-        initial_price_x=float(st.session_state.economy04_initial_price_input),
-        adjustment_speed=float(st.session_state.economy04_adjustment_speed_input),
-    )
-    try:
-        cached_economy(candidate)
-    except (ValueError, TypeError, RuntimeError, AssertionError) as error:
-        st.session_state.economy04_error = f"Settings were not applied: {error}"
-        return
-    st.session_state.economy04_agent_count = new_agent_count
-    st.session_state.economy04_period_populations = candidate.period_populations
-    st.session_state.economy04_opening_money = candidate.opening_money_per_agent
-    st.session_state.economy04_initial_price_x = candidate.initial_price_x
-    st.session_state.economy04_adjustment_speed = candidate.adjustment_speed
-    if population_changed:
-        st.session_state.economy04_period_picker = "Baseline"
-        for key in (
-            "economy04_sender",
-            "economy04_receiver",
-            "economy04_redistribution_amount",
-        ):
+def reset():
+    generation = st.session_state.lab_generation + 1
+    for key in list(st.session_state):
+        if key.startswith("lab_"):
             st.session_state.pop(key, None)
-    invalidate_playground()
-    st.session_state.economy04_settings_open = False
+    st.session_state.lab_generation = generation
+    st.session_state.economy04_conversations = {}
+    st.session_state.economy04_saved_focus = {}
+    st.session_state.pop("economy04_selected_trade", None)
+    st.session_state.lab_notice = "Reset to two identical agents. Press Run to calculate the starting economy."
 
 
-def clear_redistributions():
-    st.session_state.economy04_period_populations = (
-        st.session_state.economy04_period_populations[0],
-    )
-    st.session_state.economy04_period_picker = "Baseline"
-    for key in (
-        "economy04_sender",
-        "economy04_receiver",
-        "economy04_redistribution_amount",
-    ):
-        st.session_state.pop(key, None)
-    invalidate_playground()
-
-
-def reset_to_baseline():
-    clear_redistributions()
-    st.session_state.economy04_reset_revision = st.session_state.economy04_revision
-    st.session_state.economy04_next_view = "Experiment"
-    st.session_state.economy04_reset_notice = "Back at baseline. Transfers removed; your settings are unchanged."
-
-
-def restore_defaults():
-    for name, value in DEFAULTS.items():
-        st.session_state[f"economy04_{name}"] = value
-    for widget, setting in SETTINGS_INPUTS.items():
-        st.session_state[widget] = st.session_state[setting]
-    st.session_state.economy04_period_populations = baseline_period_populations()
-    reset_to_baseline()
-    st.session_state.economy04_reset_notice = "Original population, allocations, and model settings restored."
-
-
-def use_starting_economy():
-    """Commit a complete draft only after the real engine accepts it."""
-    baseline = st.session_state.economy04_period_populations[0]
-    draft = [
-        {good: st.session_state.get(f"economy04_baseline_quantity_{i}_{good}", row[good])
-         for good in ("x", "y")}
-        for i, row in enumerate(st.session_state.economy04_baseline_draft)
-    ]
+def run():
+    capture_draft()
     try:
-        if any(not isfinite(v) or v < 0 for row in draft for v in row.values()):
-            raise ValueError("Starting quantities must be finite and nonnegative.")
-        if any(sum(row[good] for row in draft) <= 0 for good in ("x", "y")):
-            raise ValueError("The economy needs a positive total of both X and Y.")
-        population = tuple(replace(a, **row) for a, row in zip(baseline, draft, strict=True))
-        candidate = replace(current_config(), period_populations=(population,))
-        cached_economy(candidate)
+        config = setup_config(st.session_state.lab_agents, st.session_state.lab_money)
+        candidate = cached_economy(config)
     except (ValueError, TypeError, RuntimeError, AssertionError, OverflowError) as error:
-        st.session_state.economy04_baseline_error = f"Starting economy was not changed: {error}"
+        st.session_state.lab_error = f"Could not run this setup: {error}"
         return
-    st.session_state.economy04_period_populations = candidate.period_populations
-    st.session_state.economy04_baseline_error = None
-    reset_to_baseline()
-    st.session_state.economy04_reset_notice = "Your starting economy is now the baseline. Previous transfers were removed."
+    st.session_state.lab_previous = st.session_state.lab_result
+    st.session_state.lab_result = candidate
+    st.session_state.lab_number += 1
+    st.session_state.lab_generation += 1
+    st.session_state.lab_error = None
+    st.session_state.lab_next_view = "Results"
+    st.session_state.pop("economy04_selected_trade", None)
 
 
-def render_starting_editor(baseline):
-    with st.expander("Edit starting economy"):
-        st.caption("Edit one or more agents, then apply the draft. This can change total resources; preferences stay the same.")
-        identity = tuple((a.name, a.x, a.y) for a in baseline.population)
-        if st.session_state.get("economy04_baseline_draft_identity") != identity:
-            st.session_state.economy04_baseline_draft_identity = identity
-            st.session_state.economy04_baseline_draft = [{"x": a.x, "y": a.y} for a in baseline.population]
-            st.session_state.economy04_baseline_error = None
-            for key in list(st.session_state):
-                if key.startswith("economy04_baseline_quantity_"):
-                    st.session_state.pop(key, None)
-            st.session_state.pop("economy04_baseline_agent", None)
-        draft = st.session_state.economy04_baseline_draft
-        index = st.selectbox(
-            "Agent to edit", list(range(len(baseline.population))),
-            format_func=lambda i: baseline.population[i].name,
-            key="economy04_baseline_agent",
-        )
-        for good in ("x", "y"):
-            key = f"economy04_baseline_quantity_{index}_{good}"
-            st.session_state.setdefault(key, draft[index][good])
-            draft[index][good] = st.number_input(
-                f"Starting {good.upper()}", min_value=0.0, step=0.1,
-                format="%.4f", key=key,
-            )
-        st.write(f"Draft totals: {sum(row['x'] for row in draft):g} X · {sum(row['y'] for row in draft):g} Y")
-        changed = [a.name for a, row in zip(baseline.population, draft, strict=True)
-                   if a.x != row['x'] or a.y != row['y']]
-        if changed:
-            st.caption("Edited agents: " + ", ".join(changed))
-        st.caption("Use as baseline replaces your starting allocation and removes previous transfers. Reset will return here; Restore defaults brings back the original setup. Saved for this browser session.")
-        st.button("Use as baseline", on_click=use_starting_economy, type="primary", width="stretch")
-        if error := st.session_state.get("economy04_baseline_error"):
-            st.error(error)
-
-
-def add_transfer(action):
-    """Process each component event once and commit only a valid experiment."""
-    if not isinstance(action, dict):
-        st.session_state.economy04_error = "Invalid transfer request."
-        return
-    action_id = action.get("id")
-    if action_id and action_id == st.session_state.economy04_last_action_id:
-        return
-    st.session_state.economy04_last_action_id = action_id
-    try:
-        populations = st.session_state.economy04_period_populations
-        new_population = apply_transfer(
-            populations[-1], action, st.session_state.economy04_revision
-        )
-        candidate = replace(
-            current_config(), period_populations=(*populations, new_population)
-        )
-        cached_economy(candidate)
-    except (ValueError, TypeError, RuntimeError, AssertionError) as error:
-        st.session_state.economy04_error = str(error)
-        return
-    st.session_state.economy04_period_populations = candidate.period_populations
-    st.session_state.economy04_period_picker = f"Redistribution {len(populations)}"
-    invalidate_playground()
-    st.session_state.economy04_next_view = "Results"
-    st.session_state.economy04_last_transfer = {
-        key: action[key] for key in ("sender", "receiver", "amount")
-    }
-
-
-def accounting_rows(period):
-    return [
-        {
-            "agent": name,
-            "asset": asset,
-            "opening": opening[asset],
-            "net flow": period.flows[name][asset],
-            "closing": period.closing_stocks[name][asset],
-            "check": (
-                opening[asset]
-                + period.flows[name][asset]
-                - period.closing_stocks[name][asset]
-            ),
-        }
-        for name, opening in period.opening_stocks.items()
-        for asset in ASSETS
-    ]
-
-
-DEFAULTS = {
-    "agent_count": 10,
-    "opening_money": 10.0,
-    "initial_price_x": 0.5,
-    "adjustment_speed": 1.0,
-}
-SETTINGS_INPUTS = {
-    "economy04_agent_count_input": "economy04_agent_count",
-    "economy04_opening_money_input": "economy04_opening_money",
-    "economy04_initial_price_input": "economy04_initial_price_x",
-    "economy04_adjustment_speed_input": "economy04_adjustment_speed",
-}
-for name, value in DEFAULTS.items():
-    st.session_state.setdefault(f"economy04_{name}", value)
-for name, value in {
-    "period_populations": baseline_period_populations(
-        st.session_state.economy04_agent_count
-    ),
-    "period_picker": "Baseline",
-    "view_picker": "Experiment",
-    "settings_open": False,
-    "revision": 0,
-    "last_transfer": None,
-    "last_action_id": None,
-    "error": None,
+st.set_page_config(page_title="Tiny Economy — Set up and run", layout="centered", initial_sidebar_state="collapsed")
+for key, value in {
+    "agents": default_agents(), "count": len(st.session_state.get("lab_agents", default_agents())), "money": 10.0, "result": None,
+    "previous": None, "number": 0, "generation": 0, "view": "Set up", "error": None,
 }.items():
-    st.session_state.setdefault(f"economy04_{name}", value)
-
-st.set_page_config(
-    page_title="Economy 0.4 — Monetary Settlement",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
+    st.session_state.setdefault(f"lab_{key}", value)
 apply_workspace_style()
 st.caption("TINY ECONOMY · MONEY")
-st.page_link("streamlit_app.py", label="← Explore economies", width="content")
-if st.session_state.pop("economy04_open_chat", False):
-    st.session_state.economy04_view_picker = "Ask why"
-pending_view = st.session_state.pop("economy04_next_view", None)
-if pending_view:
-    st.session_state.economy04_view_picker = pending_view
-# Migrate sessions open during deployment.
-st.session_state.economy04_view_picker = {
-    "Overview": "Experiment", "Settlement": "Results", "Audit": "Results", "Ask": "Ask why",
-}.get(st.session_state.economy04_view_picker, st.session_state.economy04_view_picker)
+st.page_link("streamlit_app.py", label="← Explore economies")
+if target := st.session_state.pop("lab_next_view", None):
+    st.session_state.lab_view = target
 with st.container(key="economy04_mobile_nav"):
-    view = st.pills(
-        "View", options=("Experiment", "Results", "Ask why"), required=True,
-        default="Experiment", key="economy04_view_picker",
-        label_visibility="collapsed", width="stretch",
-    )
-
-config = current_config()
-result = cached_economy(config)
-step_labels = ["Baseline"] + [
-    f"Redistribution {index}" for index in range(1, len(result.periods))
-]
-if st.session_state.get("economy04_period_picker") not in step_labels:
-    st.session_state.economy04_period_picker = step_labels[-1]
-if len(step_labels) > 1:
-    selected_label = st.selectbox(
-        "Your experiments", step_labels, key="economy04_period_picker",
-        format_func=lambda label: label.replace("Redistribution", "Experiment")
-    )
-    selected_index = step_labels.index(selected_label)
-else:
-    selected_index = 0
-period = result.periods[selected_index]
-rows = accounting_rows(period)
-
-latest_index = len(result.periods) - 1
-st.button(
-    "Reset to baseline", on_click=reset_to_baseline, width="stretch",
-    disabled=latest_index == 0,
-    help="Remove all transfers and return to the starting allocation. Keep your chosen settings.",
-)
-if latest_index:
-    st.caption("Reset removes transfers and keeps your settings.")
-else:
-    st.caption("You are at baseline. No transfers to reset.")
-if notice := st.session_state.pop("economy04_reset_notice", None):
+    view = st.pills("View", options=("Set up", "Results", "Ask why"), required=True,
+                    default="Set up", key="lab_view", label_visibility="collapsed", width="stretch")
+st.button("Reset", on_click=reset, width="stretch",
+          help="Restore two agents with 1 X, 1 Y, equal preferences, and 10 Money each. Clear the current and previous results.")
+if notice := st.session_state.pop("lab_notice", None):
     st.success(notice)
 
-if view == "Experiment":
-    baseline = result.periods[0]
-    with st.container(border=True):
-        st.markdown("**Your starting point · Baseline**")
-        st.write(
-            f"{len(baseline.population)} agents · "
-            f"{sum(a.x for a in baseline.population):g} X and "
-            f"{sum(a.y for a in baseline.population):g} Y in total · "
-            f"{config.opening_money_per_agent:g} Money per agent"
-        )
-        st.caption("The baseline is the starting allocation before any of your transfers, using your chosen settings.")
-        with st.expander("Meet the agents at baseline"):
-            for agent in baseline.population:
-                preference = "Prefers X" if agent.alpha > .5 else "Prefers Y" if agent.alpha < .5 else "Equal spending shares"
-                st.markdown(f"**{agent.name} · {preference}**")
-                st.write(f"{agent.x:g} X · {agent.y:g} Y · {config.opening_money_per_agent:g} Money")
-                st.caption(f"Spends {agent.alpha:.0%} of goods wealth on X and {1-agent.alpha:.0%} on Y.")
-    render_starting_editor(baseline)
-    source = "Baseline" if latest_index == 0 else f"Experiment {latest_index}"
-    st.markdown(f"**Next: Experiment {latest_index + 1} · starting from {source}’s endowments**")
-    st.caption("Your transfer changes these opening goods. Every settlement starts with fresh money; closing balances never carry forward.")
-elif selected_index:
-    source = "Baseline" if selected_index == 1 else f"Experiment {selected_index - 1}"
-    st.caption(f"Experiment {selected_index} · starting from {source}’s endowments, then applying its transfer.")
-else:
-    st.caption("Baseline · the market outcome before any transfers.")
-if selected_index < latest_index:
-    st.info(
-        "Viewing a past experiment. This does not reset the economy. "
-        f"Your next transfer still starts from Experiment {latest_index}’s opening endowments."
-    )
+result = st.session_state.lab_result
+previous = st.session_state.lab_previous
+number = st.session_state.lab_number
+revision = st.session_state.lab_generation
+dirty = result is not None and (
+    st.session_state.lab_agents != [asdict(a) for a in result.periods[0].population]
+    or st.session_state.lab_money != result.config.opening_money_per_agent
+)
+if dirty:
+    st.info(f"Setup changed · Run {number} still shows the last submitted setup. Press Run to calculate your edits.")
+if st.session_state.lab_error:
+    st.error(st.session_state.lab_error)
 
-if view in ("Experiment", "Results"):
-    data = playground_data(
-        result,
-        selected_index,
-        st.session_state.economy04_revision,
-        st.session_state.economy04_last_transfer,
-    )
-    data["error"] = st.session_state.economy04_error
-    data["view"] = view
-    data["reset_revision"] = st.session_state.get("economy04_reset_revision")
-    selection = st.session_state.get("economy04_selected_trade")
-    if validate_chat_target(selection, st.session_state.economy04_revision,
-                            selected_index, len(period.trades)):
-        data["selected_trade"] = selection.get("trade_index")
+if view == "Set up":
+    st.title("Set up your economy.")
+    st.write("Choose what each agent has and what they prefer. Then press Run.")
+    if result is None:
+        st.caption("Starting point: two agents, each with 1 X, 1 Y, and equal preferences. At equal prices, neither needs to trade.")
+    st.number_input("Number of agents", min_value=2, max_value=20, step=1,
+                    key="lab_count", on_change=resize_agents)
+    for i, agent in enumerate(st.session_state.lab_agents):
+        with st.expander(agent["name"], expanded=len(st.session_state.lab_agents) <= 4):
+            for good in ("x", "y"):
+                key = f"lab_{good}_{i}"
+                st.session_state.setdefault(key, agent[good])
+                st.number_input(f"{agent['name']} · starting {good.upper()}",
+                                min_value=0.0, step=.1, format="%.3f", key=key, on_change=capture_draft)
+            key = f"lab_alpha_{i}"
+            st.session_state.setdefault(key, agent["alpha"])
+            st.slider(f"{agent['name']} · preference for X", min_value=.01, max_value=.99,
+                      step=.01, key=key, on_change=capture_draft)
+            st.caption(f"Spending shares: {agent['alpha']:.0%} X · {1-agent['alpha']:.0%} Y. 50/50 means equal preferences.")
+    agents = st.session_state.lab_agents
+    st.write(f"Starting totals: {sum(a['x'] for a in agents):g} X · {sum(a['y'] for a in agents):g} Y")
+    with st.expander("Money and model details"):
+        st.session_state.setdefault("lab_money_input", st.session_state.lab_money)
+        st.number_input("Opening money per agent", min_value=.1, step=1.0,
+                        key="lab_money_input", on_change=capture_draft)
+        st.caption("Money settles trades but does not limit purchases. Y is the reference good, priced at 1. Preferences use positive spending shares for both goods (1–99%).")
+    st.button("Run", type="primary", on_click=run, width="stretch")
+    st.caption("Editing changes only the draft. Each Run starts from these quantities with fresh money. Results never carry balances into your next setup.")
+
+elif result is None:
+    st.info("No run yet. Set up your agents, then press Run.")
+    if st.button("Go to setup", width="stretch"):
+        st.session_state.lab_next_view = "Set up"
+        st.rerun()
+
+elif view == "Results":
+    st.subheader(f"Run {number}")
+    st.caption(f"Compared with Run {number - 1}." if previous else "Your first calculated result.")
+    with st.expander("What changed in the setup?", expanded=bool(previous)):
+        for change in run_changes(result, previous):
+            st.write(change)
+    data = playground_data(result, 0, revision)
+    data.update(view="Results", label=f"Run {number}",
+                previous_price=previous.periods[0].prices["X"] if previous else None,
+                setup_summary=f"Run {number} · submitted setup",
+                explanations=run_explanations(result, previous))
+    saved = st.session_state.get("economy04_selected_trade")
+    if validate_chat_target(saved, revision, 0, len(result.trades)):
+        data["selected_trade"] = saved.get("trade_index")
     component = render_playground(data)
     selection = getattr(component, "selection", None)
-    if (validate_chat_target(selection, st.session_state.economy04_revision,
-                             selected_index, len(period.trades))
-            and selection["id"] != st.session_state.get("economy04_last_selection")):
-        st.session_state.economy04_last_selection = selection["id"]
+    if (validate_chat_target(selection, revision, 0, len(result.trades))
+            and selection["id"] != st.session_state.get("lab_last_selection")):
         st.session_state.economy04_selected_trade = selection
+        st.session_state.lab_last_selection = selection["id"]
+    question = getattr(component, "question", None)
+    if (validate_chat_target(question, revision, 0, len(result.trades))
+            and question["id"] != st.session_state.get("lab_last_question")):
+        st.session_state.lab_last_question = question["id"]
+        st.session_state.economy04_chat_trade = question.get("trade_index")
+        st.session_state.economy04_chat_trade_identity = (revision, 0)
+        if question.get("trade_index") is not None:
+            st.session_state.economy04_selected_trade = question
+        st.session_state.lab_next_view = "Ask why"
+        st.rerun()
     navigation = getattr(component, "navigation", None)
-    if (validate_chat_target(navigation, st.session_state.economy04_revision,
-                             selected_index, len(period.trades))
-            and navigation.get("view") in ("Experiment", "Results")
-            and navigation["id"] != st.session_state.get("economy04_last_navigation")):
-        st.session_state.economy04_last_navigation = navigation["id"]
-        st.session_state.economy04_next_view = navigation["view"]
+    if (validate_chat_target(navigation, revision, 0, len(result.trades))
+            and navigation.get("view") == "Experiment"
+            and navigation["id"] != st.session_state.get("lab_last_navigation")):
+        st.session_state.lab_last_navigation = navigation["id"]
+        st.session_state.lab_next_view = "Set up"
         st.rerun()
-    chat_event = getattr(component, "question", None)
-    if validate_chat_target(
-        chat_event,
-        st.session_state.economy04_revision,
-        selected_index,
-        len(period.trades),
-    ) and chat_event["id"] != st.session_state.get("economy04_last_chat_event"):
-        st.session_state.economy04_last_chat_event = chat_event["id"]
-        st.session_state.economy04_chat_trade = chat_event.get("trade_index")
-        st.session_state.economy04_chat_trade_identity = (
-            st.session_state.economy04_revision,
-            selected_index,
-        )
-        if chat_event.get("trade_index") is not None:
-            st.session_state.economy04_selected_trade = chat_event
-        st.session_state.economy04_open_chat = True
-        st.rerun()
-    if component.action and (
-        not isinstance(component.action, dict)
-        or component.action.get("id") != st.session_state.economy04_last_action_id
-    ):
-        add_transfer(component.action)
-        st.rerun()
+    period = result.periods[0]
+    with st.expander("Inspect the evidence"):
+        rows = [
+            {"agent": name, "asset": asset, "opening": opening[asset],
+             "net flow": period.flows[name][asset], "closing": period.closing_stocks[name][asset],
+             "check": opening[asset] + period.flows[name][asset] - period.closing_stocks[name][asset]}
+            for name, opening in period.opening_stocks.items() for asset in ASSETS
+        ]
+        render_evidence(result, 0, rows)
 
-if view == "Experiment":
-    # Native controls remain as an accessible fallback.
-    with st.expander("Add a redistribution", expanded=False):
-        st.caption("Alternative controls. Transfers use the latest opening endowments.")
-        latest_population = st.session_state.economy04_period_populations[-1]
-        names = [agent.name for agent in latest_population]
-        sender = st.selectbox("Move Y from", names, key="economy04_sender")
-        receiver = st.selectbox("Move Y to", names, index=1, key="economy04_receiver")
-        available = next(agent.y for agent in latest_population if agent.name == sender)
-        amount = st.number_input(
-            "Amount of Y",
-            min_value=0.01,
-            value=0.1,
-            step=0.1,
-            key="economy04_redistribution_amount",
-        )
-        st.caption(f"{sender} has {available:.2f} Y in the latest starting endowment.")
-        if st.button(
-            "Add as next period",
-            width="stretch",
-            disabled=sender == receiver or amount > available,
-        ):
-            add_transfer(
-                {
-                    "kind": "redistribute",
-                    "id": str(uuid4()),
-                    "revision": st.session_state.economy04_revision,
-                    "sender": sender,
-                    "receiver": receiver,
-                    "amount": amount,
-                }
-            )
-            st.rerun()
-
-    # Rehydrate missing widget keys from committed settings after view/page changes.
-    for widget, setting in SETTINGS_INPUTS.items():
-        st.session_state.setdefault(widget, st.session_state[setting])
-    settings_panel = st.expander(
-        "Settings", key="economy04_settings_open", on_change="rerun"
-    )
-    with settings_panel:
-        st.caption("Changing the number of agents starts a new standard allocation. Other settings keep your saved baseline quantities.")
-        st.caption(
-            "Agent count changes the economy and clears redistributions. "
-            "Opening money affects settlement balances only."
-        )
-        with st.form("economy04_settings"):
-            st.number_input(
-                "Number of agents",
-                min_value=2,
-                max_value=20,
-                step=2,
-                key="economy04_agent_count_input",
-            )
-            st.number_input(
-                "Opening money per agent",
-                min_value=0.1,
-                step=1.0,
-                format="%.2f",
-                key="economy04_opening_money_input",
-            )
-            st.number_input(
-                "Initial trial pX",
-                min_value=0.01,
-                step=0.1,
-                key="economy04_initial_price_input",
-            )
-            st.number_input(
-                "Adjustment speed (lambda)",
-                min_value=0.1,
-                max_value=1.0,
-                step=0.1,
-                key="economy04_adjustment_speed_input",
-            )
-            st.form_submit_button(
-                "Apply and close", on_click=apply_settings, width="stretch"
-            )
-        st.caption("Restore defaults also resets the population, opening money, and price-search settings.")
-        st.button(
-            "Restore default settings", on_click=restore_defaults, width="stretch"
-        )
-
-    if len(result.periods) > 1 and st.button(
-        "Remove last redistribution", width="stretch"
-    ):
-        st.session_state.economy04_period_populations = config.period_populations[:-1]
-        st.session_state.economy04_period_picker = step_labels[-2]
-        invalidate_playground()
-        st.rerun()
-    with st.expander("Model boundary"):
-        st.subheader("What changed in 0.4?")
-        st.write(
-            "Money does not enter utility or restrict purchases yet. Every market "
-            "goods transfer has a reverse money payment at the clearing price."
-        )
-        st.caption(
-            "Each experiment starts from exogenous X/Y endowments and fresh opening "
-            "money. No inventory or financial wealth carries over. Price discovery "
-            "finishes before trade. Payments clear as one batch: the animation is "
-            "a visual explanation, not a funding sequence."
-        )
-
-
-if view == "Results":
-    with st.expander("Inspect the evidence", expanded=False):
-        render_evidence(result, selected_index, rows)
-elif view == "Ask why":
-    render_chat(result, selected_index, st.session_state.economy04_revision)
+else:
+    render_chat(result, 0, revision, previous_result=previous, run_number=number)
     if st.button("← Back to results", width="stretch"):
-        st.session_state.economy04_next_view = "Results"
+        st.session_state.lab_next_view = "Results"
         st.rerun()

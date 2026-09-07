@@ -131,7 +131,8 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     shell.append(top);
     const head = el('div', 'stage-heading');
     head.append(el('h2', '', state.mode === 'edit' ? 'A little less here. A little more there.'
-      : data.previous_price === null ? 'Your market, in balance.'
+      : !data.trades.length ? 'No trade needed.'
+      : data.previous_price === null ? 'Your market result.'
       : Math.abs(data.price - data.previous_price) < 1e-6 ? 'The price held steady.'
       : data.price > data.previous_price ? 'X became more expensive.' : 'X became less expensive.'));
     const sub = state.mode === 'edit'
@@ -242,7 +243,7 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     for (const c of (data.changes || [])) {
       receipt.append(el('p', '', `${c.name}: ${fmt(c.before)} → ${fmt(c.after)} Y`));
     }
-    if (!(data.changes || []).length) receipt.append(el('p', '', 'Baseline opening endowments'));
+    if (!(data.changes || []).length) receipt.append(el('p', '', data.setup_summary || 'Baseline opening endowments'));
     shell.append(receipt, price);
     const constants = el('div', 'constants');
     const total = asset => Object.values(data.opening).reduce((sum, stocks) => sum + stocks[asset], 0);
@@ -345,8 +346,10 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       all.append(list); details.append(all); shell.append(details);
     } else {
       shell.append(el('p', 'intro', 'No goods trades are needed in this experiment.'));
+      shell.append(el('p', 'intro', data.explanations?.['Why is there no trade?'] || 'Agents already hold their desired bundles at the clearing prices.'));
+      shell.append(button('Ask why no trade is needed', 'replay-button', () => ask(null)));
     }
-    shell.append(button('Try another transfer →', 'primary try-again', () => {
+    shell.append(button(data.setup_summary ? 'Edit setup →' : 'Try another transfer →', 'primary try-again', () => {
       navigate('Experiment');
     }));
     shell.append(el('p', 'boundary', 'Independent experiments. Fresh opening money each time. No borrowing or cash constraint.'));

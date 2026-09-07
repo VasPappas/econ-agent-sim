@@ -30,10 +30,11 @@ Official setup: https://docs.streamlit.io/deploy/streamlit-community-cloud/deplo
 
 ## Context and behavior
 
-- Selected experiment settings, agent preferences, opening/closing stocks, desired
-  bundles, trades, actual prices, clearing error and preceding-experiment price and
-  Y-endowment differences are sent with the question. The latest editor population
-  is never substituted for a selected historical experiment.
+- The current submitted run supplies settings, preferences, opening/closing stocks,
+  desired bundles, trades, prices and clearing error. Its preceding submitted run
+  supplies comparison prices and starting agents. Setup changes include quantities,
+  preferences, additions and removals. Unsubmitted draft edits never enter context.
+  Each run has its own ledger IDs; there is no cumulative trade numbering across runs.
 - Trade focus includes both its ordinal within the experiment and its ledger ID.
 - Y is explicitly fixed at 1. Money settles trades but does not enter utility or
   impose a purchasing constraint. Experiments do not carry balances forward.
@@ -76,7 +77,8 @@ selected-versus-latest experiment context, trade-event validation, concurrency a
 quota limits, input limits, response parsing, safe API errors, disabled chat,
 follow-ups, context changes, and unchanged simulation state.
 
-After adding the key, test a real question on Baseline, redistribute 0.10 Y, open
+After adding the key, press Run on the symmetric setup and ask why no trade is
+needed. Change one agent’s X quantity, press Run again, open
 **Ask about this trade**, and ask why X changed but Y did not. Confirm that the
 answer uses the displayed experiment and trade and does not claim to run a new
 simulation. Live model accuracy and connectivity still require this activation
