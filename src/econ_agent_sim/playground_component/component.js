@@ -226,7 +226,7 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
     price.append(values);
     if (data.previous_price !== null) {
       const change = (data.price / data.previous_price - 1) * 100;
-      const delta = el('div', 'price-delta', `${change >= 0 ? '+' : ''}${fmt(change, 1)}%`);
+      const delta = el('div', 'price-delta', `${change >= 0 ? '+' : ''}${fmt(change, 2)}%`);
       delta.append(el('small', '', `from ${fmt(data.previous_price, 4)}`));
       price.append(delta);
     }

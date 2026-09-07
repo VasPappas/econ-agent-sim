@@ -18,7 +18,7 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.5rem) !important; }
 [data-testid="stChatMessage"] { background: #e6eee5; color: #173f3b; border-radius: 16px; }
 .st-key-economy04_mobile_nav [data-testid="stButtonGroup"] { width: 100%; }
 .st-key-economy04_mobile_nav button { min-height: 48px; flex: 1; border-radius: 12px; }
-.st-key-economy04_mobile_nav button[aria-pressed="true"] { background: #174e44 !important; color: white !important; border-color: #174e44 !important; }
+.st-key-economy04_mobile_nav button[aria-checked="true"] { background: #174e44 !important; color: white !important; border-color: #174e44 !important; }
 @media(max-width: 480px) {
  .block-container { padding: 1rem .85rem 2rem; }
  input, textarea, select { font-size: 16px !important; }
