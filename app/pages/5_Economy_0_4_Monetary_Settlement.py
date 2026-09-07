@@ -115,16 +115,19 @@ if view == "Set up":
                                 min_value=0.0, step=.1, format="%.3f", key=key, on_change=capture_draft)
             key = f"lab_alpha_{i}"
             st.session_state.setdefault(key, agent["alpha"])
-            st.slider(f"{agent['name']} · preference for X", min_value=.01, max_value=.99,
-                      step=.01, key=key, on_change=capture_draft)
+            st.number_input(f"{agent['name']} · preference for X", min_value=.01, max_value=.99,
+                            step=.01, format="%.2f", key=key, on_change=capture_draft)
             st.caption(f"Spending shares: {agent['alpha']:.0%} X · {1-agent['alpha']:.0%} Y. 50/50 means equal preferences.")
     agents = st.session_state.lab_agents
-    st.write(f"Starting totals: {sum(a['x'] for a in agents):g} X · {sum(a['y'] for a in agents):g} Y")
-    with st.expander("Money and model details"):
-        st.session_state.setdefault("lab_money_input", st.session_state.lab_money)
-        st.number_input("Opening money per agent", min_value=.1, step=1.0,
-                        key="lab_money_input", on_change=capture_draft)
-        st.caption("Money settles trades but does not limit purchases. Y is the reference good, priced at 1. Preferences use positive spending shares for both goods (1–99%).")
+    st.session_state.setdefault("lab_money_input", st.session_state.lab_money)
+    st.number_input("Opening money per agent", min_value=.1, step=1.0,
+                    key="lab_money_input", on_change=capture_draft)
+    with st.container(border=True):
+        st.subheader("Starting totals")
+        st.write(f"Agents · {len(agents)}")
+        st.write(f"X · {sum(a['x'] for a in agents):g}")
+        st.write(f"Y · {sum(a['y'] for a in agents):g}")
+        st.write(f"Money · {len(agents) * st.session_state.lab_money:g}")
     st.button("Run", type="primary", on_click=run, width="stretch")
     st.caption("Editing changes only the draft. Each Run starts from these quantities with fresh money. Results never carry balances into your next setup.")
 

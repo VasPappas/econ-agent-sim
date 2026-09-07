@@ -40,19 +40,41 @@ def test_start_requires_explicit_run_and_has_symmetric_no_trade_result():
     assert app.session_state.lab_previous is None
 
 
+def test_preference_steppers_and_complete_starting_totals():
+    app = open_app()
+    assert not app.slider
+    assert "Money and model details" not in {e.label for e in app.expander}
+    assert {"Agents · 2", "X · 2", "Y · 2", "Money · 20"} <= {m.value for m in app.markdown}
+    app.number_input(key="lab_count").set_value(3).run()
+    app.number_input(key="lab_x_0").set_value(2.0).run()
+    app.number_input(key="lab_y_1").set_value(3.0).run()
+    app.number_input(key="lab_money_input").set_value(12.0).run()
+    app.number_input(key="lab_alpha_0").set_value(.51).run()
+    assert not app.exception
+    assert {"Agents · 3", "X · 4", "Y · 5", "Money · 36"} <= {m.value for m in app.markdown}
+    assert any("51% X · 49% Y" in m.value for m in app.caption)
+    assert app.session_state.lab_result is None
+    button(app, "Run").click().run()
+    assert app.session_state.lab_result.config.opening_money_per_agent == 12
+    go(app, "Set up")
+    assert app.number_input(key="lab_money_input").value == 12
+    assert app.number_input(key="lab_alpha_0").value == .51
+    assert {"Agents · 3", "X · 4", "Y · 5", "Money · 36"} <= {m.value for m in app.markdown}
+
+
 def test_draft_edits_leave_result_and_chat_context_unchanged_until_run():
     app = open_app()
     button(app, "Run").click().run()
     original = app.session_state.lab_result
     go(app, "Set up")
     app.number_input(key="lab_x_0").set_value(2.0).run()
-    app.slider(key="lab_alpha_0").set_value(.8).run()
+    app.number_input(key="lab_alpha_0").set_value(.8).run()
     assert app.session_state.lab_result == original
     go(app, "Ask why")
     assert any("Setup changed" in i.value for i in app.info)
     go(app, "Set up")
     assert app.number_input(key="lab_x_0").value == 2
-    assert app.slider(key="lab_alpha_0").value == .8
+    assert app.number_input(key="lab_alpha_0").value == .8
     button(app, "Run").click().run()
     assert not app.exception
     assert app.session_state.lab_previous == original
@@ -100,7 +122,7 @@ def test_failed_run_keeps_both_snapshots_and_reset_has_one_meaning():
     assert app.session_state.lab_previous is None
     assert app.session_state.lab_number == 0
     assert app.number_input(key="lab_x_0").value == 1
-    assert app.slider(key="lab_alpha_0").value == .5
+    assert app.number_input(key="lab_alpha_0").value == .5
 
 
 def test_builtin_explanations_do_not_use_ai():
@@ -123,7 +145,7 @@ def test_chat_receives_submitted_run_and_previous_run_only():
         app = open_app()
         button(app, "Run").click().run()
         go(app, "Set up")
-        app.slider(key="lab_alpha_0").set_value(.8).run()
+        app.number_input(key="lab_alpha_0").set_value(.8).run()
         button(app, "Run").click().run()
         go(app, "Set up")
         app.number_input(key="lab_x_0").set_value(9.0).run()
@@ -143,7 +165,7 @@ def test_chat_receives_submitted_run_and_previous_run_only():
 
 def test_trade_chat_roundtrip_and_stale_event_rejection():
     app = open_app()
-    app.slider(key="lab_alpha_0").set_value(.8).run()
+    app.number_input(key="lab_alpha_0").set_value(.8).run()
     button(app, "Run").click().run()
     revision = app.session_state.lab_generation
     event = {"id": "trade", "revision": revision, "selected_index": 0, "trade_index": 0}

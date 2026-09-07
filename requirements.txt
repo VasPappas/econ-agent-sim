@@ -1,2 +1,2 @@
-# Rebuild marker: no-trade explanations belong in Ask why
+# Rebuild marker: preference steppers and visible starting totals
 -e .[app]
