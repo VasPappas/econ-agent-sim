@@ -1,5 +1,4 @@
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
@@ -54,6 +53,9 @@ def test_preference_steppers_and_complete_starting_totals():
     assert {"Agents · 3", "X · 4", "Y · 5", "Money · 36"} <= {m.value for m in app.markdown}
     assert any("51% X · 49% Y" in m.value for m in app.caption)
     assert app.session_state.lab_result is None
+    summaries = {expander.label for expander in app.expander}
+    assert "Agent 1 · 2 X · 1 Y · 51% X · 49% Y" in summaries
+    assert "Agent 2 · 1 X · 3 Y · equal preferences" in summaries
     button(app, "Run").click().run()
     assert app.session_state.lab_result.config.opening_money_per_agent == 12
     go(app, "Set up")
@@ -163,20 +165,14 @@ def test_chat_receives_submitted_run_and_previous_run_only():
         assert answer.call_count == 1
 
 
-def test_trade_chat_roundtrip_and_stale_event_rejection():
+def test_trade_questions_are_selected_in_ask_why():
     app = open_app()
     app.number_input(key="lab_alpha_0").set_value(.8).run()
     button(app, "Run").click().run()
-    revision = app.session_state.lab_generation
-    event = {"id": "trade", "revision": revision, "trade_index": 0}
-    with patch("econ_agent_sim.playground_component.render_playground", return_value=SimpleNamespace(question=event)):
-        app.run()
-    assert not app.exception
-    assert app.session_state.lab_view == "Ask why"
-    button(app, "← Back to results").click()
-    with patch("econ_agent_sim.playground_component.render_playground", return_value=SimpleNamespace()) as component:
-        app.run()
-    assert component.call_args.args[0]["selected_trade_index"] == 0
-    with patch("econ_agent_sim.playground_component.render_playground", return_value=SimpleNamespace(question={**event, "id": "stale", "revision": -1})):
-        app.run()
-    assert app.session_state.lab_view == "Results"
+    go(app, "Ask why")
+    assert app.selectbox[0].options[0] == "Whole run"
+    assert any(option.startswith("Trade 1 of") for option in app.selectbox[0].options)
+    app.selectbox[0].select_index(1).run()
+    assert app.session_state.economy04_chat_trade == 0
+    assert "Explain this trade" in {expander.label for expander in app.expander}
+    assert "How was the price found?" in {expander.label for expander in app.expander}

@@ -144,14 +144,3 @@ class SubmittedRun:
         selected = (trades[trade_index]
                     if type(trade_index) is int and 0 <= trade_index < len(trades) else None)
         return {**self.data, "selected_trade": selected}
-
-    def valid_event(self, event):
-        """Browser events choose context; they never provide model facts."""
-        return (
-            isinstance(event, dict)
-            and isinstance(event.get("id"), str) and 0 < len(event["id"]) <= 100
-            and type(event.get("revision")) is int and event["revision"] == self.revision
-            and (event.get("trade_index") is None
-                 or (type(event["trade_index"]) is int
-                     and 0 <= event["trade_index"] < len(self.period.trades)))
-        )

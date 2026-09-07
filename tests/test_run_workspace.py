@@ -36,16 +36,11 @@ def test_submitted_data_agrees_with_engine_and_independent_previous_run():
     assert len(run.accounting_rows) == 9
 
 
-def test_untrusted_trade_selection_rejects_stale_and_invalid_context():
+def test_trade_context_ignores_invalid_indexes():
     run = SubmittedRun(run_economy_0_4(), None, 1, 3)
-    valid = {'id': 'event', 'revision': 3, 'trade_index': 0}
-    assert run.valid_event(valid)
-    assert run.valid_event({**valid, 'trade_index': None})
-    assert not run.valid_event(None)
-    for field, value in [('revision', 2), ('revision', True), ('trade_index', -1),
-                         ('trade_index', len(run.period.trades)), ('trade_index', True),
-                         ('id', ''), ('id', 'x' * 101)]:
-        assert not run.valid_event({**valid, field: value})
+    assert run.context(-1)["selected_trade"] is None
+    assert run.context(True)["selected_trade"] is None
+    assert run.context(len(run.period.trades))["selected_trade"] is None
 
 
 def test_run_rejects_multi_period_results_and_twenty_agents_fit_chat_budget():

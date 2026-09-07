@@ -1,8 +1,8 @@
 # Ask about this experiment
 
-Economy 0.4 has a dedicated **Ask why** view and buttons in the playground to ask about
-the whole experiment or the displayed trade. The selected trade is validated in
-Python and all context comes from the actual model result. Opening chat does not
+Economy 0.4 has a dedicated **Ask why** view with a focus selector for the whole
+experiment or a specific trade. The selection is made in Streamlit and all
+context comes from the actual model result. Opening chat does not
 call OpenAI. Common explanations are deterministic text derived from the selected
 model result; opening them never calls OpenAI. Only submitting a typed question
 uses the API allowance. Built-in explanations remain available without an API key.
@@ -78,13 +78,13 @@ Official setup: https://docs.streamlit.io/deploy/streamlit-community-cloud/deplo
 ## Verification and activation check
 
 Automated tests use a mocked HTTPS response, never a real API key. They cover
-selected-versus-latest experiment context, trade-event validation, concurrency and
+selected-versus-latest experiment context, trade focus, concurrency and
 quota limits, input limits, response parsing, safe API errors, disabled chat,
 follow-ups, context changes, and unchanged simulation state.
 
 After adding the key, press Run on the symmetric setup and ask why no trade is
-needed. Change one agent’s X quantity, press Run again, open
-**Ask about this trade**, and ask why X changed but Y did not. Confirm that the
+needed. Change one agent’s X quantity, press Run again, choose a trade under
+**Focus** in Ask why, and ask why X changed but Y did not. Confirm that the
 answer uses the displayed experiment and trade and does not claim to run a new
 simulation. Live model accuracy and connectivity still require this activation
 check; mocked tests do not establish them.

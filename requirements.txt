@@ -1,2 +1,2 @@
-# Rebuild marker: independent accounting checks and finite engine inputs
+# Rebuild marker: outcome-first results and account statement
 -e .[app]

@@ -4,8 +4,7 @@ from dataclasses import asdict
 import streamlit as st
 
 from econ_agent_sim.chat_view import render_chat
-from econ_agent_sim.evidence_view import render_evidence
-from econ_agent_sim.playground_component import cached_economy, render_playground
+from econ_agent_sim.results_component import cached_economy, render_results
 from econ_agent_sim.run_workspace import (
     SubmittedRun,
     default_agents,
@@ -42,7 +41,6 @@ def reset():
     st.session_state.lab_generation = generation
     st.session_state.economy04_conversations = {}
     st.session_state.economy04_saved_focus = {}
-    st.session_state.pop("economy04_selected_trade", None)
     st.session_state.lab_notice = "Reset to two identical agents. Press Run to calculate the starting economy."
 
 
@@ -60,7 +58,18 @@ def run():
     st.session_state.lab_generation += 1
     st.session_state.lab_error = None
     st.session_state.lab_next_view = "Results"
-    st.session_state.pop("economy04_selected_trade", None)
+
+
+def agent_summary(agent):
+    preference = (
+        "equal preferences"
+        if agent["alpha"] == .5
+        else f"{agent['alpha']:.0%} X · {1 - agent['alpha']:.0%} Y"
+    )
+    return (
+        f"{agent['name']} · {agent['x']:g} X · {agent['y']:g} Y · "
+        f"{preference}"
+    )
 
 
 st.set_page_config(page_title="Tiny Economy — Set up and run", layout="centered", initial_sidebar_state="collapsed")
@@ -104,7 +113,7 @@ if view == "Set up":
     st.number_input("Number of agents", min_value=2, max_value=20, step=1,
                     key="lab_count", on_change=resize_agents)
     for i, agent in enumerate(st.session_state.lab_agents):
-        with st.expander(agent["name"], expanded=len(st.session_state.lab_agents) <= 4):
+        with st.expander(agent_summary(agent), expanded=len(st.session_state.lab_agents) <= 4):
             for good in ("x", "y"):
                 key = f"lab_{good}_{i}"
                 st.session_state.setdefault(key, agent[good])
@@ -140,28 +149,7 @@ elif view == "Results":
     with st.expander("What changed in the setup?", expanded=bool(previous)):
         for change in submitted.data["setup_changes"]:
             st.write(change)
-    data = dict(submitted.data)
-    saved = st.session_state.get("economy04_selected_trade")
-    if submitted.valid_event(saved):
-        data["selected_trade_index"] = saved.get("trade_index")
-    component = render_playground(data)
-    selection = getattr(component, "selection", None)
-    if (submitted.valid_event(selection)
-            and selection["id"] != st.session_state.get("lab_last_selection")):
-        st.session_state.economy04_selected_trade = selection
-        st.session_state.lab_last_selection = selection["id"]
-    question = getattr(component, "question", None)
-    if (submitted.valid_event(question)
-            and question["id"] != st.session_state.get("lab_last_question")):
-        st.session_state.lab_last_question = question["id"]
-        st.session_state.economy04_chat_trade = question.get("trade_index")
-        st.session_state.economy04_chat_trade_identity = revision
-        if question.get("trade_index") is not None:
-            st.session_state.economy04_selected_trade = question
-        st.session_state.lab_next_view = "Ask why"
-        st.rerun()
-    with st.expander("Inspect the evidence"):
-        render_evidence(submitted)
+    render_results(submitted.data)
 
 else:
     render_chat(submitted)

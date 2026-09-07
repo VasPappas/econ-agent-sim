@@ -70,10 +70,6 @@ def render_chat(run):
         conversations.pop(next(iter(conversations)))
     st.session_state.economy04_chat_context = fingerprint
     st.session_state.economy04_chat_messages = history
-    if trade_index is not None:
-        st.session_state.economy04_selected_trade = {
-            "id": "chat-focus", "revision": run.revision, "trade_index": trade_index,
-        }
     st.session_state.setdefault("economy04_chat_session", str(uuid4()))
     with st.container(border=True):
         st.markdown(
@@ -86,6 +82,25 @@ def render_chat(run):
     for title, explanation in built_in_explanations(context).items():
         with st.expander(title):
             st.write(explanation)
+    with st.expander("How was the price found?"):
+        st.caption(
+            "The model adjusts the price of X until demand and supply clear. "
+            "Y stays fixed at 1 as the reference price."
+        )
+        st.dataframe(
+            [
+                {
+                    "step": step.iteration,
+                    "X price": step.price_x,
+                    "X excess demand": step.excess_demand_x,
+                    "Y excess demand": step.excess_demand_y,
+                    "market error": step.market_error,
+                }
+                for step in period.steps
+            ],
+            width="stretch",
+            hide_index=True,
+        )
     st.markdown("**Ask a deeper question**")
     key = str(chat_setting("OPENAI_API_KEY"))
     enabled = str(chat_setting("ECON_CHAT_ENABLED", "false")).lower() == "true"
@@ -97,7 +112,7 @@ def render_chat(run):
     st.caption(
         "Powered by OpenAI · When you send a question, your recent chat and this "
         "run's data go to OpenAI. Avoid personal information. AI explanations "
-        "can be mistaken; inspect the evidence in Results. Sending uses the app’s AI allowance."
+        "can be mistaken; check the accounts in Results. Sending uses the app’s AI allowance."
     )
     for message in history:
         with st.chat_message(message["role"]):

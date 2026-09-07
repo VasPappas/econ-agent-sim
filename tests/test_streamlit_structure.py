@@ -116,19 +116,26 @@ def test_economy_0_3_page_avoids_new_helper_imports_for_cloud_hot_reload() -> No
     assert "    redistribute_y,\n" not in source
 
 
-def test_economy_0_4_keeps_audits_and_uses_a_component_adapter() -> None:
+def test_economy_0_4_uses_one_read_only_results_and_accounts_component() -> None:
     source = (APP_ROOT / PERMANENT_PAGES[4]).read_text()
 
     assert 'layout="centered"' in source
     assert 'initial_sidebar_state="collapsed"' in source
     assert "st.sidebar" not in source
-    assert "render_playground(data)" in source
+    assert "render_results(submitted.data)" in source
     assert "setup_config(" in source
     assert "cached_economy(config)" in source
     assert 'options=("Set up", "Results", "Ask why")' in source
-    assert 'with st.expander("Inspect the evidence"' in source
-    evidence = (APP_ROOT.parent / "src/econ_agent_sim/evidence_view.py").read_text()
-    assert 'with st.expander("Settlement ledger")' in evidence
-    assert 'with st.expander("Stock-flow accounts")' in evidence
+    assert "render_playground" not in source
+    assert "Inspect the evidence" not in source
+    assert "economy04_selected_trade" not in source
+    assert not (APP_ROOT.parent / "src/econ_agent_sim/evidence_view.py").exists()
+    component = (
+        APP_ROOT.parent / "src/econ_agent_sim/results_component/component.js"
+    ).read_text()
+    assert "Check the accounts" in component
+    assert "Agent outcomes" in component
+    assert "Replay trade" not in component
+    assert "setTriggerValue" not in component
     assert 'on_click=run' in source
     assert 'on_click=reset' in source
