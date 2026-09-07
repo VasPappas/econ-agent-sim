@@ -251,12 +251,6 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       el('p', '', `Total goods · ${fmt(total('X'))} X + ${fmt(total('Y'))} Y`),
       el('p', '', `Total money · ${fmt(total('Money'))} · ${data.checks.money ? 'conserved' : 'check failed'}`));
     shell.append(constants);
-    const explanation = el('details', 'built-in');
-    explanation.append(el('summary', '', 'Why did the price move?'),
-      el('p', 'intro', data.explanations?.['Why did X change but not Y?'] || ''),
-      el('p', 'micro', 'From the model · no AI usage'),
-      button('Ask a follow-up →', 'replay-button', () => ask(null)));
-    shell.append(explanation);
     if (data.last_transfer) {
       const t = data.last_transfer;
       shell.append(el('p', 'transfer-receipt', `You moved ${fmt(t.amount)} Y: ${t.sender} → ${t.receiver}.`));
@@ -349,9 +343,6 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       shell.append(el('p', 'intro', data.explanations?.['Why is there no trade?'] || 'Agents already hold their desired bundles at the clearing prices.'));
       shell.append(button('Ask why no trade is needed', 'replay-button', () => ask(null)));
     }
-    shell.append(button(data.setup_summary ? 'Edit setup →' : 'Try another transfer →', 'primary try-again', () => {
-      navigate('Experiment');
-    }));
     shell.append(el('p', 'boundary', 'Independent experiments. Fresh opening money each time. No borrowing or cash constraint.'));
   }
   function play() {

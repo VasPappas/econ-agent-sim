@@ -1,2 +1,2 @@
-# Rebuild marker: explicit runs from two symmetric agents
+# Rebuild marker: focused results and price explanation in Ask why
 -e .[app]

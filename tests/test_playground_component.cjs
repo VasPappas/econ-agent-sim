@@ -58,8 +58,8 @@ assert.equal(root.playgroundState.tradeIndex,1);
 root.querySelectorAll('button').find(b=>b.textContent==='Ask about this trade').onclick();
 assert.equal(events.at(-1)[0],'question');
 assert.equal(events.at(-1)[1].trade_index,1);
-root.querySelector('.try-again').onclick();
-assert.equal(events.at(-1)[1].view,'Experiment');
+assert.equal(root.querySelector('.try-again'),undefined);
+assert.equal(root.querySelectorAll('summary').some(e=>e.textContent==='Why did the price move?'),false);
 // A remount restores the server's remembered trade.
 delete root.playgroundState; data.selected_trade=1; render();
 assert.equal(root.playgroundState.tradeIndex,1);

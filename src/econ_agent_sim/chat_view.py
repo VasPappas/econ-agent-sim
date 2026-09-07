@@ -94,6 +94,8 @@ def render_chat(result, selected_index, revision, *, previous_result=None, run_n
     explanations = (run_explanations(result, previous_result, trade_index)
                     if run_number is not None else built_in_explanations(result, selected_index, trade_index))
     for title, explanation in explanations.items():
+        if title == "Why did X change but not Y?":
+            title = "Why did the price move?"
         with st.expander(title):
             st.write(explanation)
     st.markdown("**Ask a deeper question**")
