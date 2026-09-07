@@ -1,2 +1,2 @@
-# Rebuild marker: mobile experiment workspace and built-in explanations
+# Rebuild marker: verified mobile workspace with final navigation polish
 -e .[app]
