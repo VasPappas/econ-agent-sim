@@ -64,4 +64,11 @@ assert.equal(root.querySelectorAll('summary').some(e=>e.textContent==='Why did t
 delete root.playgroundState; data.selected_trade=1; render();
 assert.equal(root.playgroundState.tradeIndex,1);
 assert.equal(root.querySelector('.next-trade').disabled,true);
-console.log('Component event, selection, pending-submit, and remount checks passed.');
+// Zero-trade Results show the outcome, not the explanation or a duplicate CTA.
+data.trades=[];
+data.explanations['Why is there no trade?']='Detailed no-trade explanation';
+render();
+assert.equal(root.querySelectorAll('p').some(e=>e.textContent==='0 trades · starting balances unchanged.'),true);
+assert.equal(root.querySelectorAll('p').some(e=>e.textContent==='Detailed no-trade explanation'),false);
+assert.equal(root.querySelectorAll('button').some(e=>e.textContent==='Ask why no trade is needed'),false);
+console.log('Component event, selection, pending-submit, remount, and no-trade checks passed.');

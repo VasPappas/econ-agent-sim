@@ -137,7 +137,7 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       : data.price > data.previous_price ? 'X became more expensive.' : 'X became less expensive.'));
     const sub = state.mode === 'edit'
       ? 'Change who starts with Y. See how the whole market responds.'
-      : 'See what changed, then follow a trade.';
+      : (data.trades.length ? 'See what changed, then follow a trade.' : 'See the outcome here. Explore the explanation in Ask why.');
     shell.append(head, el('p', 'intro', sub));
     if (data.error) {
       const error = el('p', 'error', data.error);
@@ -339,9 +339,7 @@ export default function render({ data, parentElement, setTriggerValue, setStateV
       }
       all.append(list); details.append(all); shell.append(details);
     } else {
-      shell.append(el('p', 'intro', 'No goods trades are needed in this experiment.'));
-      shell.append(el('p', 'intro', data.explanations?.['Why is there no trade?'] || 'Agents already hold their desired bundles at the clearing prices.'));
-      shell.append(button('Ask why no trade is needed', 'replay-button', () => ask(null)));
+      shell.append(el('p', 'intro', '0 trades · starting balances unchanged.'));
     }
     shell.append(el('p', 'boundary', 'Independent experiments. Fresh opening money each time. No borrowing or cash constraint.'));
   }

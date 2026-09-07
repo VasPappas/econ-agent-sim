@@ -111,6 +111,7 @@ def test_builtin_explanations_do_not_use_ai():
         assert not app.exception
         assert app.chat_input[0].disabled
         assert "Why is there no trade?" in {e.label for e in app.expander}
+        assert any("each agent already holds their desired bundle" in m.value for m in app.markdown)
         assert "Why did the price move?" in {e.label for e in app.expander}
         answer.assert_not_called()
 

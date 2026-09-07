@@ -1,2 +1,2 @@
-# Rebuild marker: focused results and price explanation in Ask why
+# Rebuild marker: no-trade explanations belong in Ask why
 -e .[app]
