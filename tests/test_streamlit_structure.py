@@ -133,7 +133,7 @@ def test_economy_0_4_uses_one_read_only_results_and_accounts_component() -> None
     component = (
         APP_ROOT.parent / "src/econ_agent_sim/results_component/component.js"
     ).read_text()
-    assert "Check the accounts" in component
+    assert "Verify this run" in component
     assert "Agent outcomes" in component
     assert "Replay trade" not in component
     assert "setTriggerValue" not in component
