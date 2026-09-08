@@ -78,7 +78,8 @@ st.button("Reset", on_click=reset, width="stretch", help="Restore the starting s
 if notice := st.session_state.pop("cash_notice", None):
     st.success(notice)
 result = st.session_state.cash_result
-if result and st.session_state.cash_agents != [asdict(a) for a in result.population]:
+dirty = result is not None and st.session_state.cash_agents != [asdict(a) for a in result.population]
+if dirty and view != "Set up":
     st.info(f"Setup changed · Run {st.session_state.cash_number} still shows your last submitted setup. Press Run to calculate your edits.")
 if st.session_state.cash_error:
     st.error(st.session_state.cash_error)
@@ -89,21 +90,21 @@ if view == "Set up":
     st.number_input("Number of agents", min_value=2, max_value=20, step=1,
                     key="cash_count", on_change=resize)
     for i, a in enumerate(st.session_state.cash_agents):
-        preference = "equal preferences" if a["alpha"] == .5 else f"{a['alpha']:.0%} good · {1-a['alpha']:.0%} money"
-        with st.expander(f"{a['name']} · {a['x']:g} X · {a['money']:g} Money · {preference}",
-                         expanded=len(st.session_state.cash_agents) <= 4):
+        with st.expander(a["name"], expanded=len(st.session_state.cash_agents) <= 4):
             for field, label in (("x", "starting X"), ("money", "starting Money"), ("alpha", "preference for the good")):
                 key = f"cash_{field}_{i}"
                 st.session_state.setdefault(key, a[field])
                 st.number_input(f"{a['name']} · {label}", min_value=.01 if field == "alpha" else 0.0,
                                 max_value=.99 if field == "alpha" else 1_000_000.0,
-                                step=.01 if field == "alpha" else .1, format="%.2f", key=key, on_change=capture)
+                                step=.10, format="%.2f", key=key, on_change=capture)
             st.caption(f"Desired wealth shares: {a['alpha']:.0%} in X · {1-a['alpha']:.0%} in Money. This is not the share of starting cash spent.")
     with st.container(border=True):
         st.subheader("Starting totals")
         st.write(f"Agents · {len(st.session_state.cash_agents)}")
         for field, label in (("x", "X"), ("money", "Money")):
             st.write(f"{label} · {sum(a[field] for a in st.session_state.cash_agents):g}")
+    if dirty:
+        st.info(f"Setup changed · Run {st.session_state.cash_number} still shows your last submitted setup. Press Run to calculate your edits.")
     st.button("Run", type="primary", on_click=run, width="stretch")
     st.caption("Money is valued directly in this experiment. No borrowing, production or money creation. Each run starts from your setup, not the previous outcome.")
 elif result is None:
