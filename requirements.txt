@@ -1,2 +1,2 @@
-# Rebuild marker: visual polish and rounded account receipts
+# Rebuild marker: consolidated agent outcomes and verification
 -e .[app]
