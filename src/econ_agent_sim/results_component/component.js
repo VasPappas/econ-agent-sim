@@ -15,6 +15,12 @@ export default function render({ data, parentElement }) {
     return node;
   };
   const assetLabel = asset => asset === 'Money' ? 'Money' : asset;
+  const agentHeading = (tag, agent) => {
+    const index = data.agents.indexOf(agent);
+    const heading = el(tag, 'agent-heading');
+    heading.append(el('span', `agent-marker tone-${index % 6}`, String(index + 1)), document.createTextNode(agent.name));
+    return heading;
+  };
   const signed = n => Math.abs(n) < 1e-10 ? fmt(0) : `${n > 0 ? '+' : ''}${fmt(n)}`;
   const priceX = data.prices.X;
   const previousPrice = data.previous_run?.prices.X ?? null;
@@ -75,7 +81,7 @@ export default function render({ data, parentElement }) {
   const outcomes = el('div', 'outcomes');
   for (const agent of data.agents) {
     const card = el('article', 'outcome-card');
-    card.append(el('h4', '', agent.name));
+    card.append(agentHeading('h4', agent));
     for (const asset of assets) {
       const start = agent.opening[asset];
       const finish = agent.closing[asset];
@@ -125,7 +131,7 @@ export default function render({ data, parentElement }) {
   accountBody.append(accountCard);
   const accountTable = agent => {
     const table = el('div', 'account-table');
-    table.append(el('h5', '', agent.name));
+    table.append(agentHeading('h5', agent));
     const header = el('div', 'account-row account-header');
     for (const label of ['Asset', 'Start', 'Received', 'Sent', 'Final']) header.append(el('span', '', label));
     table.append(header);
