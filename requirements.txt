@@ -1,2 +1,2 @@
-# Rebuild marker: one-good valued-money economy
+# Rebuild marker: visual polish and rounded account receipts
 -e .[app]
