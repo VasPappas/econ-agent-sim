@@ -90,7 +90,7 @@ if view == "Set up":
     st.number_input("Number of agents", min_value=2, max_value=20, step=1,
                     key="cash_count", on_change=resize)
     for i, a in enumerate(st.session_state.cash_agents):
-        with st.expander(a["name"], expanded=len(st.session_state.cash_agents) <= 4):
+        with st.container(key=f"agent_card_{i}"), st.expander(a["name"], expanded=len(st.session_state.cash_agents) <= 4):
             for field, label in (("x", "starting X"), ("money", "starting Money"), ("alpha", "preference for the good")):
                 key = f"cash_{field}_{i}"
                 st.session_state.setdefault(key, a[field])
