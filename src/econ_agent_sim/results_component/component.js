@@ -7,6 +7,7 @@ export default function render({ data, parentElement }) {
     minimumFractionDigits: places, maximumFractionDigits: places,
   });
   const raw = n => Number(n).toString();
+  const diagnostic = n => Number(Number(n).toPrecision(3)).toString();
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -153,8 +154,8 @@ export default function render({ data, parentElement }) {
       const item = el('details', 'trade-receipt');
       item.append(el('summary', '', `${trade.seller} → ${trade.buyer} · ${fmt(trade.quantity, 4)} ${trade.good} for ${fmt(trade.payment, 4)} Money`));
       const legs = el('div', 'ledger-legs');
-      legs.append(el('p', '', `${trade.good}: ${trade.seller} → ${trade.buyer} · ${raw(trade.quantity)}`));
-      legs.append(el('p', '', `Money: ${trade.buyer} → ${trade.seller} · ${raw(trade.payment)}`));
+      legs.append(el('p', '', `${trade.good}: ${trade.seller} → ${trade.buyer} · ${fmt(trade.quantity, 4)}`));
+      legs.append(el('p', '', `Money: ${trade.buyer} → ${trade.seller} · ${fmt(trade.payment, 4)}`));
       item.append(legs); receipts.append(item);
     }
     accountBody.append(receipts);
@@ -164,10 +165,11 @@ export default function render({ data, parentElement }) {
   technical.append(el('summary', '', 'Technical details'));
   const technicalBody = el('div', 'technical-body');
   technicalBody.append(
-    el('p', '', `Market error · ${raw(data.market_error)}`),
-    el('p', '', `Clearing tolerance · ${raw(data.clearing_tolerance)}`),
-    el('p', '', `Gross money payments · ${raw(data.gross_money_payments)}`),
-    el('p', '', `Ledger · ${data.trades.length} trades · ${data.trades.length * 2} transfer legs`),
+    el('p', '', `Market error · ${diagnostic(data.market_error)}`),
+    el('p', '', `Clearing tolerance · ${diagnostic(data.clearing_tolerance)}`),
+    el('p', '', `Gross money payments · ${fmt(data.gross_money_payments, 4)}`),
+    el('p', '', `Ledger · ${data.trades.length} ${data.trades.length === 1 ? 'trade' : 'trades'} · ${data.trades.length * 2} transfer legs`),
+    el('p', 'muted', 'Balances use 2 decimal places; prices and receipts use 4. Calculations and the CSV retain full precision. Rounded amounts may not add up exactly.'),
   );
   technical.append(technicalBody); accountBody.append(technical);
 
