@@ -94,14 +94,29 @@ export default function render({ data, parentElement }) {
       row.append(el('span', `change ${Math.abs(change) < 1e-10 ? 'flat' : change > 0 ? 'up' : 'down'}`, signed(change)));
       card.append(row);
     }
+    const agentTrades = data.trades.filter(trade => trade.seller === agent.name || trade.buyer === agent.name);
+    if (agentTrades.length) {
+      const transactions = el('details', 'agent-transactions');
+      transactions.append(el('summary', '', `Show transactions · ${agentTrades.length}`));
+      for (const trade of agentTrades) {
+        const selling = trade.seller === agent.name;
+        const receipt = el('div', 'agent-transaction');
+        receipt.append(el('p', '', `${selling ? 'Sold' : 'Bought'} ${fmt(trade.quantity, 4)} ${trade.good} ${selling ? 'to' : 'from'} ${selling ? trade.buyer : trade.seller}`));
+        receipt.append(el('p', 'muted', `${selling ? 'Received' : 'Paid'} ${fmt(trade.payment, 4)} Money`));
+        transactions.append(receipt);
+      }
+      card.append(transactions);
+    } else {
+      card.append(el('p', 'muted', 'No transactions for this agent.'));
+    }
     outcomes.append(card);
   }
   shell.append(outcomes);
   if (!data.trades.length) shell.append(el('p', 'no-trade', '0 trades · starting balances unchanged.'));
 
-  if (!checksPassed) shell.append(el('div', 'failure', 'An account check needs attention. Open the account statement below.'));
+  if (!checksPassed) shell.append(el('div', 'failure', 'A check needs attention. Open “Verify this run” below.'));
   const accounts = el('details', `accounts ${checksPassed ? 'passed' : 'failed'}`);
-  const summary = el('summary', '', `${checksPassed ? '✓ All checks passed' : '! Check failed'} · Check the accounts`);
+  const summary = el('summary', '', `${checksPassed ? '✓ All checks passed' : '! Check failed'} · Verify this run`);
   accounts.append(summary);
   const accountBody = el('div', 'account-body');
 
@@ -114,58 +129,6 @@ export default function render({ data, parentElement }) {
     conservation.append(row);
   }
   accountBody.append(conservation);
-
-  accountBody.append(el('h4', '', 'Agent account'));
-  const select = el('select', 'agent-select');
-  select.setAttribute('aria-label', 'Choose an agent account');
-  const allOption = el('option', '', 'All agents');
-  allOption.value = '';
-  select.append(allOption);
-  for (const agent of data.agents) {
-    const option = el('option', '', agent.name);
-    option.value = agent.name;
-    select.append(option);
-  }
-  accountBody.append(select);
-  const accountCard = el('div', 'account-card');
-  accountBody.append(accountCard);
-  const accountTable = agent => {
-    const table = el('div', 'account-table');
-    table.append(agentHeading('h5', agent));
-    const header = el('div', 'account-row account-header');
-    for (const label of ['Asset', 'Start', 'Received', 'Sent', 'Final']) header.append(el('span', '', label));
-    table.append(header);
-    for (const asset of assets) {
-      const flow = movements[agent.name][asset];
-      const row = el('div', 'account-row');
-      for (const value of [assetLabel(asset), fmt(agent.opening[asset]), fmt(flow.received), fmt(flow.sent), fmt(agent.closing[asset])]) row.append(el('span', '', value));
-      table.append(row);
-    }
-    return table;
-  };
-  const drawAccount = name => {
-    accountCard.replaceChildren();
-    const agents = name ? data.agents.filter(item => item.name === name) : data.agents;
-    for (const agent of agents) accountCard.append(accountTable(agent));
-  };
-  select.onchange = () => drawAccount(select.value);
-  drawAccount('');
-
-  accountBody.append(el('h4', '', 'Trade receipts'));
-  if (!data.trades.length) {
-    accountBody.append(el('p', 'muted', 'No transactions were needed.'));
-  } else {
-    const receipts = el('div', 'receipts');
-    for (const trade of data.trades) {
-      const item = el('details', 'trade-receipt');
-      item.append(el('summary', '', `${trade.seller} → ${trade.buyer} · ${fmt(trade.quantity, 4)} ${trade.good} for ${fmt(trade.payment, 4)} Money`));
-      const legs = el('div', 'ledger-legs');
-      legs.append(el('p', '', `${trade.good}: ${trade.seller} → ${trade.buyer} · ${fmt(trade.quantity, 4)}`));
-      legs.append(el('p', '', `Money: ${trade.buyer} → ${trade.seller} · ${fmt(trade.payment, 4)}`));
-      item.append(legs); receipts.append(item);
-    }
-    accountBody.append(receipts);
-  }
 
   const technical = el('details', 'technical');
   technical.append(el('summary', '', 'Technical details'));
