@@ -9,13 +9,13 @@ st.title("Explore a tiny economy.")
 st.write("Change one thing. Discover what follows.")
 with st.container(key="economy_home_start"):
     st.page_link(
-        "pages/5_Economy_0_4_Monetary_Settlement.py",
+        "pages/6_Economy_0_5_Good_and_Money.py",
         label="Start exploring →", width="stretch",
     )
 st.caption("Set up your agents. Press Run. Follow the goods and money.")
 with st.expander("A first experiment"):
     st.write(
-        "Start with two agents, each with 1 X, 1 Y, and equal preferences. "
+        "Start with two agents, each with 1 X, 1 Money, and equal preferences. "
         "Press Run: neither needs to trade. Then change one agent's quantities "
         "or preferences and Run again. What changes?"
     )
@@ -38,6 +38,8 @@ chapters = [
      "0.3", "pages/4_Economy_0_3_Repeated_Exchange.py"),
     ("Money", "Follow each goods transfer and its reverse money payment.",
      "0.4", "pages/5_Economy_0_4_Monetary_Settlement.py"),
+    ("Good and money", "Choose between one good and holding money, without borrowing.",
+     "0.5", "pages/6_Economy_0_5_Good_and_Money.py"),
 ]
 for title, description, version, page in chapters:
     with st.container(border=True):
@@ -49,6 +51,11 @@ with st.expander("What the model includes"):
     st.write(
         "Every economy keeps opening stocks, agent choices, prices, trades, "
         "closing stocks, and the accounting ledger available for inspection."
+    )
+    st.write(
+        "In Good and money, agents value both the good and holding money. "
+        "Purchases must be affordable. This is an explicit money-in-utility assumption, "
+        "not a model of why money emerges."
     )
     st.write(
         "In the Money chapter, money settles trades but does not limit purchases. "

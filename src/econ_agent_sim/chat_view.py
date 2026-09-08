@@ -31,8 +31,9 @@ def render_chat(run):
     st.subheader("Let’s make sense of it.")
     st.write("Make sense of the prices, the trades, and what changed.")
     period = run.period
-    identity = run.revision
     base_fingerprint = context_id(run.context())
+    identity = base_fingerprint
+    valued_money = run.data.get("model") == "money_in_utility"
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
     if (st.session_state.get("economy04_chat_trade_identity") != identity
             or "economy04_chat_trade" not in st.session_state):
@@ -74,7 +75,8 @@ def render_chat(run):
     with st.container(border=True):
         st.markdown(
             f"**{context['label']}** · {len(period.population)} agents · "
-            f"X price **{period.prices['X']:.4f}** · Y fixed at **1**"
+            f"X price **{period.prices['X']:.4f}** · "
+            + ("Money is valued" if valued_money else "Y fixed at **1**")
         )
         st.caption("Your conversation stays with this run and trade focus.")
     st.markdown("**Explore the explanation**")
@@ -82,6 +84,17 @@ def render_chat(run):
     for title, explanation in built_in_explanations(context).items():
         with st.expander(title):
             st.write(explanation)
+    if valued_money:
+        with st.expander("How was the price found?"):
+            st.write("This version solves the clearing price directly; it does not simulate a price-adjustment path.")
+            st.latex(r"p_X = \frac{\sum_i \alpha_i m_i^0}{\sum_i (1-\alpha_i)x_i^0}")
+            st.caption("α is preference for the good. Starting money and goods are m⁰ and x⁰. The price makes total desired X equal total available X.")
+    else:
+        render_price_history(period)
+    render_conversation(context, history)
+
+
+def render_price_history(period):
     with st.expander("How was the price found?"):
         st.caption(
             "The model adjusts the price of X until demand and supply clear. "
@@ -101,6 +114,9 @@ def render_chat(run):
             width="stretch",
             hide_index=True,
         )
+
+
+def render_conversation(context, history):
     st.markdown("**Ask a deeper question**")
     key = str(chat_setting("OPENAI_API_KEY"))
     enabled = str(chat_setting("ECON_CHAT_ENABLED", "false")).lower() == "true"

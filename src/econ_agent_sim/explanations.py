@@ -2,6 +2,8 @@
 
 
 def built_in_explanations(context):
+    if context.get("model") == "money_in_utility":
+        return money_explanations(context)
     price = context["prices"]["X"]
     previous = context["previous_run"]
     prices = (
@@ -47,4 +49,41 @@ def built_in_explanations(context):
             "Quantity × unit price gives the payment, allowing for rounding. "
             "These are the two legs of this trade only. Closing balances include all trades."
         ), **answers}
+    return answers
+
+
+def money_explanations(context):
+    price = context["prices"]["X"]
+    previous = context["previous_run"]
+    comparison = (f"Compared with Run {previous['number']}, the price changed "
+                  f"{context['price_x_change_percent']:+.2f}%. " if previous
+                  else "This is your first calculated result. ")
+    answers = {
+        "Why do agents hold money?": (
+            "We explicitly assume agents value both X and their final money balance: "
+            "utility is X^α × Money^(1−α). This is money in utility. "
+            "There is no future purchase or production in this one-shot model; "
+            "the value of holding money is assumed, not derived."
+        ),
+        "Why did the price move?": (
+            f"X clears at {price:.4f} Money per unit. {comparison}"
+            "The price depends on starting goods, money and preferences across all agents. "
+            "There is no Y in this economy. Changing several inputs at once does not isolate one cause."
+        ),
+        "What does the preference mean?": (
+            "At price p, wealth is p × starting X + starting Money. "
+            "An agent wants α of this wealth in the good, and 1−α as money. "
+            "This is a share of total wealth, not of initial cash. Net buyers pay from "
+            "their starting money; net sellers receive money. No agent can borrow."
+        ),
+        "Was any money created?": (
+            f"Total Money: {context['totals']['opening']['Money']:.4f} → "
+            f"{context['totals']['closing']['Money']:.4f}. Payments transfer existing money. "
+            "No money is created and no borrowing occurs. Independent runs use the starting balances you choose."
+        ),
+    }
+    if not context["trades"]:
+        answers = {"Why is there no trade?": "Each agent already holds their desired combination of X and Money, within numerical tolerance. Two agents with 1 X, 1 Money and equal preferences are such a case at price 1.", **answers}
+    if trade := context.get("selected_trade"):
+        answers = {"Explain this trade": f"Trade {trade['ordinal']}: {trade['seller']} sells {trade['quantity']:.4f} X to {trade['buyer']} for {trade['payment']:.4f} Money. Price × quantity is the payment. Final balances include all trades, not just this one.", **answers}
     return answers

@@ -60,3 +60,16 @@ context.render({data,parentElement:host});
 assert(root.querySelectorAll('p').some(node=>node.textContent==='0 trades · starting balances unchanged.'));
 assert(root.querySelectorAll('p').some(node=>node.textContent==='No transactions were needed.'));
 console.log('Static outcomes, account statement, receipts, and no-trade view passed.');
+
+data.model='money_in_utility'; data.assets=['X','Money'];
+data.run_rule='No borrowing or money creation.';
+data.prices={X:1,Money:1};
+data.totals={opening:{X:3,Money:20},closing:{X:3,Money:20}};
+data.agents=data.agents.map(a=>({...a,opening:{X:a.opening.X,Money:10},closing:{X:a.opening.X,Money:10}}));
+context.render({data,parentElement:host});
+assert.equal(root.querySelectorAll('.outcome-row').length,4);
+assert.equal(root.querySelectorAll('.account-row').length,6);
+assert.equal(root.querySelectorAll('p').some(n=>String(n.textContent).includes('Y price')),false);
+assert(root.querySelector('.boundary').textContent.includes('No borrowing'));
+assert(!decodeURIComponent(root.querySelector('.download').href).includes('"Y"'));
+console.log('One-good result has only X and Money, with the correct model boundary.');

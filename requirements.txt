@@ -1,2 +1,2 @@
-# Rebuild marker: outcome-first results and account statement
+# Rebuild marker: one-good valued-money economy
 -e .[app]

@@ -1,6 +1,8 @@
 // Model data is inserted as text only. This component never changes the run.
 export default function render({ data, parentElement }) {
   const root = parentElement.querySelector('.results-root');
+  const assets = data.assets || ['X', 'Y', 'Money'];
+  const valuedMoney = data.model === 'money_in_utility';
   const fmt = (n, places = 2) => Number(n).toLocaleString('en-US', {
     minimumFractionDigits: places, maximumFractionDigits: places,
   });
@@ -19,7 +21,7 @@ export default function render({ data, parentElement }) {
 
   const movements = Object.fromEntries(data.agents.map(agent => [
     agent.name,
-    Object.fromEntries(['X', 'Y', 'Money'].map(asset => [asset, { received: 0, sent: 0 }])),
+    Object.fromEntries(assets.map(asset => [asset, { received: 0, sent: 0 }])),
   ]));
   for (const trade of data.trades) {
     movements[trade.seller][trade.good].sent += trade.quantity;
@@ -31,7 +33,7 @@ export default function render({ data, parentElement }) {
   root.replaceChildren();
   const shell = el('section', 'results');
   shell.setAttribute('aria-label', 'Monetary economy result');
-  shell.append(el('div', 'topline', `Money · ${data.settings.agent_count} agents`));
+  shell.append(el('div', 'topline', `${valuedMoney ? 'One good + money' : 'Money'} · ${data.settings.agent_count} agents`));
 
   const title = !data.trades.length ? 'No trade needed.'
     : previousPrice === null ? 'Your market result.'
@@ -46,7 +48,7 @@ export default function render({ data, parentElement }) {
 
   const price = el('div', 'price-panel');
   const priceValues = el('div', 'price-values');
-  priceValues.append(el('span', 'eyebrow', 'PRICE OF X · Y FIXED AT 1'));
+  priceValues.append(el('span', 'eyebrow', valuedMoney ? 'PRICE OF X · IN MONEY' : 'PRICE OF X · Y FIXED AT 1'));
   const number = el('div', 'price-number', `${fmt(priceX, 4)} `);
   number.append(el('span', '', 'M / X'));
   priceValues.append(number);
@@ -60,9 +62,9 @@ export default function render({ data, parentElement }) {
   shell.append(price);
 
   const totals = el('div', 'totals');
+  if (!valuedMoney) totals.append(el('p', '', `Y price · ${fmt(data.prices.Y, 4)} · fixed reference`));
   totals.append(
-    el('p', '', `Y price · ${fmt(data.prices.Y, 4)} · fixed reference`),
-    el('p', '', `Total goods · ${fmt(data.totals.opening.X)} X + ${fmt(data.totals.opening.Y)} Y`),
+    el('p', '', valuedMoney ? `Total goods · ${fmt(data.totals.opening.X)} X` : `Total goods · ${fmt(data.totals.opening.X)} X + ${fmt(data.totals.opening.Y)} Y`),
     el('p', '', `Total money · ${fmt(data.totals.opening.Money)} · ${data.checks.money ? 'conserved' : 'check failed'}`),
   );
   shell.append(totals);
@@ -73,7 +75,7 @@ export default function render({ data, parentElement }) {
   for (const agent of data.agents) {
     const card = el('article', 'outcome-card');
     card.append(el('h4', '', agent.name));
-    for (const asset of ['X', 'Y', 'Money']) {
+    for (const asset of assets) {
       const start = agent.opening[asset];
       const finish = agent.closing[asset];
       const row = el('div', 'outcome-row');
@@ -98,9 +100,10 @@ export default function render({ data, parentElement }) {
 
   accountBody.append(el('h4', '', 'Conservation'));
   const conservation = el('div', 'conservation');
-  for (const asset of ['X', 'Y', 'Money']) {
+  for (const asset of assets) {
     const row = el('div', 'conservation-row');
-    row.append(el('span', '', assetLabel(asset)), el('strong', '', `${fmt(data.totals.opening[asset])} → ${fmt(data.totals.closing[asset])}`), el('span', data.checks[asset === 'Money' ? 'money' : 'accounts'] ? 'pass' : 'fail', data.checks[asset === 'Money' ? 'money' : 'accounts'] ? 'Conserved' : 'Check failed'));
+    const conserved = data.conservation?.[asset] ?? data.checks[asset === 'Money' ? 'money' : 'accounts'];
+    row.append(el('span', '', assetLabel(asset)), el('strong', '', `${fmt(data.totals.opening[asset])} → ${fmt(data.totals.closing[asset])}`), el('span', conserved ? 'pass' : 'fail', conserved ? 'Conserved' : 'Check failed'));
     conservation.append(row);
   }
   accountBody.append(conservation);
@@ -125,7 +128,7 @@ export default function render({ data, parentElement }) {
     const header = el('div', 'account-row account-header');
     for (const label of ['Asset', 'Start', 'Received', 'Sent', 'Final']) header.append(el('span', '', label));
     table.append(header);
-    for (const asset of ['X', 'Y', 'Money']) {
+    for (const asset of assets) {
       const flow = movements[agent.name][asset];
       const row = el('div', 'account-row');
       for (const value of [assetLabel(asset), fmt(agent.opening[asset]), fmt(flow.received), fmt(flow.sent), fmt(agent.closing[asset])]) row.append(el('span', '', value));
@@ -169,7 +172,7 @@ export default function render({ data, parentElement }) {
   technical.append(technicalBody); accountBody.append(technical);
 
   const csvRows = [['agent', 'asset', 'start', 'received', 'sent', 'final']];
-  for (const agent of data.agents) for (const asset of ['X', 'Y', 'Money']) {
+  for (const agent of data.agents) for (const asset of assets) {
     const flow = movements[agent.name][asset];
     csvRows.push([agent.name, asset, raw(agent.opening[asset]), raw(flow.received), raw(flow.sent), raw(agent.closing[asset])]);
   }
@@ -179,6 +182,6 @@ export default function render({ data, parentElement }) {
   download.download = `${data.label.toLowerCase().replace(' ', '-')}-accounts.csv`;
   accountBody.append(download);
   accounts.append(accountBody); shell.append(accounts);
-  shell.append(el('p', 'boundary', 'Independent experiments. Fresh opening money each time. No borrowing or cash constraint.'));
+  shell.append(el('p', 'boundary', valuedMoney ? data.run_rule : 'Independent experiments. Fresh opening money each time. No borrowing or cash constraint.'));
   root.append(shell);
 }
