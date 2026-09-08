@@ -50,17 +50,11 @@ summary:focus-visible, select:focus-visible, a:focus-visible { outline: 3px soli
 .conservation-row { display: grid; grid-template-columns: 1fr auto 76px; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .conservation-row strong { font-variant-numeric: tabular-nums; }
 .pass { color: var(--green); text-align: right; } .fail { color: var(--red); text-align: right; font-weight: 650; }
-.agent-select { width: 100%; min-height: 48px; border: 1px solid #c9cec5; border-radius: 12px; background: white; color: var(--ink); padding: 0 12px; font: inherit; font-size: 16px; }
-.account-card { display: grid; gap: 10px; margin-top: 10px; }
-.account-table { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.account-table h5 { margin: 0; padding: 14px 10px; font-size: 14px; }
-.account-row { display: grid; grid-template-columns: 1.15fr repeat(4, .9fr); gap: 5px; padding: 10px; border-top: 1px solid var(--line); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
-.account-row span:first-child { text-align: left; }
-.account-header { border-top: 0; color: var(--muted); font-size: 10px; background: #f2f4ed; }
-.trade-receipt { border-top: 1px solid var(--line); }
-.trade-receipt summary { font-size: 13px; font-weight: 550; }
-.ledger-legs { padding: 0 12px 10px; color: var(--muted); font-size: 12px; }
-.ledger-legs p, .technical-body p { margin: 6px 0; }
+.agent-transactions { margin-top: 8px; border-top: 1px solid var(--line); }
+.agent-transactions summary { font-size: 13px; color: var(--muted); }
+.agent-transaction { padding: 8px 0; font-size: 14px; }
+.agent-transaction + .agent-transaction { border-top: 1px solid var(--line); }
+.agent-transaction p, .technical-body p { margin: 6px 0; }
 .technical { margin-top: 12px; }
 .technical-body { color: var(--muted); font-size: 12px; padding: 0 0 10px; }
 .muted { color: var(--muted); font-size: 14px; }
@@ -71,6 +65,4 @@ summary:focus-visible, select:focus-visible, a:focus-visible { outline: 3px soli
   .price-number { font-size: 40px; }
   .outcome-card { padding: 14px 11px; }
   .outcome-row { grid-template-columns: minmax(62px, 1fr) auto 52px; gap: 5px; }
-  .account-row { padding: 9px 6px; font-size: 11px; }
-  .account-header { font-size: 9px; }
 }
