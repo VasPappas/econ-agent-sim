@@ -70,7 +70,8 @@ def run_money_economy(population: tuple[MoneyAgent, ...]) -> MoneyResult:
         desired[a.name] = {"X": a.alpha * wealth / price, "Money": (1 - a.alpha) * wealth}
         require_finite("Desired balances", *desired[a.name].values())
     closing = {name: dict(stocks) for name, stocks in opening.items()}
-    epsilon = 1e-12 * total_x
+    # Large economies must not discard a small agent's meaningful demand.
+    epsilon = min(1e-12 * total_x, 1e-12)
     buyers, sellers = [], []
     for a in population:
         net = desired[a.name]["X"] - a.x

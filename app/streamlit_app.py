@@ -13,6 +13,8 @@ with st.container(key="economy_home_start"):
         label="Start exploring →", width="stretch",
     )
 st.caption("Set up your agents. Press Run. Follow the goods and money.")
+st.page_link("pages/7_Economy_0_6_Production_and_Consumption.py",
+             label="New · Production and consumption over time →", width="stretch")
 with st.expander("A first experiment"):
     st.write(
         "Start with two agents, each with 1 X, 1 Money, and equal preferences. "
@@ -40,6 +42,8 @@ chapters = [
      "0.4", "pages/5_Economy_0_4_Monetary_Settlement.py"),
     ("Good and money", "Choose between one good and holding money, without borrowing.",
      "0.5", "pages/6_Economy_0_5_Good_and_Money.py"),
+    ("Production and consumption", "Produce, trade and consume across periods. Money carries forward.",
+     "0.6", "pages/7_Economy_0_6_Production_and_Consumption.py"),
 ]
 for title, description, version, page in chapters:
     with st.container(border=True):
@@ -48,6 +52,9 @@ for title, description, version, page in chapters:
         st.caption(f"Economy {version}")
 
 with st.expander("What the model includes"):
+    st.write("In Production and consumption, agents receive fixed output each period, "
+             "trade and consume all their goods. Money carries forward. Production is "
+             "automatic; work choices and planning for the future are not modeled yet.")
     st.write(
         "Every economy keeps opening stocks, agent choices, prices, trades, "
         "closing stocks, and the accounting ledger available for inspection."

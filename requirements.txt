@@ -1,2 +1,2 @@
-# Rebuild marker: consolidated agent outcomes and verification
+# Rebuild marker: Economy 0.6 production and consumption
 -e .[app]

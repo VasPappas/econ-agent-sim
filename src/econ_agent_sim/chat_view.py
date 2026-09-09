@@ -33,7 +33,8 @@ def render_chat(run):
     period = run.period
     base_fingerprint = context_id(run.context())
     identity = base_fingerprint
-    valued_money = run.data.get("model") == "money_in_utility"
+    evolving = run.data.get("model") == "production_consumption"
+    valued_money = run.data.get("model") in ("money_in_utility", "production_consumption")
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
     if (st.session_state.get("economy04_chat_trade_identity") != identity
             or "economy04_chat_trade" not in st.session_state):
@@ -47,7 +48,7 @@ def render_chat(run):
         options,
         key="economy04_chat_trade",
         format_func=lambda i: (
-            "Whole run"
+            ("Whole period" if evolving else "Whole run")
         if i == -1
             else (
                 f"Trade {i + 1} of {len(period.trades)} · "
@@ -88,7 +89,7 @@ def render_chat(run):
         with st.expander("How was the price found?"):
             st.write("This version solves the clearing price directly; it does not simulate a price-adjustment path.")
             st.latex(r"p_X = \frac{\sum_i \alpha_i m_i^0}{\sum_i (1-\alpha_i)x_i^0}")
-            st.caption("α is preference for the good. Starting money and goods are m⁰ and x⁰. The price makes total desired X equal total available X.")
+            st.caption("α is preference for consumption. Here x⁰ includes this period's production; m⁰ is carried money. The price clears the market before consumption." if evolving else "α is preference for the good. Starting money and goods are m⁰ and x⁰. The price makes total desired X equal total available X.")
     else:
         render_price_history(period)
     render_conversation(context, history)

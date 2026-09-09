@@ -2,6 +2,8 @@
 
 
 def built_in_explanations(context):
+    if context.get("model") == "production_consumption":
+        return production_explanations(context)
     if context.get("model") == "money_in_utility":
         return money_explanations(context)
     price = context["prices"]["X"]
@@ -48,6 +50,60 @@ def built_in_explanations(context):
             f"The unit price is {trade['unit_price']:.4f}. "
             "Quantity × unit price gives the payment, allowing for rounding. "
             "These are the two legs of this trade only. Closing balances include all trades."
+        ), **answers}
+    return answers
+
+
+def production_explanations(context):
+    totals = context["period_totals"]
+    prior = context["previous_run"]
+    comparison = (f"Compared with Period {prior['number']}, the price changed "
+                  f"{context['price_x_change_percent']:+.2f}%. " if prior
+                  else "This is the first period of this simulation. ")
+    answers = {
+        "What happens each period?": (
+            "Opening balances carry over from the previous period. Agents produce their fixed "
+            "quantity of X, trade, then consume all X they hold. Money carries forward; goods "
+            "are not stored. Starting X is a one-time stock, not an amount restored each period. "
+            "Production is automatic: there is no work decision, wage, input cost or firm yet."
+        ),
+        "Where did the goods go?": (
+            f"{totals['opening']['X']:.4f} opening X + {totals['produced']['X']:.4f} produced "
+            f"− {totals['consumed']['X']:.4f} consumed = {totals['closing']['X']:.4f} remaining. "
+            "Trading redistributes goods; production adds them and consumption removes them. "
+            "Consumed goods provide this period's utility; they have not vanished through an accounting error."
+        ),
+        "Why did the price move?": (
+            f"X clears at {context['prices']['X']:.4f} Money per unit. {comparison}"
+            "The price uses available goods after production, carried money and consumption preferences. "
+            "These are successive periods under fixed settings, not independent experiments. "
+            "Prices can remain steady and trades can fade as balances adjust."
+        ),
+        "Why keep money instead of consuming more?": (
+            "Each period agents maximize consumption^α × final Money^(1−α). They value "
+            "money directly; they do not forecast future prices or optimize lifetime consumption. "
+            "α is the desired consumption share of total wealth, including the value of goods "
+            "available after production—not a fraction of starting cash spent. Money carries "
+            "forward, but the preference for holding it remains an explicit assumption."
+        ),
+        "Was money created?": (
+            f"Money: {totals['opening']['Money']:.4f} → {totals['closing']['Money']:.4f}. "
+            "Production creates goods, not money. Buyers pay sellers from existing balances. "
+            "There is no borrowing, banking, interest or money creation."
+        ),
+    }
+    if not context["trades"]:
+        answers = {"Why is there no trade?": (
+            "After production, each agent already holds their desired consumption quantity and "
+            "money balance at the clearing price. Production and consumption still happen. "
+            "In the baseline, each produces and consumes 1 X while retaining 1 Money."
+        ), **answers}
+    if trade := context.get("selected_trade"):
+        answers = {"Explain this trade": (
+            f"In {context['label']}, trade {trade['ordinal']}: {trade['seller']} sells "
+            f"{trade['quantity']:.4f} X to {trade['buyer']} for {trade['payment']:.4f} Money. "
+            "Both agents then consume all their post-trade X. The receipt describes this "
+            "exchange only; period closing stocks also include production and consumption."
         ), **answers}
     return answers
 

@@ -55,6 +55,10 @@ summary:focus-visible, select:focus-visible, a:focus-visible { outline: 3px soli
 .agent-transaction { padding: 8px 0; font-size: 14px; }
 .agent-transaction + .agent-transaction { border-top: 1px solid var(--line); }
 .agent-transaction p, .technical-body p { margin: 6px 0; }
+.period-flow { padding: 8px 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+.period-flow p { margin: 5px 0; }
+.period-accounting { padding: 12px 0; font-size: 14px; }
+.period-accounting p { margin: 0 0 8px; }
 .technical { margin-top: 12px; }
 .technical-body { color: var(--muted); font-size: 12px; padding: 0 0 10px; }
 .muted { color: var(--muted); font-size: 14px; }

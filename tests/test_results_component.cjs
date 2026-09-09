@@ -76,3 +76,39 @@ assert.equal(root.querySelectorAll('p').some(n=>String(n.textContent).includes('
 assert(root.querySelector('.boundary').textContent.includes('No borrowing'));
 assert(!decodeURIComponent(root.querySelector('.download').href).includes('"Y"'));
 console.log('One-good result has only X and Money, with the correct model boundary.');
+
+data.model='production_consumption'; data.label='Period 2';
+data.prices={X:2/3,Money:1};
+data.agents=[
+  {name:'Agent 1',opening:{X:2,Money:1},closing:{X:1.75,Money:7/6}},
+  {name:'Agent 2',opening:{X:1,Money:1},closing:{X:1.25,Money:5/6}},
+];
+data.trades=[{seller:'Agent 1',buyer:'Agent 2',good:'X',quantity:.25,payment:1/6,unit_price:2/3}];
+data.totals={opening:{X:3,Money:2},closing:{X:3,Money:2}};
+data.period_opening={'Agent 1':{X:0,Money:1},'Agent 2':{X:0,Money:1}};
+data.period_closing={'Agent 1':{X:0,Money:7/6},'Agent 2':{X:0,Money:5/6}};
+data.produced={'Agent 1':2,'Agent 2':1};
+data.consumed={'Agent 1':1.75,'Agent 2':1.25};
+data.period_totals={opening:{X:0,Money:2},produced:{X:3,Money:0},consumed:{X:3,Money:0},closing:{X:0,Money:2}};
+data.period_checks={goods:true,money:true,accounts:true};
+context.render({data,parentElement:host});
+assert.equal(root.querySelectorAll('.period-flow').length,2);
+assert(root.querySelectorAll('strong').some(n=>n.textContent==='Consumed 1.75 X'));
+assert.equal(root.querySelectorAll('.outcome-row').length,2);
+assert(root.querySelector('.period-accounting').querySelector('p').textContent.includes('0.00 opening + 3.00 produced − 3.00 consumed = 0.00 remaining'));
+const csv=decodeURIComponent(root.querySelector('.download').href);
+assert(csv.includes('"opening","produced","received","sent","consumed","closing"'));
+assert(csv.includes('"Period 2","Agent 1","X","0","2","0","0.25","1.75","0"'));
+data.period_checks.accounts=false;
+context.render({data,parentElement:host});
+assert(root.querySelector('.failure'));
+data.period_checks.accounts=true;
+data.checks.accounts=false;
+context.render({data,parentElement:host});
+assert(root.querySelector('.failure'));
+data.checks.accounts=true;
+data.trades=[];
+context.render({data,parentElement:host});
+assert(root.querySelectorAll('p').some(n=>n.textContent==='0 trades · see production and consumption above.'));
+assert(!root.querySelectorAll('p').some(n=>String(n.textContent).includes('starting balances unchanged')));
+console.log('Production flows, period CSV, scoped receipts, and combined checks passed.');
