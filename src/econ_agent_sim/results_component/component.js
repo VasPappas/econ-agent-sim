@@ -2,7 +2,8 @@
 export default function render({ data, parentElement }) {
   const root = parentElement.querySelector('.results-root');
   const assets = data.assets || ['X', 'Y', 'Money'];
-  const evolving = data.model === 'production_consumption';
+  const working = data.model === 'work_leisure';
+  const evolving = data.model === 'production_consumption' || working;
   const valuedMoney = data.model === 'money_in_utility' || evolving;
   const fmt = (n, places = 2) => Number(n).toLocaleString('en-US', {
     minimumFractionDigits: places, maximumFractionDigits: places,
@@ -25,7 +26,7 @@ export default function render({ data, parentElement }) {
   const signed = n => Math.abs(n) < 1e-10 ? fmt(0) : `${n > 0 ? '+' : ''}${fmt(n)}`;
   const priceX = data.prices.X;
   const previousPrice = data.previous_run?.prices.X ?? null;
-  const checksPassed = [...Object.values(data.checks), ...Object.values(data.period_checks || {})].every(Boolean);
+  const checksPassed = [...Object.values(data.checks), ...Object.values(data.period_checks || {}), ...Object.values(data.work_checks || {})].every(Boolean);
 
   const movements = Object.fromEntries(data.agents.map(agent => [
     agent.name,
@@ -41,7 +42,7 @@ export default function render({ data, parentElement }) {
   root.replaceChildren();
   const shell = el('section', 'results');
   shell.setAttribute('aria-label', 'Monetary economy result');
-  shell.append(el('div', 'topline', `${evolving ? 'Produce · trade · consume' : valuedMoney ? 'One good + money' : 'Money'} · ${data.settings.agent_count} agents`));
+  shell.append(el('div', 'topline', `${working ? 'Work · trade · consume' : evolving ? 'Produce · trade · consume' : valuedMoney ? 'One good + money' : 'Money'} · ${data.settings.agent_count} agents`));
 
   const title = !data.trades.length ? 'No trade needed.'
     : previousPrice === null ? 'Your market result.'
@@ -51,7 +52,7 @@ export default function render({ data, parentElement }) {
   shell.append(el('p', 'intro', evolving ? 'See what agents produced, consumed, and carried into the next period.' : 'See the price, then compare what every agent started and finished with.'));
 
   const receipt = el('div', 'run-receipt');
-  receipt.append(el('span', 'eyebrow', data.label), el('p', '', evolving ? 'Production → trade → consumption → carry money forward' : `${data.label} · submitted setup`));
+  receipt.append(el('span', 'eyebrow', data.label), el('p', '', working ? 'Choose work → produce → trade → consume' : evolving ? 'Production → trade → consumption → carry money forward' : `${data.label} · submitted setup`));
   shell.append(receipt);
 
   const price = el('div', 'price-panel');
@@ -83,6 +84,12 @@ export default function render({ data, parentElement }) {
   for (const agent of data.agents) {
     const card = el('article', 'outcome-card');
     card.append(agentHeading('h4', agent));
+    if (working) {
+      const time = el('div', 'work-time');
+      time.append(el('strong', '', `Work ${fmt(100 * data.effort[agent.name], 1)}%`),
+        el('span', '', `Leisure ${fmt(100 * data.leisure_time[agent.name], 1)}%`));
+      card.append(time);
+    }
     for (const asset of assets) {
       if (evolving && asset === 'X') {
         const flow = el('div', 'period-flow');
@@ -146,6 +153,12 @@ export default function render({ data, parentElement }) {
     conservation.append(row);
   }
   accountBody.append(conservation);
+  if (working) {
+    const valid = Object.values(data.work_checks).every(Boolean);
+    accountBody.append(el('p', valid ? 'pass' : 'fail', valid
+      ? '✓ Time budgets and optimal work choices verified at the clearing price.'
+      : 'Work choices or time budgets need attention.'));
+  }
 
   const technical = el('details', 'technical');
   technical.append(el('summary', '', 'Technical details'));
@@ -157,15 +170,19 @@ export default function render({ data, parentElement }) {
     el('p', '', `Ledger · ${data.trades.length} ${data.trades.length === 1 ? 'trade' : 'trades'} · ${data.trades.length * 2} transfer legs`),
     el('p', 'muted', 'Balances use 2 decimal places; prices and receipts use 4. Calculations and the CSV retain full precision. Rounded amounts may not add up exactly.'),
   );
+  if (working) technicalBody.append(el('p', '', `Joint work/price solution · ${data.solution.active_set_passes} active-set passes · ${data.solution.resting_agents} agents chose no work`));
   technical.append(technicalBody); accountBody.append(technical);
 
   const csvRows = [evolving ? ['period', 'agent', 'asset', 'opening', 'produced', 'received', 'sent', 'consumed', 'closing'] : ['agent', 'asset', 'start', 'received', 'sent', 'final']];
+  if (working) csvRows[0].push('work_fraction', 'leisure_fraction', 'productivity_x_per_full_work_period');
   for (const agent of data.agents) for (const asset of assets) {
     const flow = movements[agent.name][asset];
     csvRows.push(evolving ? [data.label, agent.name, asset, raw(data.period_opening[agent.name][asset]),
       raw(asset === 'X' ? data.produced[agent.name] : 0), raw(flow.received), raw(flow.sent),
       raw(asset === 'X' ? data.consumed[agent.name] : 0), raw(data.period_closing[agent.name][asset])]
       : [agent.name, asset, raw(agent.opening[asset]), raw(flow.received), raw(flow.sent), raw(agent.closing[asset])]);
+    if (working) csvRows[csvRows.length - 1].push(raw(data.effort[agent.name]),
+      raw(data.leisure_time[agent.name]), raw(data.settings.agents.find(a => a.name === agent.name).productivity));
   }
   const csv = csvRows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
   const download = el('a', 'download', 'Download full-precision accounts (CSV)');

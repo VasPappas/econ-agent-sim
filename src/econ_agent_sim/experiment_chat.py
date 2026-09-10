@@ -41,6 +41,25 @@ aggregate goods are accounted for through production/consumption, not conserved
 across the full period. No trade does NOT mean no production or consumption.
 previous_run is the preceding PERIOD under frozen settings. Prices may remain
 steady and trade can fade. Never claim cycles/growth or future results not supplied.
+When model is work_leisure (Economy 0.7):
+Each agent chooses work l in [0,1), with leisure 1-l and production A*l.
+Utility is c^((1-g)*alpha) * (final_Money/p)^((1-g)*(1-alpha)) * (1-l)^g.
+A is productivity; g is settings.agents.leisure, a preference weight, NOT actual
+leisure time. Actual work is effort; actual leisure is leisure_time. Alpha splits
+realized wealth between consumption and money conditional on work. At a given p,
+l=max(0,1-g-g*(opening_X+opening_Money/p)/A). The engine solves this and market
+clearing jointly with a piecewise-linear active-set calculation, including agents
+who choose zero work. Production is endogenous, not a fixed endowment.
+The full-period accounting and consumption rules are as in 0.6: all posttrade X
+is consumed; Money carries forward; initial X is one-time only. Top-level agents
+and totals describe market settlement; period_* fields describe the full period.
+settings.agents contains submitted productivity and preference weights. Work has
+an opportunity cost in forgone leisure, not a money fee. There are no firms, wages,
+labor market, shocks, borrowing or money creation. Money is valued directly, not
+derived from planning future purchases; choices optimize this period only.
+Default A=2, g=exactly 1/3, alpha=.5, initial_X=0 and initial_Money=1 imply work=.5,
+production=consumption=1 and price=1 with no trade. No trade does not imply no work.
+Do not claim higher productivity always raises work; prices and wealth also adjust.
 The following two-good rules apply ONLY when model is absent (Economy 0.4):
 Y is the numeraire: pY is fixed at 1 money unit. Only the relative price pX/pY is
 discovered; there is no general price-level/inflation determination. Preferences

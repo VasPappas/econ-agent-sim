@@ -2,6 +2,8 @@
 
 
 def built_in_explanations(context):
+    if context.get("model") == "work_leisure":
+        return work_explanations(context)
     if context.get("model") == "production_consumption":
         return production_explanations(context)
     if context.get("model") == "money_in_utility":
@@ -106,6 +108,56 @@ def production_explanations(context):
             "exchange only; period closing stocks also include production and consumption."
         ), **answers}
     return answers
+
+
+def work_explanations(context):
+    answers = production_explanations(context)
+    answers["What happens each period?"] = (
+        "Agents choose work and keep the rest of their time for leisure. Productivity × work "
+        "gives their output of X. They trade, consume all post-trade X, and carry money forward. "
+        "Starting X is supplied only once. Work and the clearing price are solved together, "
+        "not chosen in separate unrelated steps. Agents work for themselves: no employer, "
+        "wage or monetary production cost is modeled. Work costs leisure."
+    )
+    prior = context["previous_run"]
+    comparison = (f"Compared with Period {prior['number']}, the price changed "
+                  f"{context['price_x_change_percent']:+.2f}%. " if prior
+                  else "This is the first period. ")
+    answers["Why did the price move?"] = (
+        f"X clears at {context['prices']['X']:.4f} Money per unit. {comparison}"
+        "The price balances consumption demand with opening goods plus chosen production. "
+        "Carried money affects both demand and willingness to work. Productivity and both "
+        "preferences matter too. Higher productivity does not necessarily mean more work: "
+        "agents may choose more leisure, and prices also adjust. Successive periods use "
+        "the same submitted settings; only carried balances and resulting choices change."
+    )
+    answers["Why keep money instead of consuming more?"] = (
+        "Agents value consumption, real final money (Money divided by the price of X), "
+        "and leisure through Cobb–Douglas utility. Once work is chosen, α is the share of "
+        "realized wealth allocated to consumption; 1−α is kept as money. This is not a "
+        "share of initial cash spent. Money is valued directly as an assumption: agents "
+        "do not forecast prices or optimize consumption over future periods."
+    )
+    if not context["trades"]:
+        answers["Why is there no trade?"] = (
+            "At the clearing price, each agent's opening goods plus chosen output already "
+            "match their desired consumption, and their money already matches their desired "
+            "holding. No exchange is needed. Work and consumption can still happen. In the "
+            "default baseline, each works 50%, produces and consumes 1 X, and keeps 1 Money."
+        )
+    choices = " ".join(
+        f"{agent['name']}: work {100 * context['effort'][agent['name']]:.1f}%, "
+        f"leisure {100 * context['leisure_time'][agent['name']]:.1f}%, "
+        f"output {context['produced'][agent['name']]:.4f} X."
+        for agent in context["agents"]
+    )
+    return {"Why did agents choose this much work?": (
+        f"{choices} Each agent balances the benefit of more goods and money against "
+        "giving up leisure, taking the market price as given. An agent with enough existing "
+        "resources can optimally choose no work. Leisure preference γ is a utility weight, "
+        "not the fraction of time spent resting. The baseline uses γ = exactly ⅓; together "
+        "with productivity 2 and equal consumption/money preference, this yields 50% work."
+    ), **answers}
 
 
 def money_explanations(context):

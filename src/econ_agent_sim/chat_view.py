@@ -33,8 +33,9 @@ def render_chat(run):
     period = run.period
     base_fingerprint = context_id(run.context())
     identity = base_fingerprint
-    evolving = run.data.get("model") == "production_consumption"
-    valued_money = run.data.get("model") in ("money_in_utility", "production_consumption")
+    working = run.data.get("model") == "work_leisure"
+    evolving = run.data.get("model") == "production_consumption" or working
+    valued_money = run.data.get("model") == "money_in_utility" or evolving
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
     if (st.session_state.get("economy04_chat_trade_identity") != identity
             or "economy04_chat_trade" not in st.session_state):
@@ -85,7 +86,12 @@ def render_chat(run):
     for title, explanation in built_in_explanations(context).items():
         with st.expander(title):
             st.write(explanation)
-    if valued_money:
+    if working:
+        with st.expander("How were work and price found?"):
+            st.write("The model solves work choices and market clearing together. It checks which agents choose zero work, then solves the corresponding linear equation in 1/p. This is not a simulated price-adjustment path.")
+            st.latex(r"\ell_i=\max\left(0,\;1-\gamma_i-\frac{\gamma_i}{A_i}\left(x_i^0+\frac{m_i^0}{p}\right)\right)")
+            st.caption("ℓ is work time; γ is leisure preference; A is productivity. Opening X and Money are x⁰ and m⁰. Production is A × ℓ. The price makes total desired consumption equal opening X plus production.")
+    elif valued_money:
         with st.expander("How was the price found?"):
             st.write("This version solves the clearing price directly; it does not simulate a price-adjustment path.")
             st.latex(r"p_X = \frac{\sum_i \alpha_i m_i^0}{\sum_i (1-\alpha_i)x_i^0}")

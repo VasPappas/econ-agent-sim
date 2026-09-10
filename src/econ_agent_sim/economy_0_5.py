@@ -2,7 +2,7 @@
 
 from dataclasses import asdict, dataclass
 from functools import cached_property
-from math import fsum, isclose
+from math import fsum, isclose, ulp
 
 from econ_agent_sim.economy_0_4 import MonetaryTrade, MonetaryTransaction
 from econ_agent_sim.numerics import require_finite
@@ -70,8 +70,9 @@ def run_money_economy(population: tuple[MoneyAgent, ...]) -> MoneyResult:
         desired[a.name] = {"X": a.alpha * wealth / price, "Money": (1 - a.alpha) * wealth}
         require_finite("Desired balances", *desired[a.name].values())
     closing = {name: dict(stocks) for name, stocks in opening.items()}
-    # Large economies must not discard a small agent's meaningful demand.
-    epsilon = min(1e-12 * total_x, 1e-12)
+    # Bound omitted settlement dust in both goods and money, including high
+    # prices where a tiny quantity of X can represent a meaningful cash payment.
+    epsilon = min(1e-12 * total_x, 1e-12, 1e-12 / price)
     buyers, sellers = [], []
     for a in population:
         net = desired[a.name]["X"] - a.x
@@ -109,7 +110,13 @@ def run_money_economy(population: tuple[MoneyAgent, ...]) -> MoneyResult:
     # Reconstruct ledger independently of mutable settlement balances.
     for row in account_rows(result):
         assert matches(row["opening"] + row["net flow"], row["closing"]), "Ledger mismatch"
-        assert matches(row["closing"], desired[row["agent"]][row["asset"]]), "Unsettled demand"
+        # A small closing balance can result from subtracting large transfers.
+        # Counterparties can pass their cancellation error to a small buyer, so
+        # bound accumulated roundoff at the whole market's scale for this asset.
+        scale = total_x if row["asset"] == "X" else total_m
+        rounding = 4 * (len(trades) + 1) * ulp(scale)
+        assert isclose(row["closing"], desired[row["agent"]][row["asset"]],
+                       rel_tol=TOLERANCE, abs_tol=max(1e-10, rounding)), "Unsettled demand"
         assert row["closing"] >= 0, "Borrowing is not allowed"
         require_finite("Final balance", row["closing"])
     for asset in ASSETS:

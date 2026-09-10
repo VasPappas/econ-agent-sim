@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.6 production and consumption
+# Rebuild marker: Economy 0.7 work and leisure
 -e .[app]

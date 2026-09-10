@@ -55,6 +55,7 @@ summary:focus-visible, select:focus-visible, a:focus-visible { outline: 3px soli
 .agent-transaction { padding: 8px 0; font-size: 14px; }
 .agent-transaction + .agent-transaction { border-top: 1px solid var(--line); }
 .agent-transaction p, .technical-body p { margin: 6px 0; }
+.work-time { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .75rem 0; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
 .period-flow { padding: 8px 0; font-size: 15px; font-variant-numeric: tabular-nums; }
 .period-flow p { margin: 5px 0; }
 .period-accounting { padding: 12px 0; font-size: 14px; }
