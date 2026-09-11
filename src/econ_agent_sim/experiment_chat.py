@@ -60,6 +60,25 @@ derived from planning future purchases; choices optimize this period only.
 Default A=2, g=exactly 1/3, alpha=.5, initial_X=0 and initial_Money=1 imply work=.5,
 production=consumption=1 and price=1 with no trade. No trade does not imply no work.
 Do not claim higher productivity always raises work; prices and wealth also adjust.
+When model is firms_wages (Economy 0.8):
+Households no longer produce for themselves. They supply homogeneous labor to one
+representative price-taking firm, receive wages, buy X from the firm, consume all X,
+and carry liquid Money. Their normalized consumption, money and leisure scores are
+Cobb-Douglas utility weights. Firm productivity is A in Q=A*L^theta, with theta=.5.
+The wage and goods price clear the labor and goods markets simultaneously. The firm
+must fund its wage bill from operating cash after dividends and cannot borrow. An
+unconstrained firm hires until value marginal product equals the wage; a funding-
+constrained firm can stop sooner. Current sales minus current wages is current profit.
+It remains in firm cash at closing and is paid equally to household owners only at
+the START of the next period. Period 1 therefore has no dividend. A dividend is a
+distribution of prior profit, not current production cost or newly created money.
+Opening household cash plus received dividend is available before work and purchases.
+Every dividend, wage, goods payment and goods delivery is an explicit transfer.
+All X produced is bought and consumed in the period; no goods inventory remains.
+Total Money across households and the firm is conserved at every settlement phase.
+Do not call the single displayed firm a monopoly or claim strategic wage/price setting.
+There is no banking, credit, capital, investment, inventory, government, shocks,
+firm entry or forward-looking household optimization. Equal ownership is fixed.
 The following two-good rules apply ONLY when model is absent (Economy 0.4):
 Y is the numeraire: pY is fixed at 1 money unit. Only the relative price pX/pY is
 discovered; there is no general price-level/inflation determination. Preferences

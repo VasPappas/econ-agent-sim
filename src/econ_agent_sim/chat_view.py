@@ -33,8 +33,9 @@ def render_chat(run):
     period = run.period
     base_fingerprint = context_id(run.context())
     identity = base_fingerprint
+    firms_wages = run.data.get("model") == "firms_wages"
     working = run.data.get("model") == "work_leisure"
-    evolving = run.data.get("model") == "production_consumption" or working
+    evolving = run.data.get("model") == "production_consumption" or working or firms_wages
     valued_money = run.data.get("model") == "money_in_utility" or evolving
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
     if (st.session_state.get("economy04_chat_trade_identity") != identity
@@ -43,19 +44,24 @@ def render_chat(run):
         st.session_state.economy04_chat_trade_identity = identity
     if st.session_state.get("economy04_chat_trade") is None:
         st.session_state.economy04_chat_trade = -1
-    options = [-1, *range(len(period.trades))]
+    focus_items = period.transfers if firms_wages else period.trades
+    options = [-1, *range(len(focus_items))]
+
+    def focus_label(index):
+        if index == -1:
+            return "Whole period" if evolving else "Whole run"
+        if firms_wages:
+            transfer = focus_items[index]
+            kind = transfer.kind.replace("_", " ").title()
+            return f"{kind} {index + 1} of {len(focus_items)} · {transfer.sender} → {transfer.receiver}"
+        trade = focus_items[index]
+        return f"Trade {index + 1} of {len(focus_items)} · {trade.seller} → {trade.buyer}"
+
     trade_index = st.selectbox(
         "Focus",
         options,
         key="economy04_chat_trade",
-        format_func=lambda i: (
-            ("Whole period" if evolving else "Whole run")
-        if i == -1
-            else (
-                f"Trade {i + 1} of {len(period.trades)} · "
-                f"{period.trades[i].seller} → {period.trades[i].buyer}"
-            )
-        ),
+        format_func=focus_label,
     )
     saved_focus[base_fingerprint] = trade_index
     while len(saved_focus) > 12:
@@ -74,11 +80,14 @@ def render_chat(run):
     st.session_state.economy04_chat_context = fingerprint
     st.session_state.economy04_chat_messages = history
     st.session_state.setdefault("economy04_chat_session", str(uuid4()))
+    population = period.households if firms_wages else period.population
     with st.container(border=True):
         st.markdown(
-            f"**{context['label']}** · {len(period.population)} agents · "
+            f"**{context['label']}** · {len(population)} "
+            f"{'households' if firms_wages else 'agents'} · "
             f"X price **{period.prices['X']:.4f}** · "
-            + ("Money is valued" if valued_money else "Y fixed at **1**")
+            + (f"wage **{period.wage:.4f}**" if firms_wages
+               else "Money is valued" if valued_money else "Y fixed at **1**")
         )
         st.caption("Your conversation stays with this run and trade focus.")
     st.markdown("**Explore the explanation**")
@@ -91,12 +100,12 @@ def render_chat(run):
             st.write("The model solves work choices and market clearing together. It checks which agents choose zero work, then solves the corresponding linear equation in 1/p. This is not a simulated price-adjustment path.")
             st.latex(r"\ell_i=\max\left(0,\;1-\gamma_i-\frac{\gamma_i}{A_i}\left(x_i^0+\frac{m_i^0}{p}\right)\right)")
             st.caption("ℓ is work time; γ is leisure preference; A is productivity. Opening X and Money are x⁰ and m⁰. Production is A × ℓ. The price makes total desired consumption equal opening X plus production.")
-    elif valued_money:
+    elif valued_money and not firms_wages:
         with st.expander("How was the price found?"):
             st.write("This version solves the clearing price directly; it does not simulate a price-adjustment path.")
             st.latex(r"p_X = \frac{\sum_i \alpha_i m_i^0}{\sum_i (1-\alpha_i)x_i^0}")
             st.caption("α is preference for consumption. Here x⁰ includes this period's production; m⁰ is carried money. The price clears the market before consumption." if evolving else "α is preference for the good. Starting money and goods are m⁰ and x⁰. The price makes total desired X equal total available X.")
-    else:
+    elif not firms_wages:
         render_price_history(period)
     render_conversation(context, history)
 

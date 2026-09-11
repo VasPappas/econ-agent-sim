@@ -2,6 +2,8 @@
 
 
 def built_in_explanations(context):
+    if context.get("model") == "firms_wages":
+        return firm_explanations(context)
     if context.get("model") == "work_leisure":
         return work_explanations(context)
     if context.get("model") == "production_consumption":
@@ -53,6 +55,75 @@ def built_in_explanations(context):
             "Quantity × unit price gives the payment, allowing for rounding. "
             "These are the two legs of this trade only. Closing balances include all trades."
         ), **answers}
+    return answers
+
+
+def firm_explanations(context):
+    """Explain Economy 0.8 from the settled period's own accounts."""
+    price = context["prices"]["X"]
+    wage = context["wage"]
+    output = context["output"]
+    profit = context["profit"]
+    prior = context.get("previous_run")
+    total_dividends = sum(context["dividends"].values())
+    total_wages = sum(context["wages"].values())
+    firm = context["firm"]
+    choices = " ".join(
+        f"{household['name']}: work {100 * context['work'][household['name']]:.1f}% "
+        f"and leisure {100 * context['leisure_time'][household['name']]:.1f}%."
+        for household in context["households"]
+    )
+    answers = {
+        "What happens each period?": (
+            "The firm first distributes the previous period's profit to its equal owners. "
+            "Households then choose labor, consumption and liquid money while the wage and "
+            "goods price clear both markets. The firm pays funded wages, produces X, sells "
+            "all of it, and keeps current profit for distribution at the start of the next "
+            "period. Goods are consumed; money carries forward."
+        ),
+        "How were the wage and price found?": (
+            f"The wage is {wage:.4f} Money per full unit of work and X costs {price:.4f} "
+            f"Money per unit. At those values, households supply exactly the labor the firm "
+            f"hires and demand all {output:.4f} X it produces. The firm takes both prices as "
+            "given. It hires until value marginal product equals the wage, unless its funded "
+            "wage budget binds first."
+        ),
+        "Why did households work this much?": (
+            f"{choices} Each household balances consumption and final purchasing power "
+            "against forgone leisure. The three submitted scores are normalized into relative "
+            "utility weights; they are not prescribed percentages of time or cash. A household "
+            "with sufficient cash can optimally choose no work."
+        ),
+        "Where did the profit go?": (
+            f"This period the firm received {firm['sales_received']:.4f} Money in sales, paid "
+            f"{total_wages:.4f} in wages and earned {profit:.4f} in current profit. It remains "
+            "in the firm's closing cash and is paid to owners only at the start of the next "
+            f"period. Dividends paid now were {total_dividends:.4f}; they came from the prior "
+            f"period{'s profit' if prior else '—there was none in Period 1'}."
+        ),
+        "Was any money created?": (
+            f"Total Money is {context['totals']['opening']['Money']:.4f} at opening and "
+            f"{context['totals']['closing']['Money']:.4f} at closing. Dividends, wages and "
+            "purchases are transfers among households and the firm. Production creates X, "
+            "not Money; the firm cannot borrow or overdraw."
+        ),
+        "Why is there only one firm?": (
+            "The displayed firm is a representative price-taking producer—an educational "
+            "aggregation, not a strategic monopoly or monopsony. This chapter isolates labor, "
+            "wages, production, profit and ownership before adding competing firms, capital, "
+            "credit or entry."
+        ),
+    }
+    if transfer := context.get("selected_transfer"):
+        answers = {
+            "Explain this transfer": (
+                f"This {transfer['kind'].replace('_', ' ')} moves "
+                f"{transfer['quantity']:.4f} {transfer['asset']} from "
+                f"{transfer['sender']} to {transfer['receiver']}. It is one physical ledger "
+                "leg; closing accounts include every transfer and the period's consumption."
+            ),
+            **answers,
+        }
     return answers
 
 

@@ -54,6 +54,17 @@ Money is deliberately passive at this stage: it does not enter Cobb-Douglas util
 
 Read [`docs/economies/economy_0_4.md`](docs/economies/economy_0_4.md).
 
+## Economy 0.8 — Firms and wages
+
+Economy 0.8 separates households from production. Households choose labor,
+consumption, liquid money and leisure; one representative price-taking firm hires
+labor and produces X with decreasing returns. Wages must be funded from the firm's
+cash, and realized profit is distributed equally to household owners at the start
+of the following period. Every wage, purchase, goods delivery and dividend remains
+an explicit ledger transfer.
+
+Read [`docs/economies/economy_0_8_design.md`](docs/economies/economy_0_8_design.md).
+
 ## Hosted browser app
 
 Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
