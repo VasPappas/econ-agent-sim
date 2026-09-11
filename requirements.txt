@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.8 firms and wages
+# Rebuild marker: Economy 0.8 firm production and sales
 -e .[app]
