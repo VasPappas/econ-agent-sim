@@ -118,6 +118,7 @@ def test_work_resize_chat_and_history_limit():
     assert app.session_state.work_report_scope == "Cumulative"
     assert any("Cumulative from Period 1 through Period 1" in item.value
                for item in app.caption)
+    assert all(item.label != "Timeline" for item in app.expander)
     app.session_state.work_history = [app.session_state.work_history[0]] * 100
     app.run()
     assert button(app, "Next period").disabled

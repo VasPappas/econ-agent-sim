@@ -93,10 +93,13 @@ st.page_link("streamlit_app.py", label="← Explore economies")
 if target := st.session_state.pop("work_next_view", None):
     st.session_state.work_view = target
 with st.container(key="economy04_mobile_nav"):
-    view = st.pills("View", options=("Set up", "Results", "Ask why"), required=True,
-                    key="work_view", label_visibility="collapsed", width="stretch")
-st.button("Reset", on_click=reset, width="stretch",
-          help="Restore equal priorities and clear this simulation’s history.")
+    view_column, reset_column = st.columns([4, 1], gap="small", vertical_alignment="center")
+    with view_column:
+        view = st.pills("View", options=("Set up", "Results", "Ask why"), required=True,
+                        key="work_view", label_visibility="collapsed", width="stretch")
+    with reset_column:
+        st.button("Reset", on_click=reset, width="stretch",
+                  help="Restore equal priorities and clear this simulation’s history.")
 if notice := st.session_state.pop("work_notice", None):
     st.success(notice)
 if st.session_state.work_error:
@@ -174,12 +177,5 @@ else:
             tuple(history[:selected]), cumulative=report_scope == "Cumulative"
         )
         render_results(result_data)
-        with st.expander("Timeline"):
-            st.dataframe([{"Period": period.number, "X price": period.market.prices["X"],
-                           "Produced X": fsum(period.produced.values()),
-                           "Consumed X": fsum(period.consumed.values()),
-                           "Average work (%)": 100 * fsum(period.effort.values()) / len(period.population),
-                           "Money": fsum(s["Money"] for s in period.closing_stocks.values())}
-                          for period in history], hide_index=True, width="stretch")
     else:
         render_chat(submitted)
