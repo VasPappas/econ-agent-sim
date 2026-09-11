@@ -22,7 +22,9 @@ def test_work_draft_navigation_history_and_restart():
     app = open_app()
     assert not app.exception
     assert not app.session_state.work_history
-    assert app.number_input(key="work_leisure_0").value == 1 / 3
+    assert app.number_input(key="work_consume_priority_0").value == 1
+    assert app.number_input(key="work_money_priority_0").value == 1
+    assert app.number_input(key="work_leisure_priority_0").value == 1
     button(app, "Start new simulation").click().run()
     assert not app.exception
     first = app.session_state.work_history[0]
@@ -32,7 +34,7 @@ def test_work_draft_navigation_history_and_restart():
     app.session_state.work_view = "Set up"
     app.run()
     app.number_input(key="work_productivity_0").set_value(3.0).run()
-    app.number_input(key="work_leisure_0").set_value(.6).run()
+    app.number_input(key="work_leisure_priority_0").set_value(3.0).run()
     app.session_state.work_view = "Results"
     app.run()
     button(app, "Next period").click().run()
@@ -50,7 +52,7 @@ def test_work_draft_navigation_history_and_restart():
     app.session_state.work_view = "Set up"
     app.run()
     assert app.number_input(key="work_productivity_0").value == 3
-    assert app.number_input(key="work_leisure_0").value == .6
+    assert app.number_input(key="work_leisure_priority_0").value == 3
     app.session_state.work_view = "Results"
     app.run()
     assert app.selectbox(key="work_selected").value == 1
@@ -91,16 +93,16 @@ def test_work_failed_start_next_and_reset_preserve_other_economies():
     assert app.number_input(key="work_money_0").value == 1
     assert app.number_input(key="work_x_0").value == 0
     assert app.number_input(key="work_productivity_0").value == 2
-    assert app.number_input(key="work_leisure_0").value == 1 / 3
+    assert app.number_input(key="work_leisure_priority_0").value == 1
     assert app.session_state.prod_user_marker == "preserve other economy"
 
 
 def test_work_resize_chat_and_history_limit():
     app = open_app()
-    app.number_input(key="work_leisure_0").set_value(.6).run()
+    app.number_input(key="work_leisure_priority_0").set_value(3.0).run()
     app.number_input(key="work_count").set_value(3).run()
-    assert app.number_input(key="work_leisure_0").value == .6
-    assert app.number_input(key="work_leisure_2").value == 1 / 3
+    assert app.number_input(key="work_leisure_priority_0").value == 3
+    assert app.number_input(key="work_leisure_priority_2").value == 1
     app.number_input(key="work_count").set_value(2).run()
     assert len(app.session_state.work_agents) == 2
     button(app, "Start new simulation").click().run()
@@ -122,3 +124,14 @@ def test_work_resize_chat_and_history_limit():
     app.session_state.work_history = [app.session_state.work_history[0]] * 100
     app.run()
     assert button(app, "Next period").disabled
+
+
+def test_direct_priority_scores_are_normalized_into_model_weights():
+    app = open_app()
+    app.number_input(key="work_consume_priority_0").set_value(3.0).run()
+    button(app, "Start new simulation").click().run()
+    agent = app.session_state.work_submitted[0]
+    assert agent.alpha == pytest.approx(.75)
+    assert agent.leisure == pytest.approx(.2)
+    assert (1 - agent.leisure) * agent.alpha == pytest.approx(.6)
+    assert (1 - agent.leisure) * (1 - agent.alpha) == pytest.approx(.2)

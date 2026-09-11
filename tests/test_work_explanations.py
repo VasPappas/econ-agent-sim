@@ -28,7 +28,7 @@ def test_work_explanations_cover_actual_choices_without_fixed_output_claims():
     baseline = advance_work_period((WorkAgent("A"), WorkAgent("B")))
     baseline_answers = built_in_explanations(WorkRun(baseline, None, 1).context())
     assert "works 50%" in baseline_answers["Why is there no trade?"]
-    assert "exactly ⅓" in baseline_answers["Why did agents choose this much work?"]
+    assert "Equal priority scores" in baseline_answers["Why did agents choose this much work?"]
 
 
 def test_twenty_agent_work_context_fits_tutor_and_keeps_actual_period_data(tmp_path):

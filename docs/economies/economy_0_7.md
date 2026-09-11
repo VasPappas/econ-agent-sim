@@ -21,6 +21,13 @@ consumption and money; it is not consumption's share of all three priorities.
 Money balances are divided by the current goods price, so utility values real
 balances. This does not introduce expectations of future prices or future utility.
 
+The setup UI does not expose this two-stage parameterization. Users give three
+positive relative scores for consuming X, keeping money and enjoying leisure.
+If those scores are `C`, `M` and `L`, the displayed Cobb–Douglas weights are
+`C/(C+M+L)`, `M/(C+M+L)` and `L/(C+M+L)`. Internally,
+`alpha=C/(C+M)` and `g=L/(C+M+L)`. Multiplying every score by the same number
+does not change behavior, so the scores never need to total 100.
+
 At a price the agent takes as given, the constraints are
 `p*c + m = m0 + p*(x0 + A*l)`, `0 <= l < 1`, with nonnegative holdings.
 Let `e=x0+m0/p`. The optimal choices are
@@ -65,7 +72,7 @@ sufficient for the agent's optimum at the given price.
 Two identical agents start with zero X, one Money, productivity 2, `alpha=1/2`
 and `g=1/3`. Each chooses work 1/2 and leisure 1/2, produces and consumes one X,
 retains one Money, and trades nothing at price 1. This repeats across periods.
-The exact leisure weight is 1/3; rounding its label does not change the model.
+In the UI this is the transparent `1 : 1 : 1` priority baseline.
 
 Higher leisure preference reduces work at a fixed price. Higher productivity
 raises work weakly at a fixed price in this particular specification, while also
@@ -95,8 +102,9 @@ The Results view provides the same compact reporting structure for the whole
 economy and each agent. A balance sheet compares opening and closing X and Money.
 An activity statement reports production, consumption, X traded, money received
 and paid, net trading cash flow, and work/leisure time. Agent cards also disclose
-the submitted `alpha`, leisure weight and productivity, alongside their three
-derived Cobb–Douglas weights.
+the three normalized Cobb–Douglas priority weights and full-effort productivity.
+Internal `alpha` and `g` values remain available in the full result contract but
+are not presented as separate user controls.
 
 “This period” reports one completed period and exposes its receipts. “Cumulative”
 adds flows from Period 1 through the selected period, uses Period 1 opening stocks

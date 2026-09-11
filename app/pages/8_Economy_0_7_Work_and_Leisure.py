@@ -1,6 +1,5 @@
 """Choose work, produce, trade and consume in a persistent economy."""
 
-from dataclasses import asdict
 from math import fsum
 
 import streamlit as st
@@ -17,23 +16,83 @@ from econ_agent_sim.results_component import render_results
 from econ_agent_sim.workspace_style import apply_workspace_style
 
 MAX_PERIODS = 100
-FIELDS = ("x", "money", "alpha", "productivity", "leisure")
+INPUT_FIELDS = ("x", "money", "productivity", "consume_priority",
+                "money_priority", "leisure_priority")
+PRIORITY_FIELDS = ("consume_priority", "money_priority", "leisure_priority")
+
+
+def setup_agent(agent):
+    """Add direct priority scores while preserving an existing draft's preferences."""
+    agent = dict(agent)
+    if not all(field in agent for field in PRIORITY_FIELDS):
+        leisure = agent["leisure"]
+        agent.update({
+            "consume_priority": 3 * (1 - leisure) * agent["alpha"],
+            "money_priority": 3 * (1 - leisure) * (1 - agent["alpha"]),
+            "leisure_priority": 3 * leisure,
+        })
+    sync_preferences(agent)
+    return agent
+
+
+def sync_preferences(agent):
+    consumption, money, leisure = (agent[field] for field in PRIORITY_FIELDS)
+    total = consumption + money + leisure
+    if min(consumption, money, leisure) <= 0 or total <= 0:
+        raise ValueError("Each priority must be positive.")
+    agent["alpha"] = consumption / (consumption + money)
+    agent["leisure"] = leisure / total
+
+
+def work_agent(agent):
+    sync_preferences(agent)
+    return WorkAgent(agent["name"], agent["x"], agent["money"], agent["alpha"],
+                     agent["productivity"], agent["leisure"])
+
+
+def fresh_setup(count=2):
+    return [setup_agent(agent) for agent in default_work_agents(count)]
+
+
+def weights(agent):
+    total = fsum(agent[field] for field in PRIORITY_FIELDS)
+    return tuple(agent[field] / total for field in PRIORITY_FIELDS)
+
+
+def priority_summary(agent):
+    values = weights(agent)
+    if max(values) - min(values) < 1e-9:
+        return "balanced"
+    return ("consume", "money", "leisure")[values.index(max(values))] + " first"
+
+
+def compact_input(index, agent, field, label, *, minimum, maximum, step):
+    key = f"work_{field}_{index}"
+    with st.container(key=f"work_compact_row_{index}_{field}"):
+        label_column, input_column = st.columns([1, 1.35], gap="small",
+                                                vertical_alignment="center")
+        label_column.markdown(f"**{label}**")
+        with input_column:
+            st.number_input(f"{agent['name']} · {label}", min_value=minimum,
+                            max_value=maximum, step=step, format="%.2f", key=key,
+                            on_change=capture, label_visibility="collapsed")
 
 
 def capture():
     for i, agent in enumerate(st.session_state.work_agents):
-        for field in FIELDS:
+        for field in INPUT_FIELDS:
             agent[field] = float(st.session_state.get(f"work_{field}_{i}", agent[field]))
+        sync_preferences(agent)
 
 
 def resize():
     capture()
     agents, count = st.session_state.work_agents, st.session_state.work_count
-    defaults = default_work_agents(count)
+    defaults = fresh_setup(count)
     st.session_state.work_agents = [agents[i] if i < len(agents) else defaults[i]
                                     for i in range(count)]
     for i in range(count, 20):
-        for field in FIELDS:
+        for field in INPUT_FIELDS:
             st.session_state.pop(f"work_{field}_{i}", None)
 
 
@@ -53,7 +112,7 @@ def select_period():
 def start():
     capture()
     try:
-        population = tuple(WorkAgent(**agent) for agent in st.session_state.work_agents)
+        population = tuple(work_agent(agent) for agent in st.session_state.work_agents)
         candidate = advance_work_period(population)
     except (ValueError, ArithmeticError, AssertionError) as error:
         st.session_state.work_error = f"Could not start this setup: {error}"
@@ -84,9 +143,10 @@ def next_period():
 
 st.set_page_config(page_title="Tiny Economy — Work and Leisure", layout="centered",
                    initial_sidebar_state="collapsed")
-for key, value in {"agents": default_work_agents(), "count": 2, "history": [],
+for key, value in {"agents": fresh_setup(), "count": 2, "history": [],
                    "submitted": None, "generation": 0, "view": "Set up", "error": None}.items():
     st.session_state.setdefault(f"work_{key}", value)
+st.session_state.work_agents = [setup_agent(agent) for agent in st.session_state.work_agents]
 apply_workspace_style()
 st.markdown(
     """<style>
@@ -94,6 +154,14 @@ st.markdown(
         flex-direction: row !important; flex-wrap: nowrap !important; gap: .5rem;
     }
     .st-key-economy04_mobile_nav [data-testid="stColumn"] { min-width: 0; }
+    [class*="st-key-work_compact_row_"] { margin-bottom: -.35rem; }
+    [class*="st-key-work_compact_row_"] [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; flex-wrap: nowrap !important; gap: .5rem;
+    }
+    [class*="st-key-work_compact_row_"] [data-testid="stColumn"] { min-width: 0; }
+    [class*="st-key-work_compact_row_"] [data-testid="stMarkdownContainer"] p {
+        font-size: .88rem; margin: 0;
+    }
     </style>""",
     unsafe_allow_html=True,
 )
@@ -114,7 +182,7 @@ if notice := st.session_state.pop("work_notice", None):
 if st.session_state.work_error:
     st.error(st.session_state.work_error)
 history = st.session_state.work_history
-dirty = bool(history) and st.session_state.work_agents != [asdict(a) for a in st.session_state.work_submitted]
+dirty = bool(history) and tuple(work_agent(agent) for agent in st.session_state.work_agents) != st.session_state.work_submitted
 
 if view == "Set up":
     st.title("How much is worth working for?")
@@ -123,41 +191,44 @@ if view == "Set up":
     st.number_input("Number of agents", min_value=2, max_value=20, step=1,
                     key="work_count", on_change=resize)
     for i, agent in enumerate(st.session_state.work_agents):
-        with st.container(key=f"agent_card_{i}"), st.expander(agent["name"], expanded=len(st.session_state.work_agents) <= 4):
-            for field, label in (("x", "initial X"), ("money", "initial Money"),
-                                 ("productivity", "X produced at full effort"),
-                                 ("alpha", "consumption vs money"),
-                                 ("leisure", "preference for leisure")):
-                key = f"work_{field}_{i}"
-                st.session_state.setdefault(key, agent[field])
-                preference = field in ("alpha", "leisure")
-                st.number_input(f"{agent['name']} · {label}",
-                                min_value=.01 if preference else (.1 if field == "productivity" else 0.0),
-                                max_value=.99 if preference else (100.0 if field == "productivity" else 1_000_000.0),
-                                step=.10, format="%.4f" if field == "leisure" else "%.2f",
-                                key=key, on_change=capture)
-            alpha, leisure = agent["alpha"], agent["leisure"]
-            st.caption("The starting leisure preference is exactly ⅓, displayed as 0.3333. Each +/− changes the preference by 0.10.")
-            st.caption(f"Preference weights: {(1-leisure)*alpha:.1%} consumption · {(1-leisure)*(1-alpha):.1%} Money · {leisure:.1%} leisure.")
-            st.caption("Consumption vs money divides the priority left after leisure. Leisure preference is a weight; actual leisure is chosen by the agent.")
-    with st.container(border=True):
-        st.subheader("Starting totals")
-        st.write(f"Agents · {len(st.session_state.work_agents)}")
-        for field, label in (("x", "Initial X"), ("money", "Initial Money"),
-                             ("productivity", "X capacity at full effort")):
-            st.write(f"{label} · {fsum(a[field] for a in st.session_state.work_agents):g}")
-        st.caption("Actual production depends on chosen effort. Initial X is a one-time stock.")
+        for field in INPUT_FIELDS:
+            st.session_state.setdefault(f"work_{field}_{i}", agent[field])
+        title = f"{agent['name']} · {priority_summary(agent)}"
+        with st.container(key=f"agent_card_{i}"), st.expander(title, expanded=i == 0):
+            st.caption("STARTING POSITION")
+            compact_input(i, agent, "x", "Initial X", minimum=0.0,
+                          maximum=1_000_000.0, step=.10)
+            compact_input(i, agent, "money", "Money", minimum=0.0,
+                          maximum=1_000_000.0, step=.10)
+            compact_input(i, agent, "productivity", "Full-output X", minimum=.1,
+                          maximum=100.0, step=.10)
+            st.caption("WHAT MATTERS MOST? · RELATIVE SCORES")
+            compact_input(i, agent, "consume_priority", "Consume X", minimum=.01,
+                          maximum=100.0, step=.10)
+            compact_input(i, agent, "money_priority", "Keep money", minimum=.01,
+                          maximum=100.0, step=.10)
+            compact_input(i, agent, "leisure_priority", "Enjoy leisure", minimum=.01,
+                          maximum=100.0, step=.10)
+            consumption, money, leisure = weights(agent)
+            st.caption(f"Priorities · {consumption:.0%} consume · {money:.0%} money · {leisure:.0%} leisure. Scores are relative; they do not need to total 100.")
+    st.markdown(
+        f"**Economy starts with** · {len(st.session_state.work_agents)} agents · "
+        f"{fsum(a['x'] for a in st.session_state.work_agents):g} X · "
+        f"{fsum(a['money'] for a in st.session_state.work_agents):g} Money · "
+        f"capacity {fsum(a['productivity'] for a in st.session_state.work_agents):g} X"
+    )
+    st.caption("Capacity is output at full effort. Initial X is a one-time stock.")
     if dirty:
-        st.info("Setup changed · the existing timeline still uses its submitted setup. Start a new simulation to apply your edits.")
+        st.info("Setup changed · the existing simulation still uses its submitted setup. Start a new simulation to apply your edits.")
     if history:
-        st.caption("Starting a new simulation replaces this timeline. Next period continues the existing one without applying draft edits.")
+        st.caption("Starting a new simulation replaces its history. Next period continues the existing one without applying draft edits.")
     st.button("Start new simulation", type="primary", on_click=start, width="stretch")
     st.caption("Work and price are determined together. All X is consumed each period. No goods storage, borrowing or money creation. Agents value money’s purchasing power directly and do not plan future purchases.")
 elif not history:
     st.info("No periods yet. Set up your agents, then start a new simulation.")
 else:
     if dirty:
-        st.info("Setup changed · this timeline still uses its submitted setup. Next period does not apply draft edits.")
+        st.info("Setup changed · this simulation still uses its submitted setup. Next period does not apply draft edits.")
     st.session_state.setdefault("work_selected", st.session_state.work_period_focus)
     selected = st.selectbox("View period", options=list(range(1, len(history) + 1)),
                             format_func=lambda number: f"Period {number}", key="work_selected",

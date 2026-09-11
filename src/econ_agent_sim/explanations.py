@@ -126,17 +126,18 @@ def work_explanations(context):
     answers["Why did the price move?"] = (
         f"X clears at {context['prices']['X']:.4f} Money per unit. {comparison}"
         "The price balances consumption demand with opening goods plus chosen production. "
-        "Carried money affects both demand and willingness to work. Productivity and both "
-        "preferences matter too. Higher productivity does not necessarily mean more work: "
+        "Carried money affects both demand and willingness to work. Productivity and the three "
+        "priorities matter too. Higher productivity does not necessarily mean more work: "
         "agents may choose more leisure, and prices also adjust. Successive periods use "
         "the same submitted settings; only carried balances and resulting choices change."
     )
     answers["Why keep money instead of consuming more?"] = (
         "Agents value consumption, real final money (Money divided by the price of X), "
-        "and leisure through Cobb–Douglas utility. Once work is chosen, α is the share of "
-        "realized wealth allocated to consumption; 1−α is kept as money. This is not a "
-        "share of initial cash spent. Money is valued directly as an assumption: agents "
-        "do not forecast prices or optimize consumption over future periods."
+        "and leisure through Cobb–Douglas utility. The three scores are relative: the app "
+        "normalizes them into utility weights, so they do not need to total 100. The consume "
+        "and money weights divide realized wealth; this is not a share of initial cash spent. "
+        "Money is valued directly as an assumption: agents do not forecast prices or optimize "
+        "consumption over future periods."
     )
     if not context["trades"]:
         answers["Why is there no trade?"] = (
@@ -154,9 +155,9 @@ def work_explanations(context):
     return {"Why did agents choose this much work?": (
         f"{choices} Each agent balances the benefit of more goods and money against "
         "giving up leisure, taking the market price as given. An agent with enough existing "
-        "resources can optimally choose no work. Leisure preference γ is a utility weight, "
-        "not the fraction of time spent resting. The baseline uses γ = exactly ⅓; together "
-        "with productivity 2 and equal consumption/money preference, this yields 50% work."
+        "resources can optimally choose no work. The leisure priority becomes a utility weight, "
+        "not the fraction of time spent resting. Equal priority scores give each objective a "
+        "one-third weight; with productivity 2, the baseline then yields 50% work."
     ), **answers}
 
 

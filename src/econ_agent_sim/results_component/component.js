@@ -134,8 +134,8 @@ export default function render({ data, parentElement }) {
       const card = el('article', 'outcome-card agent-report');
       card.append(agentHeading('h4', data.agents.find(row => row.name === agent.name)));
       const weights = agent.parameters.weights;
-      card.append(el('p', 'preference-line', `Preferences · ${fmt(100 * weights.consumption, 1)}% consumption · ${fmt(100 * weights.money, 1)}% money · ${fmt(100 * weights.leisure, 1)}% leisure`));
-      card.append(el('p', 'parameter-line', `Chosen parameters · consumption/money ${fmt(agent.parameters.alpha, 2)} · leisure ${fmt(agent.parameters.leisure, 4)} · productivity ${fmt(agent.parameters.productivity, 2)} X`));
+      card.append(el('p', 'preference-line', `Priorities · ${fmt(100 * weights.consumption, 1)}% consume · ${fmt(100 * weights.money, 1)}% money · ${fmt(100 * weights.leisure, 1)}% leisure`));
+      card.append(el('p', 'parameter-line', `Full-effort output · ${fmt(agent.parameters.productivity, 2)} X`));
       card.append(balanceSheet(agent.opening, agent.closing));
       const activityRows = [
         ['Produced', `${fmt(agent.produced)} X`],
