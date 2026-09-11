@@ -29,6 +29,8 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.5rem) !important; }
 [data-testid="stExpander"] { background: #faf8f1; border-radius: 14px; }
 [data-testid="stChatMessage"] { background: #e6eee5; color: #173f3b; border-radius: 16px; }
 .st-key-economy04_mobile_nav [data-testid="stButtonGroup"] { width: 100%; }
+.st-key-economy04_mobile_nav [data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: nowrap !important; gap: .5rem; }
+.st-key-economy04_mobile_nav [data-testid="stColumn"] { min-width: 0; }
 .st-key-economy04_mobile_nav button { min-height: 48px; flex: 1; border-radius: 12px; }
 .st-key-economy04_mobile_nav button[aria-checked="true"] { background: #174e44 !important; color: white !important; border-color: #174e44 !important; }
 .st-key-economy_home_start a { background: #174e44; color: white; min-height: 52px; padding: 14px 18px; border-radius: 14px; justify-content: center; }
