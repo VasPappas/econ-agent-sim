@@ -99,7 +99,6 @@ def test_ask_why_uses_period_transfers_without_duplicate_price_explanation():
     labels = [item.label for item in app.expander]
     assert labels.count("How were the wage and price found?") == 1
     assert "How was the price found?" not in labels
-    assert app.selectbox(key="fw_chat_transfer").options[0] == "Whole period"
-    assert any(option.startswith("Wage") for option in app.selectbox(
-        key="fw_chat_transfer"
-    ).options)
+    focus = next(item for item in app.selectbox if item.label == "Focus")
+    assert focus.options[0] == "Whole period"
+    assert any(option.startswith("Wage") for option in focus.options)

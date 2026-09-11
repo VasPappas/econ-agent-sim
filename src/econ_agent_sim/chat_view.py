@@ -37,14 +37,19 @@ def render_chat(run):
     working = run.data.get("model") == "work_leisure"
     evolving = run.data.get("model") == "production_consumption" or working or firms_wages
     valued_money = run.data.get("model") == "money_in_utility" or evolving
-    focus_key = "fw_chat_transfer" if firms_wages else "economy04_chat_trade"
-    identity_key = f"{focus_key}_identity"
     saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
-    if st.session_state.get(identity_key) != identity or focus_key not in st.session_state:
-        st.session_state[focus_key] = saved_focus.get(base_fingerprint, -1)
-        st.session_state[identity_key] = identity
-    if st.session_state.get(focus_key) is None:
-        st.session_state[focus_key] = -1
+    focus_key = (
+        f"fw_chat_transfer_{base_fingerprint[:16]}"
+        if firms_wages else "economy04_chat_trade"
+    )
+    if not firms_wages:
+        identity_key = f"{focus_key}_identity"
+        if (st.session_state.get(identity_key) != identity
+                or focus_key not in st.session_state):
+            st.session_state[focus_key] = saved_focus.get(base_fingerprint, -1)
+            st.session_state[identity_key] = identity
+        if st.session_state.get(focus_key) is None:
+            st.session_state[focus_key] = -1
     focus_items = period.transfers if firms_wages else period.trades
     options = [-1, *range(len(focus_items))]
 
@@ -63,6 +68,7 @@ def render_chat(run):
         options,
         key=focus_key,
         format_func=focus_label,
+        **({"index": 0} if firms_wages else {}),
     )
     saved_focus[base_fingerprint] = trade_index
     while len(saved_focus) > 12:
