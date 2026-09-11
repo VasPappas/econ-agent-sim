@@ -112,7 +112,12 @@ def test_work_resize_chat_and_history_limit():
     assert not app.exception
     app.selectbox(key="work_selected").set_value(1).run()
     assert app.session_state.economy04_chat_context == first_context
-    app.session_state.work_history = [app.session_state.work_history[0]] * 100
     app.session_state.work_view = "Results"
+    app.run()
+    app.pills(key="work_report_scope").set_value("Cumulative").run()
+    assert app.session_state.work_report_scope == "Cumulative"
+    assert any("Cumulative from Period 1 through Period 1" in item.value
+               for item in app.caption)
+    app.session_state.work_history = [app.session_state.work_history[0]] * 100
     app.run()
     assert button(app, "Next period").disabled

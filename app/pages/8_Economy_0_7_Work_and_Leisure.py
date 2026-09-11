@@ -11,6 +11,7 @@ from econ_agent_sim.economy_0_7 import (
     WorkRun,
     advance_work_period,
     default_work_agents,
+    work_report,
 )
 from econ_agent_sim.results_component import render_results
 from econ_agent_sim.workspace_style import apply_workspace_style
@@ -149,6 +150,13 @@ else:
     selected = st.selectbox("View period", options=list(range(1, len(history) + 1)),
                             format_func=lambda number: f"Period {number}", key="work_selected",
                             on_change=select_period)
+    report_scope = None
+    if view == "Results":
+        report_scope = st.pills("Report range", options=("This period", "Cumulative"),
+                                default="This period", key="work_report_scope",
+                                width="stretch")
+        if report_scope == "Cumulative":
+            st.caption(f"Cumulative from Period 1 through Period {selected}.")
     st.button("Next period", type="primary", on_click=next_period, width="stretch",
               disabled=len(history) >= MAX_PERIODS,
               help="Continue from the latest period, even when viewing an earlier one.")
@@ -161,7 +169,11 @@ else:
     if view == "Results":
         st.subheader(f"Period {selected}")
         st.caption(f"Compared with Period {selected - 1}." if selected > 1 else "Your first period.")
-        render_results(submitted.data)
+        result_data = dict(submitted.data)
+        result_data["reporting"] = work_report(
+            tuple(history[:selected]), cumulative=report_scope == "Cumulative"
+        )
+        render_results(result_data)
         with st.expander("Timeline"):
             st.dataframe([{"Period": period.number, "X price": period.market.prices["X"],
                            "Produced X": fsum(period.produced.values()),

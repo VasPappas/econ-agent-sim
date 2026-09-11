@@ -13,6 +13,7 @@ from econ_agent_sim.economy_0_7 import (
     WorkRun,
     advance_work_period,
     default_work_agents,
+    work_report,
 )
 
 
@@ -269,3 +270,53 @@ def test_adapter_carries_actual_work_period_flows_and_serializable_context():
     for index in (-1, len(data["trades"]), True, "0", None):
         assert run.context(index)["selected_trade"] is None
     json.dumps(run.context(), allow_nan=False)
+
+
+def test_period_and_cumulative_reports_separate_stocks_from_flows():
+    population = (WorkAgent("A", productivity=4, alpha=.7, leisure=.2),
+                  WorkAgent("B", money=2, productivity=1.5, alpha=.3, leisure=.6))
+    periods = []
+    previous = None
+    for _ in range(3):
+        previous = advance_work_period(population, previous)
+        periods.append(previous)
+
+    current = work_report(tuple(periods), cumulative=False)
+    cumulative = work_report(tuple(periods), cumulative=True)
+    assert current["label"] == "Period 3" and current["period_count"] == 1
+    assert cumulative["label"] == "Periods 1–3" and cumulative["period_count"] == 3
+    assert cumulative["opening"] == {
+        asset: fsum(periods[0].opening_stocks[name][asset] for name in ("A", "B"))
+        for asset in ("X", "Money")
+    }
+    assert cumulative["closing"] == {
+        asset: fsum(periods[-1].closing_stocks[name][asset] for name in ("A", "B"))
+        for asset in ("X", "Money")
+    }
+    assert cumulative["produced"] == pytest.approx(
+        fsum(value for period in periods for value in period.produced.values())
+    )
+    assert cumulative["consumed"] == pytest.approx(
+        fsum(value for period in periods for value in period.consumed.values())
+    )
+    assert cumulative["gross_money_exchanged"] == pytest.approx(
+        fsum(t.payment for period in periods for t in period.market.trades)
+    )
+    assert cumulative["gross_x_exchanged"] == pytest.approx(
+        fsum(t.quantity for period in periods for t in period.market.trades)
+    )
+    assert cumulative["average_work"] == pytest.approx(
+        fsum(value for period in periods for value in period.effort.values()) / 6
+    )
+    assert len(cumulative["rows"]) == 3 * 2 * 2
+    assert {row["period"] for row in cumulative["rows"]} == {1, 2, 3}
+    for agent in cumulative["agents"]:
+        assert agent["net_trade_cash"] == pytest.approx(
+            agent["closing"]["Money"] - agent["opening"]["Money"]
+        )
+        assert sum(agent["parameters"]["weights"].values()) == pytest.approx(1)
+    assert all(cumulative["checks"].values())
+    assert work_report((periods[0],), cumulative=True)["label"] == "Period 1"
+    with pytest.raises(ValueError):
+        work_report(())
+    json.dumps(cumulative, allow_nan=False)

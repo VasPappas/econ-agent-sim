@@ -139,3 +139,50 @@ data.checks.accounts=false;
 context.render({data,parentElement:host});
 assert(root.querySelector('.failure'));
 console.log('Work choices, zero-work corner, CSV units and all three check layers passed.');
+
+data.checks.accounts=true;
+data.trades=[];
+data.reporting={
+  scope:'period',label:'Period 2',period_count:1,through_period:2,
+  opening:{X:0,Money:2},closing:{X:0,Money:2},produced:1.5,consumed:1.5,
+  gross_x_exchanged:0.0000003,gross_money_exchanged:0.0000004,net_trade_cash:0,total_work:.75,
+  average_work:.375,average_leisure:.625,
+  checks:{goods_identity:true,money_identity:true,periods:true,work:true},
+  agents:[
+    {name:'Agent 1',opening:{X:0,Money:1},closing:{X:0,Money:.9999996},produced:1,consumed:1.0000003,
+     sold_x:0,bought_x:.0000003,sales_received:0,purchases_paid:.0000004,net_trade_cash:-.0000004,
+     transaction_count:1,total_work:.5,average_work:.5,average_leisure:.5,
+     parameters:{alpha:.5,leisure:1/3,productivity:2,weights:{consumption:1/3,money:1/3,leisure:1/3}}},
+    {name:'Agent 2',opening:{X:0,Money:1},closing:{X:0,Money:1.0000004},produced:.5,consumed:.4999997,
+     sold_x:.0000003,bought_x:0,sales_received:.0000004,purchases_paid:0,net_trade_cash:.0000004,
+     transaction_count:1,total_work:.25,average_work:.25,average_leisure:.75,
+     parameters:{alpha:.5,leisure:.5,productivity:2,weights:{consumption:.25,money:.25,leisure:.5}}},
+  ],
+  trades:[{seller:'Agent 2',buyer:'Agent 1',good:'X',quantity:.0000003,payment:.0000004,unit_price:4/3,period:2}],
+  rows:[
+    {period:2,agent:'Agent 1',asset:'X',opening:0,produced:1,received:.0000003,sent:0,consumed:1.0000003,closing:0,work_fraction:.5,leisure_fraction:.5,productivity:2},
+    {period:2,agent:'Agent 1',asset:'Money',opening:1,produced:0,received:0,sent:.0000004,consumed:0,closing:.9999996,work_fraction:.5,leisure_fraction:.5,productivity:2},
+  ],
+};
+context.render({data,parentElement:host});
+assert(root.querySelector('.economy-card'));
+assert.equal(root.querySelectorAll('.agent-report').length,2);
+assert.equal(root.querySelectorAll('.balance-sheet').length,3);
+assert.equal(root.querySelectorAll('.activity-statement').length,3);
+assert(root.querySelectorAll('.preference-line').some(n=>n.textContent.includes('33.3% consumption')));
+assert(root.querySelectorAll('.parameter-line').some(n=>n.textContent.includes('leisure 0.3333')));
+assert(root.querySelectorAll('p').some(n=>n.textContent==='Bought <0.0001 X from Agent 2'));
+assert(root.querySelectorAll('p').some(n=>n.textContent==='Paid <0.0001 Money'));
+assert(!root.querySelectorAll('strong').some(n=>n.textContent.includes('-0.00')));
+const reportCsv=decodeURIComponent(root.querySelector('.download').href);
+assert(reportCsv.includes('"2","Agent 1","X","0","1","3e-7"'));
+
+data.reporting.scope='cumulative'; data.reporting.label='Periods 1–2'; data.reporting.period_count=2;
+data.reporting.rows=[...data.reporting.rows,{...data.reporting.rows[0],period:1}];
+context.render({data,parentElement:host});
+assert(root.querySelector('.section-intro').textContent.includes('flows are added'));
+assert(root.querySelectorAll('summary').some(n=>n.textContent==='Activity statement · 2 periods'));
+assert.equal(root.querySelectorAll('.agent-transactions').length,0);
+assert(root.querySelectorAll('p').some(n=>n.textContent.includes('select a single period for receipts')));
+assert(decodeURIComponent(root.querySelector('.download').href).includes('"1","Agent 1","X"'));
+console.log('Compact period and cumulative reports preserve stock-flow logic and clarify tiny receipts.');

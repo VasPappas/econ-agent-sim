@@ -88,3 +88,19 @@ contract with model `work_leisure`, plus those four fields. Market closing X is
 consumption, never end-of-period stored inventory. The ordinary period checks
 retain production/consumption accounting; work checks separately report feasible
 time, optimal work and agreement of the joint price with settlement.
+
+## Result reports
+
+The Results view provides the same compact reporting structure for the whole
+economy and each agent. A balance sheet compares opening and closing X and Money.
+An activity statement reports production, consumption, X traded, money received
+and paid, net trading cash flow, and work/leisure time. Agent cards also disclose
+the submitted `alpha`, leisure weight and productivity, alongside their three
+derived Cobb–Douglas weights.
+
+“This period” reports one completed period and exposes its receipts. “Cumulative”
+adds flows from Period 1 through the selected period, uses Period 1 opening stocks
+and the selected period's closing stocks, and averages work/leisure over the
+included agent-periods. It never adds balances or prices across periods. The price
+shown at the top remains the selected period's price. Full-precision CSV rows span
+the same selected reporting range.
