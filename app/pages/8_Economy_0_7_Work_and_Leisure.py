@@ -88,6 +88,15 @@ for key, value in {"agents": default_work_agents(), "count": 2, "history": [],
                    "submitted": None, "generation": 0, "view": "Set up", "error": None}.items():
     st.session_state.setdefault(f"work_{key}", value)
 apply_workspace_style()
+st.markdown(
+    """<style>
+    .st-key-economy04_mobile_nav [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; flex-wrap: nowrap !important; gap: .5rem;
+    }
+    .st-key-economy04_mobile_nav [data-testid="stColumn"] { min-width: 0; }
+    </style>""",
+    unsafe_allow_html=True,
+)
 st.caption("TINY ECONOMY · WORK + LEISURE")
 st.page_link("streamlit_app.py", label="← Explore economies")
 if target := st.session_state.pop("work_next_view", None):
