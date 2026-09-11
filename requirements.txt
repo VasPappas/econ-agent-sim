@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.7 work and leisure
+# Rebuild marker: Economy 0.7 period and cumulative reports
 -e .[app]
