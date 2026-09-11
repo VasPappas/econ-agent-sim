@@ -42,7 +42,8 @@ const report = {
   })),
   firm: {name:'Firm',opening_money:1,closing_money:5/3,sales_received:4/3,
     wages_paid:2/3,profit:2/3,dividends_paid:0,net_cash_change:2/3,
-    profit_awaiting_distribution:2/3,parameters:{productivity:2,theta:.5}},
+    profit_awaiting_distribution:2/3,produced_x:Math.sqrt(8/3),sold_x:Math.sqrt(8/3),
+    parameters:{productivity:2,theta:.5}},
   economy: {opening_money:3,closing_money:3,produced_x:Math.sqrt(8/3),
     consumed_x:Math.sqrt(8/3),output_value:4/3,wages:2/3,profit:2/3,
     dividends:0,average_work:1/3,average_leisure:2/3},
@@ -63,6 +64,7 @@ assert(root.querySelectorAll('.metric')[0].querySelector('strong').textContent =
 assert.equal(root.querySelectorAll('.household-card').length, 2);
 assert.equal(root.querySelectorAll('.firm-card').length, 1);
 assert.equal(root.querySelectorAll('.economy-card').length, 1);
+assert(root.querySelector('.production-line').textContent === 'Produced 1.63 X · Sold 1.63 X');
 assert(root.querySelectorAll('.preference-line').some(node => node.textContent.includes('33% consume')));
 assert(root.querySelectorAll('.statement-heading').some(node => node.textContent === 'INCOME STATEMENT'));
 assert(root.querySelectorAll('.profit-note').some(node => node.textContent.includes('awaits next-period distribution')));

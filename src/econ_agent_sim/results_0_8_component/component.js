@@ -110,6 +110,7 @@ export default function render({ data, parentElement }) {
   const firmTitle = el('h4', 'party-heading');
   firmTitle.append(el('span', 'firm-marker', 'F'), document.createTextNode(firm.name || 'Firm'));
   firmCard.append(firmTitle, el('p', 'preference-line', `Productivity · ${fmt(firm.parameters.productivity, 2)} X with one full unit of total labor`));
+  firmCard.append(el('p', 'production-line', `Produced ${fmt(firm.produced_x)} X · Sold ${fmt(firm.sold_x)} X`));
   firmCard.append(statement('INCOME STATEMENT', [
     ['Sales', `${fmt(firm.sales_received)} M`],
     ['Wages', `−${fmt(firm.wages_paid)} M`, firm.wages_paid ? 'down' : 'flat'],

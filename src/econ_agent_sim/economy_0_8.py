@@ -692,6 +692,8 @@ def firm_report(periods: tuple[Economy08Period, ...], cumulative: bool = False) 
             "name": last.firm.name,
             "productivity": last.firm.productivity,
             "theta": last.firm.theta,
+            "produced_x": produced,
+            "sold_x": consumed,
             "opening_money": first.opening_cash[last.firm.name],
             "closing_money": last.closing_cash[last.firm.name],
             "sales_received": sales_received,

@@ -315,6 +315,12 @@ def test_period_and_cumulative_reports_keep_stocks_and_flows_distinct():
     assert cumulative["economy"]["output_value"] == pytest.approx(
         cumulative["economy"]["wages"] + cumulative["economy"]["profit"]
     )
+    assert cumulative["firm"]["produced_x"] == pytest.approx(
+        fsum(period.output for period in periods)
+    )
+    assert cumulative["firm"]["sold_x"] == pytest.approx(
+        fsum(sum(period.consumption.values()) for period in periods)
+    )
     assert cumulative["firm"]["profit_awaiting_distribution"] == periods[-1].profit
     assert len(cumulative["rows"]) == 3 * 3
     assert {row["period"] for row in cumulative["rows"]} == {1, 2, 3}
