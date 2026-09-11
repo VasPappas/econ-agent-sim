@@ -169,6 +169,7 @@ assert(root.querySelector('.economy-card'));
 assert.equal(root.querySelectorAll('.agent-report').length,2);
 assert.equal(root.querySelectorAll('.balance-sheet').length,3);
 assert.equal(root.querySelectorAll('.activity-statement').length,3);
+assert(!root.querySelectorAll('.statement-row').some(n=>(n.textContent||'').includes('Net internal cash flow')));
 assert(root.querySelectorAll('.preference-line').some(n=>n.textContent.includes('33.3% consume')));
 assert(root.querySelectorAll('.parameter-line').some(n=>n.textContent==='Full-effort output · 2.00 X'));
 assert(root.querySelectorAll('p').some(n=>n.textContent==='Bought <0.0001 X from Agent 2'));

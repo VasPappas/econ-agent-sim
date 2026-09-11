@@ -101,7 +101,9 @@ time, optimal work and agreement of the joint price with settlement.
 The Results view provides the same compact reporting structure for the whole
 economy and each agent. A balance sheet compares opening and closing X and Money.
 An activity statement reports production, consumption, X traded, money received
-and paid, net trading cash flow, and work/leisure time. Agent cards also disclose
+and paid, and work/leisure time. Each agent also receives a net trading cash-flow
+line; the corresponding economy-wide line is omitted because internal payments
+always cancel. Agent cards additionally disclose
 the three normalized Cobb–Douglas priority weights and full-effort productivity.
 Internal `alpha` and `g` values remain available in the full result contract but
 are not presented as separate user controls.

@@ -120,7 +120,6 @@ export default function render({ data, parentElement }) {
       ['Consumed', `${fmt(report.consumed)} X`],
       ['X exchanged', `${fmt(report.gross_x_exchanged)} X`],
       ['Money exchanged', `${fmt(report.gross_money_exchanged)} M`],
-      ['Net internal cash flow', fmt(0)],
       ...(report.scope === 'cumulative' ? [['Total work time', `${fmt(report.total_work, 2)} agent-periods`]] : []),
       ['Average work · leisure', `${fmt(100 * report.average_work, 1)}% · ${fmt(100 * report.average_leisure, 1)}%`],
     ], report.period_count));
