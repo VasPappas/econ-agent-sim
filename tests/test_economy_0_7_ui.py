@@ -128,7 +128,9 @@ def test_work_resize_chat_and_history_limit():
 
 def test_direct_priority_scores_are_normalized_into_model_weights():
     app = open_app()
+    labels_before = [item.label for item in app.expander]
     app.number_input(key="work_consume_priority_0").set_value(3.0).run()
+    assert [item.label for item in app.expander] == labels_before == ["Agent 1", "Agent 2"]
     button(app, "Start new simulation").click().run()
     agent = app.session_state.work_submitted[0]
     assert agent.alpha == pytest.approx(.75)

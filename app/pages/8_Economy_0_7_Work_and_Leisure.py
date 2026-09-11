@@ -59,13 +59,6 @@ def weights(agent):
     return tuple(agent[field] / total for field in PRIORITY_FIELDS)
 
 
-def priority_summary(agent):
-    values = weights(agent)
-    if max(values) - min(values) < 1e-9:
-        return "balanced"
-    return ("consume", "money", "leisure")[values.index(max(values))] + " first"
-
-
 def compact_input(index, agent, field, label, *, minimum, maximum, step):
     key = f"work_{field}_{index}"
     with st.container(key=f"work_compact_row_{index}_{field}"):
@@ -193,8 +186,7 @@ if view == "Set up":
     for i, agent in enumerate(st.session_state.work_agents):
         for field in INPUT_FIELDS:
             st.session_state.setdefault(f"work_{field}_{i}", agent[field])
-        title = f"{agent['name']} · {priority_summary(agent)}"
-        with st.container(key=f"agent_card_{i}"), st.expander(title, expanded=i == 0):
+        with st.container(key=f"agent_card_{i}"), st.expander(agent["name"], expanded=i == 0):
             st.caption("STARTING POSITION")
             compact_input(i, agent, "x", "Initial X", minimum=0.0,
                           maximum=1_000_000.0, step=.10)
