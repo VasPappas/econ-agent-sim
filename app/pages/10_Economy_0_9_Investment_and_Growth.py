@@ -88,6 +88,10 @@ def select_period():
     st.session_state.ig_period_focus = st.session_state.ig_selected
 
 
+def remember_report_scope():
+    st.session_state.ig_saved_scope = st.session_state.ig_report_scope
+
+
 def submitted_settings():
     return (
         tuple(Household(**item) for item in st.session_state.ig_households),
@@ -156,6 +160,7 @@ for key, value in {
     "households": default_households(), "firm": default_firm(), "count": 2,
     "history": [], "submitted": None, "generation": 0, "view": "Set up",
     "error": None, "expanded": {}, "period_focus": 1,
+    "saved_scope": st.session_state.get("ig_report_scope", "This period"),
 }.items():
     st.session_state.setdefault(f"ig_{key}", value)
 
@@ -357,10 +362,11 @@ else:
         st.caption(f"Reached {MAX_PERIODS} periods. Start a new simulation for another experiment.")
     elif selected != len(history):
         st.caption(f"Viewing history. Next period continues from Period {len(history)}.")
+    st.session_state.setdefault("ig_report_scope", st.session_state.ig_saved_scope)
     report_scope = st.pills(
         "Report range", options=("This period", "Cumulative"), required=True,
-        default="This period", key="ig_report_scope", width="stretch",
-        label_visibility="collapsed",
+        key="ig_report_scope", width="stretch", label_visibility="collapsed",
+        on_change=remember_report_scope,
     )
     report = investment_report(
         tuple(history[:selected]), cumulative=report_scope == "Cumulative"

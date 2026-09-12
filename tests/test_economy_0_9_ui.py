@@ -74,6 +74,11 @@ def test_scope_ask_why_and_reset_preserve_other_chapters():
     button(app, "Start new simulation").click().run()
     button(app, "+10 periods").click().run()
     app.pills(key="ig_report_scope").set_value("Cumulative").run()
+    app.session_state.ig_view = "Set up"
+    app.run()
+    app.session_state.ig_view = "Results"
+    app.run()
+    assert app.pills(key="ig_report_scope").value == "Cumulative"
     app.session_state.ig_view = "Ask why"
     app.run()
     assert not app.exception
@@ -85,6 +90,8 @@ def test_scope_ask_why_and_reset_preserve_other_chapters():
     assert app.number_input(key="ig_firm_reinvestment_rate").value == 40
     assert app.number_input(key="ig_firm_capital").value == 1
     assert app.session_state.fw_marker == "preserve"
+    button(app, "Start new simulation").click().run()
+    assert app.pills(key="ig_report_scope").value == "This period"
 
 
 def test_failed_batch_does_not_append_partial_history(monkeypatch):

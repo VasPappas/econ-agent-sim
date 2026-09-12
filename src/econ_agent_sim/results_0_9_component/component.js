@@ -114,6 +114,7 @@ export default function render({ data, parentElement }) {
     ['Net economy income', money(economy.net_income), 'total'],
   ]));
   economyBody.append(el('p', 'note', 'Dividends move income between the firm and its owners; they are not added to economy income again.'));
+  economyBody.append(el('p', 'note', 'Amounts are rounded for display. Totals use full precision, so rounded rows may not add exactly.'));
   economyBody.append(statement('RESOURCES', [
     ['Money at opening', money(economy.opening_money)],
     ['Money at closing', money(economy.closing_money)],
@@ -256,7 +257,7 @@ export default function render({ data, parentElement }) {
     for (const [label, value] of Object.entries(data.diagnostics)) {
       technical.append(el('p', '', `${label.replaceAll('_', ' ')} · ${typeof value === 'number' ? Number(value.toPrecision(4)).toString() : value}`));
     }
-    technical.append(el('p', 'note', 'Small nonzero values use scientific notation. All calculations and CSV values retain full precision.'));
+    technical.append(el('p', 'note', 'Small nonzero values use scientific notation. Rounded rows may not add exactly; calculations and CSV values retain full precision.'));
     evidenceBody.append(details('technical', 'Technical details', technical, 'technical-details'));
   }
   const columns = [...new Set((report.rows || []).flatMap(item => Object.keys(item)))];

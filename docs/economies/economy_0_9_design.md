@@ -582,4 +582,5 @@ against real engine reports, including tiny nonzero values and complete CSVs.
 Actual 320/375/390px device rendering has not been verified: the available cloud
 browser has no viewport emulation. Layouts use flexible columns, readable type
 and 44px controls; phone interaction still needs device review. Desktop live
-inspection is a separate release check.
+inspection verified the baseline, ten-period advance, cumulative firm accounts,
+and scope-aware built-in explanations. GitHub CI passed for the release.
