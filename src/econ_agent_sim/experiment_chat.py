@@ -79,6 +79,38 @@ Total Money across households and the firm is conserved at every settlement phas
 Do not call the single displayed firm a monopoly or claim strategic wage/price setting.
 There is no banking, credit, capital, investment, inventory, government, shocks,
 firm entry or forward-looking household optimization. Equal ownership is fixed.
+When model is investment_growth (Economy 0.9):
+Use report as the authoritative selected-period or cumulative accounts. A single
+price-taking firm produces Q=A*K^(1-theta)*L^theta using OPENING firm-owned capital.
+Households choose consumption, real closing Money and leisure with the reported
+relative priority weights. They own equal shares but cannot spend ownership value.
+The owner's fixed reinvestment policy is I=r*(pQ-W)/p: a share of gross operating
+surplus BEFORE depreciation, NOT a share of all output or net profit. The firm
+sells C=Q-I to households and installs I of its own X as next-period capital.
+No self-sale, capital supplier or investment cash payment exists. All household
+purchases are consumed. Closing capital=(1-delta)*opening capital+I, so newly
+installed capital produces and wears only from the NEXT period. Firm wages must
+be funded from actual post-dividend cash. Wage/price clear both markets jointly;
+a payroll funding constraint can stop hiring before marginal product equals wage.
+Output value=pQ=cash sales+pI. Gross surplus=pQ-W. Net operating profit=gross
+surplus-p*delta*K. Profit can be negative despite positive cash surplus. Dividends
+are paid at the START of the next period: min(previous positive net profit,
+cash above the ORIGINAL operating float). First-period dividend is zero. The
+float is protected when choosing dividends, not a cash reset or money injection.
+Negative historical retained earnings do not veto a later funded profit dividend.
+Report next_dividend_budget is a future budget, not a liability or cumulative flow.
+Capital is economically valued at the current replacement price of X, not a
+guaranteed resale or traded share price. Period1 opening capital uses p1 and has
+zero holding gain; later holding gain=(p-p_previous)*openingK. This price effect
+is separate from operating profit. Equity=firm cash+capital value; its change is
+net operating profit-dividends+holding gain. Retained earnings preserve all losses.
+Household ownership claims are eliminated on economy consolidation; never add
+them again to full firm assets. Keep Money and capital units distinct. Report
+flows sum original-period values; stocks use first opening and selected closing.
+Price and wage are selected-period rates even in cumulative mode. Real wage=w/p.
+No banks, debt, shocks, money creation, government, lifetime optimization or
+optimal investment choice. More investment need not increase consumption or
+utility. Do not assert perpetual percentage growth or future results not supplied.
 The following two-good rules apply ONLY when model is absent (Economy 0.4):
 Y is the numeraire: pY is fixed at 1 money unit. Only the relative price pX/pY is
 discovered; there is no general price-level/inflation determination. Preferences

@@ -13,8 +13,10 @@ with st.container(key="economy_home_start"):
         label="Start exploring →", width="stretch",
     )
 st.caption("Set up your agents. Press Run. Follow the goods and money.")
+st.page_link("pages/10_Economy_0_9_Investment_and_Growth.py",
+             label="New · Investment and growth →", width="stretch")
 st.page_link("pages/9_Economy_0_8_Firms_and_Wages.py",
-             label="New · Firms, wages and dividends →", width="stretch")
+             label="Firms, wages and dividends →", width="stretch")
 st.page_link("pages/8_Economy_0_7_Work_and_Leisure.py",
              label="Work, leisure and production →", width="stretch")
 with st.expander("A first experiment"):
@@ -50,6 +52,8 @@ chapters = [
      "0.7", "pages/8_Economy_0_7_Work_and_Leisure.py"),
     ("Firms and wages", "Households supply labor to a firm, receive wages and share its delayed profits.",
      "0.8", "pages/9_Economy_0_8_Firms_and_Wages.py"),
+    ("Investment and growth", "Use some production for capital. Explore consumption today and capacity tomorrow.",
+     "0.9", "pages/10_Economy_0_9_Investment_and_Growth.py"),
 ]
 for title, description, version, page in chapters:
     with st.container(border=True):
@@ -58,6 +62,11 @@ for title, description, version, page in chapters:
         st.caption(f"Economy {version}")
 
 with st.expander("What the model includes"):
+    st.write("In Investment and growth, the firm uses labor and capital to produce X. "
+             "Households consume some X; the firm installs the rest as capital for the "
+             "next period. Capital wears out. Dividends depend on prior net profit and "
+             "available cash. Investment is your policy choice; there is no borrowing "
+             "or money creation.")
     st.write("In Firms and wages, households choose work, consumption and money holdings. "
              "One representative price-taking firm hires labor, produces X and distributes "
              "realized profit to its equal owners at the start of the next period. Wages must "

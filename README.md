@@ -65,6 +65,20 @@ an explicit ledger transfer.
 
 Read [`docs/economies/economy_0_8_design.md`](docs/economies/economy_0_8_design.md).
 
+## Economy 0.9 — Investment and growth
+
+The firm combines labor with productive capital. Some X is consumed; some becomes
+capital for the next period. An owner policy reinvests a share of gross operating
+surplus before depreciation. Opening capital wears out, and dividends are limited
+by prior-period net profit and cash above the initial operating float.
+
+Phone-friendly reports distinguish production, cash sales, investment, wear and
+profit. Capital uses current replacement-price valuation, with holding gains
+separate from income. Period and cumulative accounts preserve original prices,
+cash funding, physical continuity and consolidated ownership accounting.
+
+Read [`docs/economies/economy_0_9_design.md`](docs/economies/economy_0_9_design.md).
+
 ## Hosted browser app
 
 Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
