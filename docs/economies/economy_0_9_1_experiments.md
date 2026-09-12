@@ -87,3 +87,17 @@ cumulative original-price flows and closing stocks. Local integration validation
 
 The available cloud browser does not support phone viewport emulation. Responsive
 layout is checked in code; live inspection uses the available desktop viewport.
+
+Live verification passed for an eleven-period baseline and edited copy, cumulative
+comparisons, historical period selection, changed settings, and the built-in
+comparison question. A file generated outside the hosted session reopened with
+exact verified accounts, its separate 60% draft, a completed 20% run, baseline,
+selected Period 2 and cumulative scope. Continuing produced Period 4 using the
+submitted 20% policy; the three-period baseline remained fixed, and comparison
+correctly reported the unmatched horizon. GitHub CI passed for the release.
+
+The browser's download event was not received when the Download control was
+activated. Its security policy blocked inspection of Chrome's downloads page, so
+actual browser download completion is unverified. Serialization and restoration,
+including their Streamlit callbacks, pass automated tests. A phone download check
+remains outstanding alongside phone viewport inspection.
