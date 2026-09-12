@@ -107,9 +107,9 @@ def investment_explanations(period, report: dict) -> dict[str, str]:
     }
 
 
-def investment_context(period, report: dict, run_id) -> dict:
+def investment_context(period, report: dict, run_id, *, comparison=None) -> dict:
     """Use the same report as Results without duplicating the unbounded ledger."""
-    return {
+    context = {
         "model": "investment_growth",
         "label": report["label"],
         "revision": str(run_id),
@@ -131,3 +131,17 @@ def investment_context(period, report: dict, run_id) -> dict:
             "only to the selected period. The next dividend is a future budget."
         ),
     }
+    if comparison is not None:
+        context["baseline_comparison"] = {
+            key: value for key, value in comparison.items()
+            if key != "settings_changes"
+        }
+        # Compact rows retain every changed setting within the shared AI budget.
+        context["baseline_comparison"]["changed_setting_columns"] = [
+            "entity", "setting", "baseline", "current", "unit",
+        ]
+        context["baseline_comparison"]["changed_settings"] = [
+            [entry[key] for key in ("entity", "label", "baseline", "current", "unit")]
+            for entry in comparison["settings_changes"]
+        ]
+    return context

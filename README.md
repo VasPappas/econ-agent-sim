@@ -79,6 +79,15 @@ cash funding, physical continuity and consolidated ownership accounting.
 
 Read [`docs/economies/economy_0_9_design.md`](docs/economies/economy_0_9_design.md).
 
+### Economy 0.9.1 — Experiments
+
+Keep a baseline, edit a copy, and compare consumption, capital, work, prices,
+wage purchasing power and profit at the same period. Download a portable JSON
+file containing the simulation, setup draft and baseline; reopen it later to
+continue with verified accounts. No database or account is required.
+
+Read [`docs/economies/economy_0_9_1_experiments.md`](docs/economies/economy_0_9_1_experiments.md).
+
 ## Hosted browser app
 
 Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.

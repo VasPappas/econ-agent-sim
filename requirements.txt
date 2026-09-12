@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.9 investment and growth
+# Rebuild marker: Economy 0.9.1 portable experiments
 -e .[app]

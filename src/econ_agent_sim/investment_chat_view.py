@@ -12,10 +12,19 @@ from econ_agent_sim.investment_explanations import (
 )
 
 
-def render_investment_chat(period, report, run_id, view_key):
+def render_investment_chat(period, report, run_id, view_key, *, comparison=None):
     st.subheader("Make sense of your economy")
     st.caption(f"{report['label']} · Answers use the results you are viewing.")
     answers = investment_explanations(period, report)
+    if comparison is not None:
+        answers["How should I read the baseline comparison?"] = (
+            f"{comparison['label']}. {comparison['note']} "
+            "Wage buys means how much X one unit of work can buy. "
+            "Changed settings compare the setups used for the completed runs; "
+            "unsubmitted edits do not affect these results. A larger number "
+            "is not automatically better: consuming, saving and leisure "
+            "serve different household priorities."
+        )
     topic = st.selectbox(
         "Explore a question", list(answers), key=f"{view_key}_question_topic",
     )
@@ -23,7 +32,7 @@ def render_investment_chat(period, report, run_id, view_key):
     st.caption("From the model · instant · no AI usage")
     st.divider()
 
-    context = investment_context(period, report, run_id)
+    context = investment_context(period, report, run_id, comparison=comparison)
     fingerprint = context_id(context)
     conversations = st.session_state.setdefault("investment_conversations", {})
     history = conversations.pop(fingerprint, [])

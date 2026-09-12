@@ -78,6 +78,44 @@ export default function render({ data, parentElement }) {
   shell.append(metrics);
   if (cumulative) shell.append(el('p', 'scope-note', `Price and wage are for Period ${report.through_period}.`));
 
+  if (data.comparison) {
+    const comparison = data.comparison;
+    const body = el('div', 'comparison-body');
+    body.append(el('p', 'scope-note', comparison.label));
+    if (comparison.available) {
+      const legend = el('div', 'comparison-legend');
+      for (const [label, name] of [['BASELINE', comparison.baseline_name], ['CURRENT', comparison.current_name]]) {
+        const item = el('div', '');
+        item.append(el('span', 'eyebrow', label), el('strong', '', name));
+        legend.append(item);
+      }
+      body.append(legend);
+      for (const metric of comparison.metrics) {
+        const item = el('div', 'comparison-metric');
+        item.append(el('div', 'comparison-label', `${metric.label} · ${metric.unit}`));
+        item.append(el('strong', 'baseline-value', fmt(metric.baseline, metric.key === 'price' || metric.key === 'real_wage' ? 4 : 2)));
+        const current = el('div', 'current-value');
+        current.append(el('strong', '', fmt(metric.current, metric.key === 'price' || metric.key === 'real_wage' ? 4 : 2)));
+        current.append(el('small', '', `${signed(metric.change)} ${metric.change_unit} vs baseline`));
+        item.append(current);
+        body.append(item);
+      }
+    }
+    body.append(el('p', 'note', comparison.note));
+    const changes = el('div', 'comparison-changes');
+    if (comparison.settings_changes.length) {
+      for (const setting of comparison.settings_changes) {
+        const value = number => typeof number === 'number' ? fmt(number) : String(number);
+        changes.append(row(`${setting.entity} · ${setting.label}`,
+          `${value(setting.baseline)} → ${value(setting.current)}${setting.unit ? ` ${setting.unit}` : ''}`));
+      }
+    } else {
+      changes.append(el('p', 'note', 'Both simulations use the same starting settings.'));
+    }
+    body.append(details('comparison-settings', `Changed settings · ${comparison.settings_changes.length}`, changes, 'activity'));
+    shell.append(details('comparison', 'Compare with baseline', body, 'comparison'));
+  }
+
   const economyCard = el('article', 'card economy-card');
   economyCard.append(el('h3', 'card-heading', 'Whole economy'));
   const production = el('div', 'production-allocation');

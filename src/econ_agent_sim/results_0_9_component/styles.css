@@ -15,6 +15,15 @@
 h2 { font-size: clamp(29px, 7vw, 39px); font-weight: 540; letter-spacing: -.045em; line-height: 1.12; margin: 12px 0 6px; }
 .intro { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
 .scope-note, .note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 7px 0; }
+.comparison { margin: 12px 0 0; border: 1px solid #cadad3; border-radius: 14px; padding: 0 12px; background: #f4f7f0; }
+.comparison-body { padding-bottom: 10px; }
+.comparison-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 1px 0 10px; }
+.comparison-legend strong { display: block; font-size: 13px; font-weight: 620; }
+.comparison-metric { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 3px 12px; padding: 9px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.comparison-label { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.comparison-metric strong { font-size: 17px; font-weight: 620; }
+.current-value small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.comparison-changes .statement-row { font-size: 12px; }
 .headline-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 12px; }
 .metric { border-top: 3px solid #bcd5cf; padding: 8px 0 5px; }
 .metric strong { display: block; margin-top: 3px; font-size: clamp(18px, 5.7vw, 28px); font-weight: 590; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }

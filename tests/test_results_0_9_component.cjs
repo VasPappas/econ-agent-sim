@@ -29,11 +29,25 @@ from econ_agent_sim.economy_0_9 import (
     Household, Firm, default_households, default_firm,
     advance_investment_period, investment_report,
 )
+from econ_agent_sim.investment_comparison import compare_investment_runs
 households = tuple(Household(**item) for item in default_households())
 firm = Firm(**default_firm())
 first = advance_investment_period(households, firm)
 second = advance_investment_period(households, firm, previous=first)
-print(json.dumps([investment_report((first,)), investment_report((first, second), cumulative=True)]))
+baseline_firm = Firm(reinvestment_rate=.2)
+baseline_first = advance_investment_period(households, baseline_firm)
+baseline_second = advance_investment_period(households, baseline_firm, baseline_first)
+comparison = compare_investment_runs(
+    (first, second), (baseline_first, baseline_second), selected_period=2,
+    cumulative=True, current_name='Build capital', baseline_name='Consume today',
+)
+unavailable_comparison = compare_investment_runs(
+    (first, second), (baseline_first,), selected_period=2,
+)
+print(json.dumps([
+    investment_report((first,)), investment_report((first, second), cumulative=True),
+    comparison, unavailable_comparison,
+]))
 `], {cwd: repo, env: {...process.env, PYTHONPATH: path.join(repo, 'src')}, encoding: 'utf8'}));
 
 const context = vm.createContext({
@@ -101,4 +115,21 @@ assert.equal(root.querySelector('h2').textContent, 'Capital declined.');
 assert(allText(root).includes('No dividend available for next period.'));
 assert(root.querySelector('.failure'));
 assert(allText(root).includes('! Check failed · Evidence'));
-console.log('Economy 0.9 real-report rendering, cumulative disclosure state, tiny amounts, full evidence CSV passed.');
+
+// Compare actual experiments at the selected date, preserving independent
+// values and the open comparison when a report rerenders.
+context.render({data: {reporting: reports[1], comparison: reports[2]}, parentElement: host});
+assert.equal(root.querySelectorAll('.comparison-metric').length, 6);
+assert(allText(root).includes('Build capital'));
+assert(allText(root).includes('Consume today'));
+assert(allText(root).includes('Reinvest surplus'));
+assert(allText(root).includes('pp vs baseline'));
+assert(!/NaN|undefined/.test(allText(root)));
+root.querySelectorAll('details').find(node => node.getAttribute('data-disclosure') === 'comparison').open = true;
+context.render({data: {reporting: reports[1], comparison: reports[3]}, parentElement: host});
+assert.equal(root.querySelectorAll('.comparison-metric').length, 0);
+assert(allText(root).includes('Both experiments need Period 2'));
+assert(allText(root).includes('Reinvest surplus'));
+assert(!allText(root).includes('Both simulations have the same starting settings'));
+assert(root.querySelectorAll('details').find(node => node.getAttribute('data-disclosure') === 'comparison').open);
+console.log('Investment reports, comparison dates, disclosure state, tiny amounts, full evidence CSV passed.');

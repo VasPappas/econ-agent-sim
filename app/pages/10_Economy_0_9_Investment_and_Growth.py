@@ -13,6 +13,11 @@ from econ_agent_sim.economy_0_9 import (
     investment_report,
 )
 from econ_agent_sim.investment_chat_view import render_investment_chat
+from econ_agent_sim.investment_comparison import compare_investment_runs
+from econ_agent_sim.investment_experiment_view import (
+    initialize_experiments,
+    render_experiment_controls,
+)
 from econ_agent_sim.results_0_9_component import render_investment_results
 from econ_agent_sim.workspace_style import apply_workspace_style
 
@@ -77,11 +82,17 @@ def resize():
 
 def reset():
     generation = st.session_state.ig_generation + 1
+    baseline = st.session_state.ig_baseline
     for key in list(st.session_state):
         if key.startswith("ig_"):
             del st.session_state[key]
     st.session_state.ig_generation = generation
-    st.session_state.ig_notice = "Baseline restored. Ready for a fresh experiment."
+    st.session_state.ig_baseline = baseline
+    st.session_state.ig_notice = (
+        "Default setup restored. Your comparison baseline is still saved."
+        if baseline is not None else
+        "Default setup restored. Ready for a fresh experiment."
+    )
 
 
 def select_period():
@@ -114,6 +125,9 @@ def start():
     st.session_state.ig_period_focus = 1
     st.session_state.ig_error = None
     st.session_state.ig_next_view = "Results"
+    if name := st.session_state.pop("ig_copy_name", None):
+        st.session_state.ig_experiment_name = name
+        st.session_state.ig_name_input = name
 
 
 def next_period(count=1):
@@ -163,17 +177,22 @@ for key, value in {
     "saved_scope": st.session_state.get("ig_report_scope", "This period"),
 }.items():
     st.session_state.setdefault(f"ig_{key}", value)
+initialize_experiments()
 
 apply_workspace_style()
 st.markdown(
     """<style>
     .st-key-ig_mobile_nav [data-testid="stHorizontalBlock"],
     .st-key-ig_period_controls [data-testid="stHorizontalBlock"],
+    .st-key-ig_experiment_actions [data-testid="stHorizontalBlock"],
+    .st-key-ig_baseline_actions [data-testid="stHorizontalBlock"],
     [class*="st-key-ig_compact_"] [data-testid="stHorizontalBlock"] {
         flex-direction: row !important; flex-wrap: nowrap !important; gap: .5rem;
     }
     .st-key-ig_mobile_nav [data-testid="stColumn"],
     .st-key-ig_period_controls [data-testid="stColumn"],
+    .st-key-ig_experiment_actions [data-testid="stColumn"],
+    .st-key-ig_baseline_actions [data-testid="stColumn"],
     [class*="st-key-ig_compact_"] [data-testid="stColumn"] { min-width: 0; }
     .st-key-ig_mobile_nav [data-testid="stButtonGroup"] { width: 100%; }
     .st-key-ig_mobile_nav button {
@@ -187,6 +206,10 @@ st.markdown(
         border-color: #174e44 !important;
     }
     .st-key-ig_report_scope button { min-height: 44px; }
+    .st-key-ig_experiment_actions button,
+    .st-key-ig_baseline_actions button { min-height: 44px; padding: .4rem; }
+    .st-key-ig_experiment_actions button p,
+    .st-key-ig_baseline_actions button p { font-size: .8rem; }
     [class*="st-key-ig_compact_"] { margin-bottom: -.5rem; }
     [class*="st-key-ig_compact_"] [data-testid="stMarkdownContainer"] p {
         font-size: .85rem; line-height: 1.25; margin: 0;
@@ -211,7 +234,7 @@ st.markdown(
     }
     </style>""", unsafe_allow_html=True,
 )
-st.caption("TINY ECONOMY · 0.9 · INVESTMENT + GROWTH")
+st.caption("TINY ECONOMY · 0.9.1 · INVESTMENT + GROWTH")
 st.page_link("streamlit_app.py", label="← Explore economies")
 if target := st.session_state.pop("ig_next_view", None):
     st.session_state.ig_view = target
@@ -227,8 +250,10 @@ with st.container(key="ig_mobile_nav"):
     with reset_column:
         st.button(
             "Reset", on_click=reset, width="stretch",
-            help="Restore the baseline and clear this chapter’s simulation.",
+            help="Restore the default setup and clear this run. Keep the comparison baseline.",
         )
+
+render_experiment_controls(setup_expander)
 
 if notice := st.session_state.pop("ig_notice", None):
     st.success(notice)
@@ -371,13 +396,22 @@ else:
     report = investment_report(
         tuple(history[:selected]), cumulative=report_scope == "Cumulative"
     )
+    baseline = st.session_state.ig_baseline
+    comparison = compare_investment_runs(
+        tuple(history), baseline.periods,
+        selected_period=selected, cumulative=report_scope == "Cumulative",
+        current_name=st.session_state.ig_experiment_name,
+        baseline_name=baseline.name,
+    ) if baseline is not None else None
     if view == "Results":
         render_investment_results({
             "reporting": report,
             "diagnostics": dict(history[selected - 1].solution),
+            "comparison": comparison,
         })
     else:
         render_investment_chat(
             history[selected - 1], report,
             st.session_state.ig_generation, "ig_chat",
+            comparison=comparison,
         )

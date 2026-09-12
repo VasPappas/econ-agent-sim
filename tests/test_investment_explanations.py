@@ -1,6 +1,7 @@
 """Keep explanations aligned with actual scope and the economic payout rule."""
 
 import json
+from dataclasses import replace
 
 from econ_agent_sim.economy_0_9 import (
     Firm,
@@ -8,6 +9,7 @@ from econ_agent_sim.economy_0_9 import (
     advance_investment_period,
     investment_report,
 )
+from econ_agent_sim.investment_comparison import compare_investment_runs
 from econ_agent_sim.investment_explanations import (
     amount,
     investment_context,
@@ -53,3 +55,20 @@ def test_small_positive_and_negative_amounts_do_not_become_false_zero():
     assert amount(-1e-12) == "-1.000e-12"
     assert amount(-0.0) == "0.0000"
     assert amount(.24999999999999975) == "0.2500"
+
+
+def test_chat_comparison_uses_the_displayed_metrics_and_all_changed_settings():
+    baseline = tuple(Household(f"Household {i}") for i in range(20))
+    changed = tuple(replace(
+        household, money=2.31 + i / 23, consumption_priority=3.123 + i / 19,
+        money_priority=2.154 + i / 17, leisure_priority=1.331 + i / 29,
+    ) for i, household in enumerate(baseline))
+    old = advance_investment_period(baseline, Firm())
+    new = advance_investment_period(changed, Firm(reinvestment_rate=.2))
+    comparison = compare_investment_runs((new,), (old,), selected_period=1)
+    context = investment_context(
+        new, investment_report((new,)), 1, comparison=comparison,
+    )
+    assert context["baseline_comparison"]["metrics"] == comparison["metrics"]
+    assert len(context["baseline_comparison"]["changed_settings"]) == 81
+    assert len(json.dumps(context, separators=(",", ":")).encode()) < 35000

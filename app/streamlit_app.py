@@ -14,7 +14,7 @@ with st.container(key="economy_home_start"):
     )
 st.caption("Set up your agents. Press Run. Follow the goods and money.")
 st.page_link("pages/10_Economy_0_9_Investment_and_Growth.py",
-             label="New · Investment and growth →", width="stretch")
+             label="New · Investment, growth and experiments →", width="stretch")
 st.page_link("pages/9_Economy_0_8_Firms_and_Wages.py",
              label="Firms, wages and dividends →", width="stretch")
 st.page_link("pages/8_Economy_0_7_Work_and_Leisure.py",
@@ -52,8 +52,8 @@ chapters = [
      "0.7", "pages/8_Economy_0_7_Work_and_Leisure.py"),
     ("Firms and wages", "Households supply labor to a firm, receive wages and share its delayed profits.",
      "0.8", "pages/9_Economy_0_8_Firms_and_Wages.py"),
-    ("Investment and growth", "Use some production for capital. Explore consumption today and capacity tomorrow.",
-     "0.9", "pages/10_Economy_0_9_Investment_and_Growth.py"),
+    ("Investment and growth", "Explore consumption today and capacity tomorrow. Save experiments and compare a baseline.",
+     "0.9.1", "pages/10_Economy_0_9_Investment_and_Growth.py"),
 ]
 for title, description, version, page in chapters:
     with st.container(border=True):
