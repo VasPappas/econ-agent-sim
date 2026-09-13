@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 0.9.1 portable experiments
+# Rebuild marker: Economy 1.0 two firms, one market
 -e .[app]

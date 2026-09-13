@@ -13,8 +13,10 @@ with st.container(key="economy_home_start"):
         label="Start exploring →", width="stretch",
     )
 st.caption("Set up your agents. Press Run. Follow the goods and money.")
+st.page_link("pages/11_Economy_1_0_Two_Firms_One_Market.py",
+             label="New · Two firms, one market →", width="stretch")
 st.page_link("pages/10_Economy_0_9_Investment_and_Growth.py",
-             label="New · Investment, growth and experiments →", width="stretch")
+             label="Investment, growth and experiments →", width="stretch")
 st.page_link("pages/9_Economy_0_8_Firms_and_Wages.py",
              label="Firms, wages and dividends →", width="stretch")
 st.page_link("pages/8_Economy_0_7_Work_and_Leisure.py",
@@ -54,6 +56,8 @@ chapters = [
      "0.8", "pages/9_Economy_0_8_Firms_and_Wages.py"),
     ("Investment and growth", "Explore consumption today and capacity tomorrow. Save experiments and compare a baseline.",
      "0.9.1", "pages/10_Economy_0_9_Investment_and_Growth.py"),
+    ("Two firms, one market", "Change one firm's productivity or investment policy. Follow both firms and their households.",
+     "1.0", "pages/11_Economy_1_0_Two_Firms_One_Market.py"),
 ]
 for title, description, version, page in chapters:
     with st.container(border=True):
@@ -62,6 +66,11 @@ for title, description, version, page in chapters:
         st.caption(f"Economy {version}")
 
 with st.expander("What the model includes"):
+    st.write("In Two firms, one market, two firms share a goods price and wage, "
+             "while each funds its own work, production, investment and dividends. "
+             "Households own equal shares in both. Start with equal firms, then "
+             "change one and compare their paths. Firms take prices as given; "
+             "there is no price bargaining, borrowing or firm exit.")
     st.write("In Investment and growth, the firm uses labor and capital to produce X. "
              "Households consume some X; the firm installs the rest as capital for the "
              "next period. Capital wears out. Dividends depend on prior net profit and "

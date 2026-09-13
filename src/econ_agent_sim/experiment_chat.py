@@ -111,6 +111,30 @@ Price and wage are selected-period rates even in cumulative mode. Real wage=w/p.
 No banks, debt, shocks, money creation, government, lifetime optimization or
 optimal investment choice. More investment need not increase consumption or
 utility. Do not assert perpetual percentage growth or future results not supplied.
+When model is competition (Economy 1.0):
+Carry the investment_growth accounting, household preferences and period timing
+forward SEPARATELY for TWO price-taking firms. Use report as authoritative. There
+is one X price and one wage. Each firm produces Q_j=A_j*sqrt(K_j*L_j), chooses its
+own labor and must fund payroll from its OWN post-dividend cash. Do not pool firm
+cash, profit or dividend eligibility. Reinvestment I_j=r_j*(pQ_j-W_j)/p keeps the
+firm's own X as capital, with no self-payment or purchase from the other firm.
+Each household owns an equal share of EACH firm, may work for both and buys from
+both. Labor is allocated proportionally to firms' labor demand; purchases follow
+each firm's SOLD X, not total output. Wage payments have reverse labor-service
+legs; goods payments have reverse X legs. Dividends have Money legs only.
+Share of sales is a physical sold-X share. Cumulative shares divide summed sold
+X, not mean percentages or cumulative revenue. Firm work sums in work-periods;
+household work/leisure percentages average. Funding flags and next dividends
+refer to the selected period, never accumulated. Capital ownership claims are
+eliminated against BOTH firms on consolidation. Holding gains are not income.
+Tables with columns/values are lossless row records in the listed column order.
+Stable entity IDs identify firms independently of labels. The equal default
+splits the 0.9 firm's capital and cash in half and preserves aggregate outcomes.
+This is assumed price-taking competition, not strategic duopoly or price wars.
+There is no borrowing, bankruptcy, exit, entry, shocks or optimal lifetime
+investment. Positive supported inputs keep both firms producing, even at tiny
+shares. More productivity may lower the nominal wage while raising real wage.
+Never infer a firm's failure, a winner or future outcomes from rounded values.
 The following two-good rules apply ONLY when model is absent (Economy 0.4):
 Y is the numeraire: pY is fixed at 1 money unit. Only the relative price pX/pY is
 discovered; there is no general price-level/inflation determination. Preferences
@@ -221,7 +245,9 @@ def answer_question(
         raise ChatUnavailable("The experiment assistant is not connected yet.")
     if not isinstance(question, str) or not 1 <= len(question.strip()) <= MAX_QUESTION:
         raise ChatUnavailable(f"Please ask a question of 1–{MAX_QUESTION} characters.")
-    context_json = json.dumps(context, separators=(",", ":"), allow_nan=False)
+    context_json = json.dumps(
+        context, separators=(",", ":"), allow_nan=False, ensure_ascii=False,
+    )
     if len(context_json) > 35000:
         raise ChatUnavailable("This experiment is too large for a chat explanation.")
     messages = [{"role": "developer", "content": "Experiment data: " + context_json}]

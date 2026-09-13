@@ -88,6 +88,26 @@ continue with verified accounts. No database or account is required.
 
 Read [`docs/economies/economy_0_9_1_experiments.md`](docs/economies/economy_0_9_1_experiments.md).
 
+## Economy 1.0 — Two firms, one market
+
+Two independently funded firms share the same goods price and wage. Each owns
+capital, hires labor, retains output for investment and pays its own eligible
+dividends. Households own equal shares of each firm and choose consumption,
+holding Money and leisure. The equal starting firms split the previous firm's
+resources, preserving the aggregate baseline rather than adding extra wealth.
+
+Compact firm summaries distinguish production from sales, with full statements
+for a selected firm and consolidated economy accounts. Cumulative flows retain
+original period prices; sales shares use summed physical quantities. Version 2
+experiment files save both firms, draft edits, a baseline and the selected view.
+Earlier economies and their original saved files remain runnable.
+
+The pure engine, canonical reports, comparisons, file format and UI are separate
+modules. Firms take prices as given; borrowing, strategic pricing, bankruptcy,
+entry/exit and shocks remain outside this model.
+
+Read [`docs/economies/economy_1_0_design.md`](docs/economies/economy_1_0_design.md).
+
 ## Hosted browser app
 
 Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
