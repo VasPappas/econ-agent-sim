@@ -597,3 +597,36 @@ deterministically and reject corrupt files atomically. UI tests exercise firm
 selection, disclosures, independent edits, reset/copy behavior and failed batches.
 The shared optional AI request remains bounded; repeated account fields are
 represented as named-column tables without rounding calculation values.
+
+### Live release verification — 13 September 2026
+
+Published the implemented chapter to Streamlit Community Cloud at
+<https://econ-agent-sim.streamlit.app/Economy_1_0_Two_Firms_One_Market>.
+The application release is commit
+`4fad4eeca51607c6a694c77c48b10be2a845c45d`. GitHub Actions run `34755611196`
+passed the full Python regression suite, all four JavaScript component suites,
+Ruff, package imports and the Streamlit server smoke test.
+
+Live browser checks verified the equal-firm first period, a +10 advance to
+Period 11, original-price cumulative accounts, firm selection, built-in Ask why
+content, and saving an immutable comparison baseline. A generated experiment
+file was uploaded and reopened through the live file picker: both firms, the
+11-period history, baseline, cumulative scope, selected Firm B, and a different
+unsubmitted draft were restored. Starting that draft with Firm A productivity
+2.4 and Firm B productivity 2.0 produced a 57.6%/42.4% physical sales split.
+The comparison correctly used Period 1 of the 11-period baseline and identified
+the one changed setting. Accounting checks passed in these live reports.
+
+Live inspection exposed a Streamlit component serialization issue: nested
+immutable diagnostic mappings caused its whole payload to become text. The
+page now sends only scalar diagnostics, retaining firm funding evidence in the
+canonical report. A regression test decodes the actual Streamlit component
+wire payload for the first period and an 11-period cumulative report.
+
+The desktop layout was visually inspected. Physical-phone touch behavior and
+320/375/390 px browser layouts remain unverified because the available browser
+does not advertise viewport controls. The browser's Download action did not
+produce an observable download event; downloading to a real device remains an
+open verification item. Serializer/replay tests and live file uploading passed,
+but these do not certify the actual download-to-reopen round trip. The phone
+and download portions of the original release gate therefore remain open.
