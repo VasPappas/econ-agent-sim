@@ -406,9 +406,18 @@ else:
         baseline_name=baseline.name,
     ) if baseline is not None else None
     if view == "Results":
+        # The engine's frozen solution contains nested mapping proxies for
+        # funding evidence. The component's technical list needs only these
+        # scalars; per-firm funding is already carried by the canonical report.
+        solution = history[selected - 1].solution
         render_competition_results({
             "reporting": report,
-            "diagnostics": dict(history[selected - 1].solution),
+            "diagnostics": {
+                key: solution[key] for key in (
+                    "method", "iterations", "relative_market_error",
+                    "resting_households", "tolerance",
+                )
+            },
             "comparison": comparison,
             "selected_firm": st.session_state.cg_selected_firm,
         })

@@ -1,5 +1,6 @@
 """Protect submitted runs and setup continuity in the two-firm workspace."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,31 @@ def open_app():
 
 def button(app, label):
     return next(item for item in app.button if item.label == label)
+
+
+def test_component_wire_payload_is_an_object_with_a_real_report():
+    app = open_app()
+    button(app, "Start new simulation").click().run()
+
+    def check_payload(scope):
+        component = app.get("bidi_component")[0]
+        payload = json.loads(component.proto.json)
+        # Streamlit silently stringifies the WHOLE payload when one nested
+        # value is not JSON serializable. Python-only exception checks miss
+        # this failure because the crash happens later in the browser.
+        assert isinstance(payload, dict)
+        assert payload["reporting"]["model"] == "competition"
+        assert payload["reporting"]["scope"] == scope
+        assert len(payload["reporting"]["firms"]) == 2
+        assert payload["selected_firm"] == "firm_a"
+        assert all(isinstance(value, (str, int, float, bool))
+                   for value in payload["diagnostics"].values())
+        assert payload["diagnostics"]["relative_market_error"] < 1e-9
+
+    check_payload("period")
+    button(app, "+10 periods").click().run()
+    app.pills(key="cg_report_scope").set_value("Cumulative").run()
+    check_payload("cumulative")
 
 
 def test_baseline_and_atomic_ten_period_advance():
