@@ -135,6 +135,21 @@ There is no borrowing, bankruptcy, exit, entry, shocks or optimal lifetime
 investment. Positive supported inputs keep both firms producing, even at tiny
 shares. More productivity may lower the nominal wage while raising real wage.
 Never infer a firm's failure, a winner or future outcomes from rounded values.
+When model is consumption_target (Economy 1.1):
+Use the competition market, firm, funding, ownership and accounting rules above.
+Households additionally have a flexible consumption target b, not subsistence
+Stone-Geary utility or a guaranteed minimum. Their three normalized preference
+weights stay fixed. For 0<C<b, utility adds -(C/b-1-log(C/b)); at C>=b or b=0
+that term is absent. Its fixed strength is 1. It makes extra consumption more
+valuable below the target while money and leisure remain valued. Work and
+consumption are jointly chosen. Targets neither create goods nor force spending.
+Read each household's consumption_target from household_parameters. Shortfall
+is max(b-C,0) for each household and period. Cumulative shortfalls add these
+positive gaps; excess elsewhere cannot offset them. Coverage caps consumption
+at its own household-period target. Zero target has no coverage percentage.
+Reported gaps are not debts and never accumulate into future preferences.
+All accounting checks may pass while some households remain below target.
+Comparisons with different targets are different goals, not a welfare ranking.
 The following two-good rules apply ONLY when model is absent (Economy 0.4):
 Y is the numeraire: pY is fixed at 1 money unit. Only the relative price pX/pY is
 discovered; there is no general price-level/inflation determination. Preferences

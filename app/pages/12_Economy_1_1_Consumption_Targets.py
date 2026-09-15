@@ -1,0 +1,442 @@
+"""Two firms and households with flexible, visible consumption targets."""
+
+from math import fsum
+
+import streamlit as st
+
+from econ_agent_sim.economy_1_1 import (
+    Firm,
+    Household,
+    advance_target_period,
+    default_firms,
+    default_households,
+)
+from econ_agent_sim.results_1_1_component import render_target_results
+from econ_agent_sim.target_chat_view import render_target_chat
+from econ_agent_sim.target_comparison import compare_target_runs
+from econ_agent_sim.target_experiment_view import (
+    initialize_experiments,
+    render_experiment_controls,
+)
+from econ_agent_sim.target_reporting import target_report
+from econ_agent_sim.workspace_style import apply_workspace_style
+
+MAX_PERIODS = 100
+PREFERENCE_FIELDS = (
+    "consumption_priority", "money_priority", "leisure_priority",
+)
+HOUSEHOLD_FIELDS = ("money", "consumption_target", *PREFERENCE_FIELDS)
+FIRM_FIELDS = (
+    "money", "capital", "productivity", "reinvestment_rate", "depreciation_rate",
+)
+PERCENT_FIELDS = ("reinvestment_rate", "depreciation_rate")
+
+
+def capture():
+    """Keep the editable draft independently of transient widget state."""
+    for index, household in enumerate(st.session_state.tg_households):
+        for field in HOUSEHOLD_FIELDS:
+            key = f"tg_household_{field}_{index}"
+            household[field] = float(st.session_state.get(key, household[field]))
+    for index, firm in enumerate(st.session_state.tg_firms):
+        for field in FIRM_FIELDS:
+            key = f"tg_firm_{field}_{index}"
+            if key in st.session_state:
+                value = float(st.session_state[key])
+                firm[field] = value / 100 if field in PERCENT_FIELDS else value
+
+
+def remember_expander(name):
+    st.session_state.tg_expanded[name] = st.session_state[f"tg_open_{name}"]
+
+
+def setup_expander(label, name, *, expanded=False):
+    key = f"tg_open_{name}"
+    st.session_state.setdefault(
+        key, st.session_state.tg_expanded.get(name, expanded)
+    )
+    # The initial expanded argument stays constant, so the widget identity does
+    # not change when a user opens a card or edits one of its children.
+    return st.expander(
+        label, expanded=expanded, key=key,
+        on_change=remember_expander, args=(name,),
+    )
+
+
+def resize():
+    capture()
+    households = st.session_state.tg_households
+    count = st.session_state.tg_count
+    defaults = default_households(count)
+    st.session_state.tg_households = [
+        households[index] if index < len(households) else defaults[index]
+        for index in range(count)
+    ]
+    for index in range(count, 20):
+        for field in HOUSEHOLD_FIELDS:
+            st.session_state.pop(f"tg_household_{field}_{index}", None)
+        name = f"household_{index}"
+        st.session_state.pop(f"tg_open_{name}", None)
+        st.session_state.tg_expanded.pop(name, None)
+
+
+def reset():
+    generation = st.session_state.tg_generation + 1
+    baseline = st.session_state.tg_baseline
+    for key in list(st.session_state):
+        if key.startswith("tg_"):
+            del st.session_state[key]
+    st.session_state.tg_generation = generation
+    st.session_state.tg_baseline = baseline
+    st.session_state.tg_notice = (
+        "Default setup restored. Your comparison baseline is still saved."
+        if baseline is not None else
+        "Default setup restored. Ready for a fresh experiment."
+    )
+
+
+def select_period():
+    st.session_state.tg_period_focus = st.session_state.tg_selected
+
+
+def remember_report_scope():
+    st.session_state.tg_saved_scope = st.session_state.tg_report_scope
+
+
+def submitted_settings():
+    return (
+        tuple(Household(**item) for item in st.session_state.tg_households),
+        tuple(Firm(**item) for item in st.session_state.tg_firms),
+    )
+
+
+def start():
+    capture()
+    try:
+        households, firms = submitted_settings()
+        candidate = advance_target_period(households, firms)
+    except (ValueError, ArithmeticError, AssertionError) as error:
+        st.session_state.tg_error = f"Could not start this setup: {error}"
+        return
+    st.session_state.tg_history = [candidate]
+    st.session_state.tg_submitted = (households, firms)
+    if st.session_state.tg_selected_firm not in {firm.id for firm in firms}:
+        st.session_state.tg_selected_firm = firms[0].id
+    st.session_state.tg_generation += 1
+    st.session_state.tg_selected = 1
+    st.session_state.tg_period_focus = 1
+    st.session_state.tg_error = None
+    st.session_state.tg_next_view = "Results"
+    if name := st.session_state.pop("tg_copy_name", None):
+        st.session_state.tg_experiment_name = name
+        st.session_state.tg_name_input = name
+
+
+def next_period(count=1):
+    history = st.session_state.tg_history
+    if not history or len(history) >= MAX_PERIODS:
+        return
+    households, firms = st.session_state.tg_submitted
+    pending = []
+    previous = history[-1]
+    try:
+        for _ in range(min(count, MAX_PERIODS - len(history))):
+            previous = advance_target_period(households, firms, previous=previous)
+            pending.append(previous)
+    except (ValueError, ArithmeticError, AssertionError) as error:
+        st.session_state.tg_error = f"Could not advance this economy: {error}"
+        return
+    st.session_state.tg_history = [*history, *pending]
+    st.session_state.tg_selected = len(history) + len(pending)
+    st.session_state.tg_period_focus = len(history) + len(pending)
+    st.session_state.tg_error = None
+
+
+def compact_input(owner, field, label, *, minimum, maximum, step, index=None):
+    suffix = f"_{index}" if index is not None else ""
+    with st.container(key=f"tg_compact_{owner}_{field}{suffix}"):
+        label_column, input_column = st.columns(
+            [1, 1.45], gap="small", vertical_alignment="center"
+        )
+        label_column.markdown(f"**{label}**")
+        with input_column:
+            st.number_input(
+                label, min_value=minimum, max_value=maximum, step=step,
+                format="%.0f" if field in PERCENT_FIELDS else "%.2f",
+                key=f"tg_{owner}_{field}{suffix}", on_change=capture,
+                label_visibility="collapsed",
+            )
+
+
+st.set_page_config(
+    page_title="Tiny Economy — Consumption Targets", layout="centered",
+    initial_sidebar_state="collapsed",
+)
+for key, value in {
+    "households": default_households(), "firms": default_firms(), "count": 2,
+    "history": [], "submitted": None, "generation": 0, "view": "Set up",
+    "error": None, "expanded": {}, "period_focus": 1,
+    "selected_firm": default_firms()[0]["id"],
+    "saved_scope": st.session_state.get("tg_report_scope", "This period"),
+}.items():
+    st.session_state.setdefault(f"tg_{key}", value)
+initialize_experiments()
+
+apply_workspace_style()
+st.markdown(
+    """<style>
+    .st-key-tg_mobile_nav [data-testid="stHorizontalBlock"],
+    .st-key-tg_period_controls [data-testid="stHorizontalBlock"],
+    .st-key-tg_experiment_actions [data-testid="stHorizontalBlock"],
+    .st-key-tg_baseline_actions [data-testid="stHorizontalBlock"],
+    [class*="st-key-tg_compact_"] [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; flex-wrap: nowrap !important; gap: .5rem;
+    }
+    .st-key-tg_mobile_nav [data-testid="stColumn"],
+    .st-key-tg_period_controls [data-testid="stColumn"],
+    .st-key-tg_experiment_actions [data-testid="stColumn"],
+    .st-key-tg_baseline_actions [data-testid="stColumn"],
+    [class*="st-key-tg_compact_"] [data-testid="stColumn"] { min-width: 0; }
+    .st-key-tg_mobile_nav [data-testid="stButtonGroup"] { width: 100%; }
+    .st-key-tg_mobile_nav button {
+        min-height: 44px; padding: .4rem .45rem; border-radius: 12px;
+        flex: 1; white-space: nowrap;
+    }
+    .st-key-tg_mobile_nav button p { font-size: .8rem; }
+    .st-key-tg_mobile_nav button[aria-checked="true"],
+    .st-key-tg_report_scope button[aria-checked="true"] {
+        background: #174e44 !important; color: white !important;
+        border-color: #174e44 !important;
+    }
+    .st-key-tg_report_scope button { min-height: 44px; }
+    .st-key-tg_experiment_actions button,
+    .st-key-tg_baseline_actions button { min-height: 44px; padding: .4rem; }
+    .st-key-tg_experiment_actions button p,
+    .st-key-tg_baseline_actions button p { font-size: .8rem; }
+    [class*="st-key-tg_compact_"] { margin-bottom: -.5rem; }
+    [class*="st-key-tg_compact_"] [data-testid="stMarkdownContainer"] p {
+        font-size: .85rem; line-height: 1.25; margin: 0;
+    }
+    [class*="st-key-tg_compact_"] [data-testid="stNumberInput"] button {
+        min-width: 44px; min-height: 44px; width: 44px;
+    }
+    [class*="st-key-tg_compact_"] [data-testid="stNumberInput"] input {
+        min-width: 0; padding-left: .5rem; padding-right: .2rem;
+    }
+    [class*="st-key-tg_open_"] summary { min-height: 48px; }
+    [class*="st-key-tg_open_firm_"] details { background: #fffdf5; border-color: #e6d8ad; }
+    .st-key-tg_starting_totals {
+        border: 1px solid #dce4d7; background: #edf3ea;
+        border-radius: 14px; padding: .8rem 1rem;
+    }
+    .st-key-tg_starting_totals p { margin: 0; }
+    @media(max-width: 360px) {
+        .st-key-tg_mobile_nav [data-testid="stHorizontalBlock"] { gap: .3rem; }
+        .st-key-tg_mobile_nav button { padding-inline: .3rem; }
+        .st-key-tg_mobile_nav button p { font-size: .75rem; }
+    }
+    </style>""", unsafe_allow_html=True,
+)
+st.caption("TINY ECONOMY · 1.1 · CONSUMPTION TARGETS")
+st.page_link("streamlit_app.py", label="← Explore economies")
+if target := st.session_state.pop("tg_next_view", None):
+    st.session_state.tg_view = target
+with st.container(key="tg_mobile_nav"):
+    view_column, reset_column = st.columns(
+        [4.2, 1], gap="small", vertical_alignment="center"
+    )
+    with view_column:
+        view = st.pills(
+            "View", options=("Set up", "Results", "Ask why"), required=True,
+            key="tg_view", label_visibility="collapsed", width="stretch",
+        )
+    with reset_column:
+        st.button(
+            "Reset", on_click=reset, width="stretch",
+            help="Restore the default setup and clear this run. Keep the comparison baseline.",
+        )
+
+render_experiment_controls(setup_expander)
+
+if notice := st.session_state.pop("tg_notice", None):
+    st.success(notice)
+if st.session_state.tg_error:
+    st.error(st.session_state.tg_error)
+
+history = st.session_state.tg_history
+try:
+    draft_settings = submitted_settings()
+except ValueError:
+    draft_settings = None
+dirty = bool(history) and draft_settings != st.session_state.tg_submitted
+
+if view == "Set up":
+    st.title("A target for everyday life.")
+    st.write(
+        "Households balance consumption, money and leisure. Below their "
+        "consumption target, each extra unit of X matters more."
+    )
+    st.number_input(
+        "Households", min_value=2, max_value=20, step=1,
+        key="tg_count", on_change=resize,
+    )
+    st.caption("Two firms share one goods market and one labor market. Each uses its own money and capital.")
+
+    for index, firm in enumerate(st.session_state.tg_firms):
+        for field in FIRM_FIELDS:
+            value = firm[field]
+            st.session_state.setdefault(
+                f"tg_firm_{field}_{index}",
+                value * 100 if field in PERCENT_FIELDS else value,
+            )
+        with setup_expander(firm["name"], f"firm_{index}", expanded=index == 0):
+            st.caption("STARTING RESOURCES")
+            for field, label, minimum, maximum in (
+                ("money", "Operating money", .01, 1_000_000.0),
+                ("capital", "Starting capital", .10, 1_000_000.0),
+                ("productivity", "Productivity", .10, 100.0),
+            ):
+                compact_input(
+                    "firm", field, label, minimum=minimum,
+                    maximum=maximum, step=.10, index=index,
+                )
+            st.caption("Productivity: X produced with 1 capital and 1 unit of work.")
+            st.caption("EACH PERIOD")
+            compact_input(
+                "firm", "reinvestment_rate", "Reinvest surplus %", minimum=0.0,
+                maximum=90.0, step=10.0, index=index,
+            )
+            compact_input(
+                "firm", "depreciation_rate", "Capital wear %", minimum=0.0,
+                maximum=90.0, step=5.0, index=index,
+            )
+            st.caption(
+                "Surplus is output value minus wages, before wear. "
+                f"Keep {firm['reinvestment_rate']:.0%} of that value as new capital. "
+                "Wear applies to opening capital only."
+            )
+
+    for index, household in enumerate(st.session_state.tg_households):
+        for field in HOUSEHOLD_FIELDS:
+            st.session_state.setdefault(
+                f"tg_household_{field}_{index}", household[field]
+            )
+        with setup_expander(household["name"], f"household_{index}"):
+            compact_input(
+                "household", "money", "Starting money", minimum=0.0,
+                maximum=1_000_000.0, step=.10, index=index,
+            )
+            compact_input(
+                "household", "consumption_target", "Consumption target",
+                minimum=0.0, maximum=100.0, step=.10, index=index,
+            )
+            st.caption(
+                "X each period · a target, not a guarantee. "
+                "A bigger shortfall makes consumption more urgent. Set 0 to turn it off."
+            )
+            st.caption("WHAT MATTERS MOST? · RELATIVE SCORES")
+            for field, label in (
+                ("consumption_priority", "Consume X"),
+                ("money_priority", "Keep money"),
+                ("leisure_priority", "Enjoy leisure"),
+            ):
+                compact_input(
+                    "household", field, label, minimum=.01,
+                    maximum=100.0, step=.10, index=index,
+                )
+            total = fsum(household[field] for field in PREFERENCE_FIELDS)
+            st.caption(
+                f"{household['consumption_priority'] / total:.0%} consume · "
+                f"{household['money_priority'] / total:.0%} money · "
+                f"{household['leisure_priority'] / total:.0%} leisure. "
+                "Base preferences stay fixed; the target adds urgency below it."
+            )
+
+    count = len(st.session_state.tg_households)
+    household_money = fsum(item["money"] for item in st.session_state.tg_households)
+    firm_money = fsum(item["money"] for item in st.session_state.tg_firms)
+    capital = fsum(item["capital"] for item in st.session_state.tg_firms)
+    consumption_target = fsum(
+        item["consumption_target"] for item in st.session_state.tg_households
+    )
+    with st.container(key="tg_starting_totals"):
+        st.markdown("**Starting economy**")
+        st.write(f"{count} households · 2 firms · {household_money + firm_money:.2f} Money · {capital:.2f} capital")
+        st.write(f"Consumption targets · {consumption_target:.2f} X each period")
+        st.caption(
+            f"Money: {household_money:g} with households + {firm_money:g} with firms. "
+            f"Each household owns {1 / count:.1%} of each firm."
+        )
+    if dirty:
+        st.info("Draft changed. Start a new simulation to apply these settings.")
+    if history:
+        st.caption("Starting again replaces this simulation’s history. Your draft stays saved when you switch tabs.")
+    st.button("Start new simulation", type="primary", on_click=start, width="stretch")
+    st.caption("Reset restores two equal households, each targeting 0.50 X, and two equal firms with 1 total capital.")
+elif not history:
+    st.info("Your economy is ready to set up. Start a simulation to see its first period.")
+else:
+    if dirty:
+        st.info("Draft changed. This simulation continues with its original settings.")
+    st.session_state.setdefault("tg_selected", st.session_state.tg_period_focus)
+    selected = st.selectbox(
+        "View period", options=list(range(1, len(history) + 1)),
+        format_func=lambda number: f"Period {number}", key="tg_selected",
+        on_change=select_period, label_visibility="collapsed",
+    )
+    with st.container(key="tg_period_controls"):
+        advance_column, batch_column = st.columns([1, 1], gap="small")
+        with advance_column:
+            st.button(
+                "Next period →", type="primary", on_click=next_period,
+                width="stretch", disabled=len(history) >= MAX_PERIODS,
+                help="Continue from the latest period in this simulation.",
+            )
+        with batch_column:
+            st.button(
+                "+10 periods", on_click=next_period, args=(10,), width="stretch",
+                disabled=len(history) >= MAX_PERIODS,
+                help="Continue ten linked periods from the latest result, up to 100.",
+            )
+    if len(history) >= MAX_PERIODS:
+        st.caption(f"Reached {MAX_PERIODS} periods. Start a new simulation for another experiment.")
+    elif selected != len(history):
+        st.caption(f"Viewing history. Next period continues from Period {len(history)}.")
+    st.session_state.setdefault("tg_report_scope", st.session_state.tg_saved_scope)
+    report_scope = st.pills(
+        "Report range", options=("This period", "Cumulative"), required=True,
+        key="tg_report_scope", width="stretch", label_visibility="collapsed",
+        on_change=remember_report_scope,
+    )
+    report = target_report(
+        tuple(history[:selected]), cumulative=report_scope == "Cumulative"
+    )
+    baseline = st.session_state.tg_baseline
+    comparison = compare_target_runs(
+        tuple(history), baseline.periods,
+        selected_period=selected, cumulative=report_scope == "Cumulative",
+        current_name=st.session_state.tg_experiment_name,
+        baseline_name=baseline.name,
+    ) if baseline is not None else None
+    if view == "Results":
+        # The engine's frozen solution contains nested mapping proxies for
+        # funding evidence. The component's technical list needs only these
+        # scalars; per-firm funding is already carried by the canonical report.
+        solution = history[selected - 1].solution
+        render_target_results({
+            "reporting": report,
+            "diagnostics": {
+                key: solution[key] for key in (
+                    "method", "iterations", "relative_market_error",
+                    "resting_households", "tolerance",
+                ) if key in solution
+            },
+            "comparison": comparison,
+            "selected_firm": st.session_state.tg_selected_firm,
+        })
+    else:
+        render_target_chat(
+            history[selected - 1], report,
+            st.session_state.tg_generation, "tg_chat",
+            comparison=comparison,
+        )

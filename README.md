@@ -108,6 +108,24 @@ entry/exit and shocks remain outside this model.
 
 Read [`docs/economies/economy_1_0_design.md`](docs/economies/economy_1_0_design.md).
 
+## Economy 1.1 — Consumption targets
+
+Households can set a flexible amount of X they aim to consume each period.
+Below that target, a smooth log-gap preference term raises the value of extra
+consumption. Money and leisure remain valued; no minimum delivery is guaranteed.
+The three base priorities stay fixed. A zero target recovers Economy 1.0's choices.
+
+The default target is 0.50 X; default first-period consumption already exceeds it.
+Try 1.00 X to activate the extra incentive. Results show each household's target,
+actual consumption and shortfall. Cumulative shortfalls sum each household's
+positive gaps in each period; excess elsewhere never cancels them. A target is
+a preference parameter, and the fixed urgency strength is a disclosed modeling
+choice, not an estimate of subsistence needs or Stone–Geary utility.
+
+Version 3 files identify the new engine. Earlier chapters and files retain their
+original models. Accounting, dividends, market structure and firm policies are
+unchanged. Read [`docs/economies/economy_1_1_design.md`](docs/economies/economy_1_1_design.md).
+
 ## Hosted browser app
 
 Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.

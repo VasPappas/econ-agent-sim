@@ -1,2 +1,2 @@
-# Rebuild marker: Economy 1.0 component payload revision 1
+# Rebuild marker: Economy 1.1 flexible consumption targets revision 1
 -e .[app]

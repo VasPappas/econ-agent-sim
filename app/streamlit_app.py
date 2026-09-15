@@ -13,8 +13,10 @@ with st.container(key="economy_home_start"):
         label="Start exploring →", width="stretch",
     )
 st.caption("Set up your agents. Press Run. Follow the goods and money.")
+st.page_link("pages/12_Economy_1_1_Consumption_Targets.py",
+             label="New · Consumption targets →", width="stretch")
 st.page_link("pages/11_Economy_1_0_Two_Firms_One_Market.py",
-             label="New · Two firms, one market →", width="stretch")
+             label="Two firms, one market →", width="stretch")
 st.page_link("pages/10_Economy_0_9_Investment_and_Growth.py",
              label="Investment, growth and experiments →", width="stretch")
 st.page_link("pages/9_Economy_0_8_Firms_and_Wages.py",
@@ -58,6 +60,8 @@ chapters = [
      "0.9.1", "pages/10_Economy_0_9_Investment_and_Growth.py"),
     ("Two firms, one market", "Change one firm's productivity or investment policy. Follow both firms and their households.",
      "1.0", "pages/11_Economy_1_0_Two_Firms_One_Market.py"),
+    ("Consumption targets", "Give households a flexible consumption target. Explore work, spending and shortfalls over time.",
+     "1.1", "pages/12_Economy_1_1_Consumption_Targets.py"),
 ]
 for title, description, version, page in chapters:
     with st.container(border=True):
@@ -66,6 +70,11 @@ for title, description, version, page in chapters:
         st.caption(f"Economy {version}")
 
 with st.expander("What the model includes"):
+    st.write("In Consumption targets, households place extra value on consumption "
+             "below their chosen target. Money and leisure still matter; the target "
+             "does not guarantee consumption. Set it to zero to recover the previous "
+             "chapter's household choices. Cumulative shortfalls never disappear "
+             "because someone consumed extra at another time.")
     st.write("In Two firms, one market, two firms share a goods price and wage, "
              "while each funds its own work, production, investment and dividends. "
              "Households own equal shares in both. Start with equal firms, then "
