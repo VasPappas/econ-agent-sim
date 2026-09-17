@@ -1,111 +1,337 @@
+"""The single Tiny Economy workspace: set up, explore results, and ask why."""
+
+from math import fsum
+
 import streamlit as st
 
+from econ_agent_sim.chat_view import render_chat
+from econ_agent_sim.comparison import compare_runs
+from econ_agent_sim.experiment_view import (
+    initialize_experiments,
+    render_experiment_controls,
+)
+from econ_agent_sim.presets import PRESETS, build_preset
+from econ_agent_sim.reporting import build_report
+from econ_agent_sim.results_component import render_results
+from econ_agent_sim.ui_text import literal
+from econ_agent_sim.workspace import (
+    FIRM_FIELDS,
+    HOUSEHOLD_FIELDS,
+    MAX_PERIODS,
+    PERCENT_FIELDS,
+    PREFERENCE_FIELDS,
+    apply_household_preferences,
+    apply_preset,
+    capture,
+    initialize,
+    next_period,
+    remember_expander,
+    remember_report_scope,
+    resize,
+    select_period,
+    start,
+    submitted_settings,
+)
 from econ_agent_sim.workspace_style import apply_workspace_style
 
-st.set_page_config(page_title="Tiny Economy", layout="centered", initial_sidebar_state="collapsed")
+
+def setup_expander(label, name, *, expanded=False):
+    """Keep disclosure state when widgets and navigation trigger a rerun."""
+    key = f"te_open_{name}"
+    st.session_state.setdefault(key, st.session_state.te_expanded.get(name, expanded))
+    return st.expander(
+        literal(label), expanded=expanded, key=key,
+        on_change=remember_expander, args=(st.session_state, name),
+    )
+
+
+def compact_input(owner, field, label, *, minimum, maximum, step, index):
+    """One mobile-sized label and a native accessible numeric stepper."""
+    with st.container(key=f"te_compact_{owner}_{field}_{index}"):
+        label_column, input_column = st.columns(
+            [1, 1.45], gap="small", vertical_alignment="center"
+        )
+        label_column.markdown(f"**{label}**")
+        with input_column:
+            st.number_input(
+                label, min_value=minimum, max_value=maximum, step=step,
+                format="%.0f" if field in PERCENT_FIELDS else "%.2f",
+                key=f"te_{owner}_{field}_{index}", on_change=capture,
+                args=(st.session_state,), label_visibility="collapsed",
+            )
+
+
+def use_selected_preset():
+    preset = PRESETS[st.session_state.te_preset_choice]
+    households, firms = build_preset(preset.key)
+    apply_preset(st.session_state, households, firms, preset.title)
+
+
+def go_to_setup():
+    st.session_state.te_view = "Set up"
+
+
+def select_firm(firm_id):
+    st.session_state.te_selected_firm = firm_id
+
+
+def render_setup(dirty):
+    st.title("Build your tiny economy.")
+    st.write(
+        "Households choose work, consumption and leisure. "
+        "Two firms produce X and decide how much to reinvest."
+    )
+    with setup_expander("Choose a starting experiment", "presets"):
+        preset_key = st.selectbox(
+            "Starting experiment", options=tuple(PRESETS),
+            format_func=lambda key: PRESETS[key].title, key="te_preset_choice",
+        )
+        st.write(PRESETS[preset_key].description)
+        st.button(
+            "Use this setup", on_click=use_selected_preset, width="stretch",
+            help="Replace the editable setup. Existing results and the baseline stay saved.",
+        )
+        st.caption(
+            "Each preset fills the draft with two households and two firms. "
+            "Start a new simulation when you are ready."
+        )
+
+    st.number_input(
+        "Households", min_value=2, max_value=20, step=1,
+        key="te_count", on_change=resize, args=(st.session_state,),
+    )
+    st.caption("Two firms share one goods market and one labor market.")
+
+    for index, firm in enumerate(st.session_state.te_firms):
+        for field in FIRM_FIELDS:
+            value = firm[field]
+            st.session_state.setdefault(
+                f"te_firm_{field}_{index}",
+                value * 100 if field in PERCENT_FIELDS else value,
+            )
+        with setup_expander(firm["name"], f"firm_{index}", expanded=index == 0):
+            st.caption("STARTING RESOURCES")
+            for field, label, minimum, maximum in (
+                ("money", "Operating money", .01, 1_000_000.0),
+                ("capital", "Starting capital", .10, 1_000_000.0),
+                ("productivity", "Productivity", .10, 100.0),
+            ):
+                compact_input(
+                    "firm", field, label, minimum=minimum,
+                    maximum=maximum, step=.10, index=index,
+                )
+            st.caption("Productivity: X produced with 1 capital and 1 unit of work.")
+            st.caption("EACH PERIOD")
+            compact_input(
+                "firm", "reinvestment_rate", "Reinvest surplus %", minimum=0.0,
+                maximum=90.0, step=10.0, index=index,
+            )
+            compact_input(
+                "firm", "depreciation_rate", "Capital wear %", minimum=0.0,
+                maximum=90.0, step=5.0, index=index,
+            )
+            st.caption(
+                "Reinvestment uses a share of output value after wages. "
+                "Wear uses a share of opening capital. Equal percentages need not balance."
+            )
+
+    for index, household in enumerate(st.session_state.te_households):
+        for field in HOUSEHOLD_FIELDS:
+            st.session_state.setdefault(
+                f"te_household_{field}_{index}", household[field]
+            )
+        with setup_expander(household["name"], f"household_{index}"):
+            compact_input(
+                "household", "money", "Starting money", minimum=0.0,
+                maximum=1_000_000.0, step=.10, index=index,
+            )
+            compact_input(
+                "household", "consumption_target", "Target · X per period",
+                minimum=0.0, maximum=100.0, step=.10, index=index,
+            )
+            st.caption(
+                "Below the target, consuming more becomes more urgent. "
+                "The target is not guaranteed; 0 turns it off."
+            )
+            st.caption("PREFERENCES · HIGHER MEANS MORE IMPORTANT")
+            for field, label in (
+                ("consumption_priority", "Consume X"),
+                ("money_priority", "Keep money"),
+                ("leisure_priority", "Leisure"),
+            ):
+                compact_input(
+                    "household", field, label, minimum=.01,
+                    maximum=100.0, step=.10, index=index,
+                )
+            total = fsum(household[field] for field in PREFERENCE_FIELDS)
+            st.caption(
+                f"Relative importance: {household['consumption_priority'] / total:.0%} "
+                f"consumption · {household['money_priority'] / total:.0%} money · "
+                f"{household['leisure_priority'] / total:.0%} leisure. "
+                "These are preferences, not spending or time shares."
+            )
+            if index == 0:
+                st.button(
+                    "Copy preferences and target to all",
+                    key="te_copy_preferences", on_click=apply_household_preferences,
+                    args=(st.session_state,), width="stretch",
+                    help="Copy Household 1’s three preferences and target to every household. "
+                         "Keep each household’s starting money.",
+                )
+                st.caption("Copies Household 1 only; starting money stays unchanged.")
+
+    count = len(st.session_state.te_households)
+    household_money = fsum(item["money"] for item in st.session_state.te_households)
+    firm_money = fsum(item["money"] for item in st.session_state.te_firms)
+    capital = fsum(item["capital"] for item in st.session_state.te_firms)
+    target = fsum(item["consumption_target"] for item in st.session_state.te_households)
+    with st.container(key="te_starting_totals"):
+        st.markdown("**Starting economy**")
+        st.write(
+            f"{count} households · 2 firms · "
+            f"{household_money + firm_money:.2f} Money · {capital:.2f} capital"
+        )
+        st.write(f"Consumption targets · {target:.2f} X each period")
+        st.caption(
+            f"Money: {household_money:g} with households + {firm_money:g} with firms. "
+            f"Each household owns {1 / count:.1%} of each firm."
+        )
+    if dirty:
+        st.info("Draft changed. Start a new simulation to apply these settings.")
+    if st.session_state.te_history:
+        st.caption(
+            "Starting again replaces this simulation’s history. "
+            "Save it as a baseline in Experiment if you want to compare."
+        )
+    st.button(
+        "Start new simulation", type="primary", on_click=start,
+        args=(st.session_state,), width="stretch",
+    )
+    st.caption("Your setup stays saved when you switch tabs.")
+
+
+def render_run(view, history, dirty):
+    if dirty:
+        st.info("Draft changed. This simulation continues with its original settings.")
+    st.session_state.setdefault("te_selected", st.session_state.te_period_focus)
+    selected = st.selectbox(
+        "View period", options=list(range(1, len(history) + 1)),
+        format_func=lambda number: f"Period {number}", key="te_selected",
+        on_change=select_period, args=(st.session_state,),
+        label_visibility="collapsed",
+    )
+    with st.container(key="te_period_controls"):
+        advance_column, batch_column = st.columns([1, 1], gap="small")
+        with advance_column:
+            st.button(
+                "Next period →", type="primary", on_click=next_period,
+                args=(st.session_state,), width="stretch",
+                disabled=len(history) >= MAX_PERIODS,
+                help="Continue from the latest period in this simulation.",
+            )
+        with batch_column:
+            st.button(
+                "+10 periods", on_click=next_period,
+                args=(st.session_state, 10), width="stretch",
+                disabled=len(history) >= MAX_PERIODS,
+                help="Continue ten linked periods from the latest result, up to 100.",
+            )
+    if len(history) >= MAX_PERIODS:
+        st.caption(f"Reached {MAX_PERIODS} periods. Start a new simulation for another experiment.")
+    elif selected != len(history):
+        st.caption(f"Viewing history. Next period continues from Period {len(history)}.")
+    st.session_state.setdefault("te_report_scope", st.session_state.te_saved_scope)
+    report_scope = st.pills(
+        "Report range", options=("This period", "Cumulative"), required=True,
+        key="te_report_scope", width="stretch", label_visibility="collapsed",
+        on_change=remember_report_scope, args=(st.session_state,),
+    )
+    report = build_report(
+        tuple(history[:selected]), cumulative=report_scope == "Cumulative"
+    )
+    baseline = st.session_state.te_baseline
+    comparison = compare_runs(
+        tuple(history), baseline.periods,
+        selected_period=selected, cumulative=report_scope == "Cumulative",
+        current_name=st.session_state.te_experiment_name,
+        baseline_name=baseline.name,
+    ) if baseline is not None else None
+    if view == "Results":
+        solution = history[selected - 1].solution
+        diagnostics = {
+            key: solution[key] for key in (
+                "method", "iterations", "relative_market_error",
+                "resting_households", "tolerance", "candidate_count",
+                "selected_candidate", "selection_rule", "reference_price",
+                "root_search_complete",
+            ) if key in solution and isinstance(solution[key], (str, int, float, bool))
+        }
+        if "candidate_prices" in solution:
+            diagnostics["candidate_prices"] = list(solution["candidate_prices"])
+        render_results(
+            {
+                "reporting": report,
+                "diagnostics": diagnostics,
+                "comparison": comparison,
+                "selected_firm": st.session_state.te_selected_firm,
+            },
+            on_select_firm=select_firm,
+        )
+    else:
+        render_chat(
+            history[selected - 1], report,
+            st.session_state.te_generation, "te_chat", comparison=comparison,
+        )
+
+
+st.set_page_config(
+    page_title="Tiny Economy", layout="centered", initial_sidebar_state="collapsed",
+)
+initialize(st.session_state)
+initialize_experiments()
 apply_workspace_style()
-st.caption("TINY ECONOMY")
-st.title("Explore a tiny economy.")
-st.write("Change one thing. Discover what follows.")
-with st.container(key="economy_home_start"):
-    st.page_link(
-        "pages/6_Economy_0_5_Good_and_Money.py",
-        label="Start exploring →", width="stretch",
-    )
-st.caption("Set up your agents. Press Run. Follow the goods and money.")
-st.page_link("pages/12_Economy_1_1_Consumption_Targets.py",
-             label="New · Consumption targets →", width="stretch")
-st.page_link("pages/11_Economy_1_0_Two_Firms_One_Market.py",
-             label="Two firms, one market →", width="stretch")
-st.page_link("pages/10_Economy_0_9_Investment_and_Growth.py",
-             label="Investment, growth and experiments →", width="stretch")
-st.page_link("pages/9_Economy_0_8_Firms_and_Wages.py",
-             label="Firms, wages and dividends →", width="stretch")
-st.page_link("pages/8_Economy_0_7_Work_and_Leisure.py",
-             label="Work, leisure and production →", width="stretch")
-with st.expander("A first experiment"):
-    st.write(
-        "Start with two agents, each with 1 X, 1 Money, and equal preferences. "
-        "Press Run: neither needs to trade. Then change one agent's quantities "
-        "or preferences and Run again. What changes?"
-    )
-    st.write(
-        "Results compare your latest run with the previous one. Inspect a trade, then use Ask why. "
-        "The built-in explanations are instant; deeper questions use the AI assistant."
+st.caption(f"TINY ECONOMY · {literal(st.session_state.te_experiment_name)}")
+if target_view := st.session_state.pop("te_next_view", None):
+    st.session_state.te_view = target_view
+with st.container(key="te_mobile_nav"):
+    view = st.pills(
+        "View", options=("Set up", "Results", "Ask why"), required=True,
+        key="te_view", label_visibility="collapsed", width="stretch",
     )
 
-st.divider()
-st.subheader("Explore the building blocks")
-st.caption("Each chapter adds one mechanism. Earlier economies remain fully runnable.")
-chapters = [
-    ("Exchange", "Two agents discover the gains from exchanging two goods.",
-     "0", "pages/1_Economy_0_Pure_Exchange.py"),
-    ("Price discovery", "Watch a trial price adjust until the market clears.",
-     "0.1", "pages/2_Economy_0_1_Walrasian_Price_Discovery.py"),
-    ("Many agents", "Different endowments and preferences meet in one market.",
-     "0.2", "pages/3_Economy_0_2_Many_Agent_Exchange.py"),
-    ("Redistribution", "Change who starts with Y and compare independent outcomes.",
-     "0.3", "pages/4_Economy_0_3_Repeated_Exchange.py"),
-    ("Money", "Follow each goods transfer and its reverse money payment.",
-     "0.4", "pages/5_Economy_0_4_Monetary_Settlement.py"),
-    ("Good and money", "Choose between one good and holding money, without borrowing.",
-     "0.5", "pages/6_Economy_0_5_Good_and_Money.py"),
-    ("Production and consumption", "Produce, trade and consume across periods. Money carries forward.",
-     "0.6", "pages/7_Economy_0_6_Production_and_Consumption.py"),
-    ("Work and leisure", "Agents choose how much to work, produce and consume, keeping time for leisure.",
-     "0.7", "pages/8_Economy_0_7_Work_and_Leisure.py"),
-    ("Firms and wages", "Households supply labor to a firm, receive wages and share its delayed profits.",
-     "0.8", "pages/9_Economy_0_8_Firms_and_Wages.py"),
-    ("Investment and growth", "Explore consumption today and capacity tomorrow. Save experiments and compare a baseline.",
-     "0.9.1", "pages/10_Economy_0_9_Investment_and_Growth.py"),
-    ("Two firms, one market", "Change one firm's productivity or investment policy. Follow both firms and their households.",
-     "1.0", "pages/11_Economy_1_0_Two_Firms_One_Market.py"),
-    ("Consumption targets", "Give households a flexible consumption target. Explore work, spending and shortfalls over time.",
-     "1.1", "pages/12_Economy_1_1_Consumption_Targets.py"),
-]
-for title, description, version, page in chapters:
-    with st.container(border=True):
-        st.page_link(page, label=title, width="stretch")
-        st.write(description)
-        st.caption(f"Economy {version}")
+if notice := st.session_state.pop("te_notice", None):
+    st.success(literal(notice))
+if st.session_state.te_error:
+    st.error(literal(st.session_state.te_error))
+history = st.session_state.te_history
+try:
+    draft_settings = submitted_settings(st.session_state)
+except ValueError:
+    draft_settings = None
+dirty = bool(history) and draft_settings != st.session_state.te_submitted
 
-with st.expander("What the model includes"):
-    st.write("In Consumption targets, households place extra value on consumption "
-             "below their chosen target. Money and leisure still matter; the target "
-             "does not guarantee consumption. Set it to zero to recover the previous "
-             "chapter's household choices. Cumulative shortfalls never disappear "
-             "because someone consumed extra at another time.")
-    st.write("In Two firms, one market, two firms share a goods price and wage, "
-             "while each funds its own work, production, investment and dividends. "
-             "Households own equal shares in both. Start with equal firms, then "
-             "change one and compare their paths. Firms take prices as given; "
-             "there is no price bargaining, borrowing or firm exit.")
-    st.write("In Investment and growth, the firm uses labor and capital to produce X. "
-             "Households consume some X; the firm installs the rest as capital for the "
-             "next period. Capital wears out. Dividends depend on prior net profit and "
-             "available cash. Investment is your policy choice; there is no borrowing "
-             "or money creation.")
-    st.write("In Firms and wages, households choose work, consumption and money holdings. "
-             "One representative price-taking firm hires labor, produces X and distributes "
-             "realized profit to its equal owners at the start of the next period. Wages must "
-             "be funded from the firm’s cash; there is no credit, inventory or investment yet.")
-    st.write("In Work and leisure, agents choose work to balance consumption, holding money "
-             "and leisure. Productivity turns their work into goods. Work and prices are "
-             "solved together. There are no firms, wages or planning for future periods yet.")
-    st.write("In Production and consumption, agents receive fixed output each period, "
-             "trade and consume all their goods. Money carries forward. Production is "
-             "automatic; work choices and planning for the future are not modeled yet.")
-    st.write(
-        "Every economy keeps opening stocks, agent choices, prices, trades, "
-        "closing stocks, and the accounting ledger available for inspection."
+if view == "Set up":
+    render_setup(dirty)
+elif not history:
+    st.info("Start a simulation to see what your households and firms do.")
+    st.button("Go to set up", on_click=go_to_setup, width="stretch")
+else:
+    render_run(view, history, dirty)
+
+render_experiment_controls(setup_expander)
+with setup_expander("How this economy works", "model"):
+    st.markdown(
+        "**One good, two firms, a fixed amount of money.** "
+        "Households own equal shares of both firms. Each period, they choose work, "
+        "consumption and money to keep. Firms hire, produce X and reinvest part of their surplus."
     )
     st.write(
-        "In Good and money, agents value both the good and holding money. "
-        "Purchases must be affordable. This is an explicit money-in-utility assumption, "
-        "not a model of why money emerges."
+        "Prices and wages clear the markets each period. Households consume all the X "
+        "they buy. Money and capital carry forward; there is no borrowing or money creation."
     )
-    st.write(
-        "In the Money chapter, money settles trades but does not limit purchases. "
-        "There is no banking, credit, production, or money creation. Each experiment "
-        "starts with fresh money; closing balances do not carry into the next experiment."
+    st.caption(
+        "The model uses textbook economic building blocks with explicit teaching "
+        "assumptions: households plan one period at a time, money enters their preferences, "
+        "firms use a chosen reinvestment rate, and consumption targets add urgency below "
+        "the target. Preferences can affect work as well as spending."
     )

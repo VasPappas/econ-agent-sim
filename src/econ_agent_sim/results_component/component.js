@@ -1,305 +1,482 @@
-// Model data is inserted as text only. This component never changes the run.
-export default function render({ data, parentElement }) {
+// All report values are inserted as text. Only disclosure state is local to this view.
+export default function render({ data, parentElement, setStateValue }) {
   const root = parentElement.querySelector('.results-root');
-  const assets = data.assets || ['X', 'Y', 'Money'];
-  const working = data.model === 'work_leisure';
-  const evolving = data.model === 'production_consumption' || working;
-  const valuedMoney = data.model === 'money_in_utility' || evolving;
-  const fmt = (n, places = 2) => Number(n).toLocaleString('en-US', {
-    minimumFractionDigits: places, maximumFractionDigits: places,
-  });
-  const roundsToZero = (n, places) => Math.abs(n) < 0.5 * 10 ** -places;
-  const fmtReceipt = n => n !== 0 && Math.abs(n) < 0.0001 ? '<0.0001' : fmt(n, 4);
-  const raw = n => Number(n).toString();
-  const diagnostic = n => Number(Number(n).toPrecision(3)).toString();
+  const report = data.reporting;
+  const opened = new Set([...root.querySelectorAll('details')]
+    .filter(node => node.open).map(node => node.getAttribute('data-disclosure')));
+  const fmt = (value, places = 2) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 'Unavailable';
+    if (number !== 0 && (Math.abs(number) < .5 * 10 ** -places || Math.abs(number) >= 1e7)) {
+      return number.toExponential(2).replace('e-', 'e−');
+    }
+    return (Object.is(number, -0) ? 0 : number).toLocaleString('en-US', {
+      minimumFractionDigits: places, maximumFractionDigits: places,
+    });
+  };
+  const money = value => `${fmt(value)} M`;
+  const signed = value => `${value > 0 ? '+' : ''}${fmt(value)}`;
+  const percent = (value, places = 0) => `${fmt(100 * value, places)}%`;
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
     if (text !== undefined) node.textContent = text;
     return node;
   };
-  const assetLabel = asset => asset === 'Money' ? 'Money' : asset;
-  const agentHeading = (tag, agent) => {
-    const index = data.agents.indexOf(agent);
-    const heading = el(tag, 'agent-heading');
-    heading.append(el('span', `agent-marker tone-${index % 6}`, String(index + 1)), document.createTextNode(agent.name));
+  const row = (label, value, cls = '') => {
+    const item = el('div', `statement-row ${cls}`.trim());
+    item.append(el('span', '', label), el('strong', '', value));
+    return item;
+  };
+  const statement = (title, rows, cls = '') => {
+    const section = el('section', `statement ${cls}`.trim());
+    section.append(el('div', 'statement-heading', title));
+    for (const [label, value, tone] of rows) section.append(row(label, value, tone));
+    return section;
+  };
+  const details = (id, label, body, cls = '') => {
+    const section = el('details', cls);
+    section.setAttribute('data-disclosure', id);
+    section.open = opened.has(id);
+    section.append(el('summary', '', label), body);
+    return section;
+  };
+  const partyHeading = (name, index) => {
+    const heading = el('h3', 'party-heading');
+    heading.append(el('span', index === null ? 'firm-marker' : `party-marker tone-${index % 6}`,
+      index === null ? 'F' : String(index + 1)), document.createTextNode(name));
     return heading;
   };
-  const signed = n => roundsToZero(n, 2) ? fmt(0) : `${n > 0 ? '+' : ''}${fmt(n)}`;
-  const priceX = data.prices.X;
-  const previousPrice = data.previous_run?.prices.X ?? null;
-  const report = data.reporting;
-  const checksPassed = [...Object.values(data.checks), ...Object.values(data.period_checks || {}),
-    ...Object.values(data.work_checks || {}), ...Object.values(report?.checks || {})].every(Boolean);
+  const cumulative = report.scope === 'cumulative';
+  const economy = report.economy;
+  const firms = report.firms;
+  let selectedFirm = firms.find(firm => firm.entity_id === data.selected_firm) || firms[0];
 
-  const movements = Object.fromEntries(data.agents.map(agent => [
-    agent.name,
-    Object.fromEntries(assets.map(asset => [asset, { received: 0, sent: 0 }])),
-  ]));
-  for (const trade of data.trades) {
-    movements[trade.seller][trade.good].sent += trade.quantity;
-    movements[trade.buyer][trade.good].received += trade.quantity;
-    movements[trade.buyer].Money.sent += trade.payment;
-    movements[trade.seller].Money.received += trade.payment;
-  }
+  const targetSummary = (account, wholeEconomy = false) => {
+    const section = el('section', 'target-summary');
+    section.setAttribute('aria-label', wholeEconomy ? 'Economy consumption targets' : 'Household consumption target');
+    if (account.needed_x === 0) {
+      section.append(el('p', 'target-off', wholeEconomy ? 'Consumption targets are off.' : 'Consumption target off.'));
+      return section;
+    }
+    const below = wholeEconomy ? account.household_periods_below_target : account.below_target_periods;
+    const coverage = Math.min(1, Math.max(0, account.target_coverage));
+    const header = el('div', 'target-heading');
+    header.append(el('span', '', cumulative ? 'TARGETS ACROSS PERIODS' : 'CONSUMPTION TARGET'));
+    header.append(el('strong', below ? 'target-shortfall' : 'target-met',
+      below ? cumulative ? 'Target gaps occurred' : 'Below target'
+        : account.shortfall_x > 0 ? 'Within tolerance' : 'Target met'));
+    section.append(header);
+    const bar = el('progress', 'target-bar');
+    bar.max = 1;
+    bar.value = coverage;
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '1');
+    bar.setAttribute('aria-valuenow', String(coverage));
+    bar.setAttribute('aria-valuetext', `${percent(coverage, 1)} of consumption targets covered`);
+    bar.setAttribute('aria-label', `${percent(coverage, 1)} of consumption targets covered; ${fmt(account.shortfall_x)} X target gap`);
+    if (below) bar.className += ' target-gap-bar';
+    section.append(bar);
+    section.append(row(cumulative ? 'Total targets' : wholeEconomy ? 'Combined targets' : 'Target this period', `${fmt(account.needed_x)} X`));
+    section.append(row(cumulative ? 'Sum of period target gaps' : 'Target gap', `${fmt(account.shortfall_x)} X`, below ? 'target-gap' : ''));
+    if (cumulative) {
+      section.append(el('p', 'note', 'Extra consumption cannot erase an earlier target gap.'
+        + (wholeEconomy ? ' One household’s extra consumption cannot cover another’s target gap.' : '')));
+    } else if (wholeEconomy && below) {
+      section.append(el('p', 'note', `${account.households_below_target} of ${report.households.length} households below target. Extra consumption by others does not cover their target gap.`));
+    }
+    return section;
+  };
 
   root.replaceChildren();
   const shell = el('section', 'results');
-  shell.setAttribute('aria-label', 'Monetary economy result');
-  shell.append(el('div', 'topline', `${working ? 'Work · trade · consume' : evolving ? 'Produce · trade · consume' : valuedMoney ? 'One good + money' : 'Money'} · ${data.settings.agent_count} agents`));
+  shell.setAttribute('aria-label', 'Tiny Economy results');
+  shell.append(el('div', 'topline', `${report.label} · ${report.households.length} HOUSEHOLDS · ${firms.length} FIRMS`));
+  const change = economy.capital_close - economy.capital_open;
+  const maintained = Math.abs(change) <= 1e-9 * Math.max(economy.capital_open, economy.capital_close);
+  shell.append(el('h2', '', maintained ? 'Capital held steady.' : change > 0 ? 'Capital grew.' : 'Capital declined.'));
+  shell.append(el('p', 'intro', maintained
+    ? economy.investment_quantity === 0 && economy.depreciation_quantity === 0
+      ? 'There was no new investment or capital wear.'
+      : 'New capital replaced the units that wore out.'
+    : change > 0 ? 'Investment added more capital than wear removed.' : 'Wear removed more capital than investment added.'));
+  if (cumulative) shell.append(el('p', 'scope-note', 'Activity adds at each period’s original prices. Balances show the first opening and selected closing.'));
 
-  const title = report?.scope === 'cumulative'
-    ? (report.trades.length ? 'Your cumulative report.' : 'No trade in this period range.')
-    : !data.trades.length ? 'No trade needed.'
-    : previousPrice === null ? 'Your market result.'
-    : Math.abs(priceX - previousPrice) < 1e-6 ? 'The price held steady.'
-    : priceX > previousPrice ? 'X became more expensive.' : 'X became less expensive.';
-  shell.append(el('h2', '', title));
-  shell.append(el('p', 'intro', report?.scope === 'cumulative'
-    ? 'See accumulated activity and balances through the selected period.'
-    : evolving ? 'See what agents produced, consumed, and carried into the next period.' : 'See the price, then compare what every agent started and finished with.'));
-
-  const receipt = el('div', 'run-receipt');
-  receipt.append(el('span', 'eyebrow', report?.scope === 'cumulative' ? report.label : data.label),
-    el('p', '', report?.scope === 'cumulative' ? 'Cumulative activity through the selected period' : working ? 'Choose work → produce → trade → consume' : evolving ? 'Production → trade → consumption → carry money forward' : `${data.label} · submitted setup`));
-  shell.append(receipt);
-
-  const price = el('div', 'price-panel');
-  const priceValues = el('div', 'price-values');
-  priceValues.append(el('span', 'eyebrow', report?.scope === 'cumulative' ? 'PRICE OF X · SELECTED PERIOD' : valuedMoney ? 'PRICE OF X · IN MONEY' : 'PRICE OF X · Y FIXED AT 1'));
-  const number = el('div', 'price-number', `${fmt(priceX, 4)} `);
-  number.append(el('span', '', 'M / X'));
-  priceValues.append(number);
-  price.append(priceValues);
-  if (previousPrice !== null) {
-    const change = data.price_x_change_percent;
-    const delta = el('div', 'price-delta', `${change >= 0 ? '+' : ''}${fmt(change, 2)}%`);
-    delta.append(el('small', '', `from ${fmt(previousPrice, 4)}`));
-    price.append(delta);
+  const metrics = el('div', 'headline-metrics');
+  for (const [label, value, unit] of [
+    ['X PRICE', report.price, 'M / X'],
+    ['WAGE', report.wage, 'M / WORK'],
+  ]) {
+    const metric = el('div', 'metric');
+    metric.append(el('span', 'eyebrow', label), el('strong', '', fmt(value, 4)), el('small', '', unit));
+    metrics.append(metric);
   }
-  shell.append(price);
+  shell.append(metrics);
+  if (cumulative) shell.append(el('p', 'scope-note', `Price and wage are for Period ${report.through_period}.`));
+  if (data.diagnostics?.candidate_count > 1) {
+    const previous = data.diagnostics.selection_rule === 'nearest_previous_price';
+    shell.append(el('p', 'selection-note', `The search found ${data.diagnostics.candidate_count} clearing prices for Period ${report.through_period}. This run follows the price closest in proportional terms to ${previous ? 'the previous period’s price' : 'the price with consumption targets off'}. See Ask why for the selection rule.`));
+  }
 
-  const totals = el('div', 'totals');
-  if (!valuedMoney) totals.append(el('p', '', `Y price · ${fmt(data.prices.Y, 4)} · fixed reference`));
-  totals.append(
-    el('p', '', evolving ? `Produced · ${fmt(data.period_totals.produced.X)} X · Consumed · ${fmt(data.period_totals.consumed.X)} X` : valuedMoney ? `Total goods · ${fmt(data.totals.opening.X)} X` : `Total goods · ${fmt(data.totals.opening.X)} X + ${fmt(data.totals.opening.Y)} Y`),
-    el('p', '', `Total money · ${fmt(data.totals.opening.Money)} · ${data.checks.money ? 'conserved' : 'check failed'}`),
-  );
-  if (!working || !report) shell.append(totals);
+  const appendComparisonLegend = (body, comparison) => {
+    const legend = el('div', 'comparison-legend');
+    for (const [label, name] of [['BASELINE', comparison.baseline_name], ['CURRENT', comparison.current_name]]) {
+      const item = el('div', '');
+      item.append(el('span', 'eyebrow', label), el('strong', '', name));
+      legend.append(item);
+    }
+    body.append(legend);
+  };
+  const appendComparisonMetrics = (body, metrics) => {
+    for (const metric of metrics) {
+      const places = ['price', 'real_wage'].includes(metric.key) ? 4 : 2;
+      const item = el('div', 'comparison-metric');
+      item.append(el('div', 'comparison-label', `${metric.label} · ${metric.unit}`));
+      item.append(el('strong', 'baseline-value', fmt(metric.baseline, places)));
+      const current = el('div', 'current-value');
+      current.append(el('strong', '', fmt(metric.current, places)));
+      current.append(el('small', '', `${signed(metric.change)} ${metric.change_unit} vs baseline`));
+      item.append(current);
+      body.append(item);
+    }
+  };
 
-  if (working && report) {
-    const statementRow = (label, value, className = '') => {
-      const row = el('div', `statement-row ${className}`.trim());
-      row.append(el('span', '', label), el('strong', '', value));
-      return row;
-    };
-    const balanceSheet = (opening, closing) => {
-      const section = el('section', 'balance-sheet');
-      section.append(el('div', 'statement-heading', 'BALANCE SHEET'));
-      section.append(statementRow('X', `${fmt(opening.X)} → ${fmt(closing.X)}`));
-      section.append(statementRow('Money', `${fmt(opening.Money)} → ${fmt(closing.Money)}`));
-      return section;
-    };
-    const activityStatement = (rows, count) => {
-      const details = el('details', 'activity-statement');
-      details.append(el('summary', '', `Activity statement · ${count === 1 ? 'this period' : `${count} periods`}`));
-      const body = el('div', 'statement-body');
-      for (const [label, value, cls] of rows) body.append(statementRow(label, value, cls));
-      details.append(body);
-      return details;
-    };
-    shell.append(el('h3', '', 'Economy report'));
-    shell.append(el('p', 'section-intro', report.scope === 'cumulative'
-      ? `${report.label} · flows are added; balances run from the first opening to the selected closing.`
-      : `${report.label} · opening and closing balances with this period’s activity.`));
-    const economy = el('article', 'outcome-card economy-card');
-    economy.append(el('h4', '', 'Whole economy'));
-    economy.append(balanceSheet(report.opening, report.closing));
-    economy.append(activityStatement([
-      ['Produced', `${fmt(report.produced)} X`],
-      ['Consumed', `${fmt(report.consumed)} X`],
-      ['X exchanged', `${fmt(report.gross_x_exchanged)} X`],
-      ['Money exchanged', `${fmt(report.gross_money_exchanged)} M`],
-      ...(report.scope === 'cumulative' ? [['Total work time', `${fmt(report.total_work, 2)} agent-periods`]] : []),
-      ['Average work · leisure', `${fmt(100 * report.average_work, 1)}% · ${fmt(100 * report.average_leisure, 1)}%`],
-    ], report.period_count));
-    economy.append(el('p', 'muted compact-note', 'Payments cancel for the economy; production adds X and consumption removes it.'));
-    shell.append(economy);
-
-    shell.append(el('h3', '', 'Agent reports'));
-    shell.append(el('p', 'section-intro', 'Holdings, activity and the submitted preferences behind each choice.'));
-    const reports = el('div', 'outcomes');
-    for (const agent of report.agents) {
-      const card = el('article', 'outcome-card agent-report');
-      card.append(agentHeading('h4', data.agents.find(row => row.name === agent.name)));
-      const weights = agent.parameters.weights;
-      card.append(el('p', 'preference-line', `Priorities · ${fmt(100 * weights.consumption, 1)}% consume · ${fmt(100 * weights.money, 1)}% money · ${fmt(100 * weights.leisure, 1)}% leisure`));
-      card.append(el('p', 'parameter-line', `Full-effort output · ${fmt(agent.parameters.productivity, 2)} X`));
-      card.append(balanceSheet(agent.opening, agent.closing));
-      const activityRows = [
-        ['Produced', `${fmt(agent.produced)} X`],
-        ['Consumed', `${fmt(agent.consumed)} X`],
-        ['X sold', `${fmt(agent.sold_x)} X`],
-        ['X bought', `${fmt(agent.bought_x)} X`],
-        ['Sales received', `${fmt(agent.sales_received)} M`],
-        ['Purchases paid', `${fmt(agent.purchases_paid)} M`],
-        ['Net trading cash flow', signed(agent.net_trade_cash), roundsToZero(agent.net_trade_cash, 2) ? 'flat' : agent.net_trade_cash > 0 ? 'up' : 'down'],
-        ...(report.scope === 'cumulative' ? [['Total work time', `${fmt(agent.total_work, 2)} period-equivalents`]] : []),
-        ['Average work · leisure', `${fmt(100 * agent.average_work, 1)}% · ${fmt(100 * agent.average_leisure, 1)}%`],
-      ];
-      const activity = activityStatement(activityRows, report.period_count);
-      if (report.scope === 'period') {
-        const agentTrades = report.trades.filter(trade => trade.seller === agent.name || trade.buyer === agent.name);
-        if (agentTrades.length) {
-          const transactions = el('details', 'agent-transactions');
-          transactions.append(el('summary', '', `Receipts · ${agentTrades.length}`));
-          for (const trade of agentTrades) {
-            const selling = trade.seller === agent.name;
-            const receiptLine = el('div', 'agent-transaction');
-            receiptLine.append(el('p', '', `${selling ? 'Sold' : 'Bought'} ${fmtReceipt(trade.quantity)} ${trade.good} ${selling ? 'to' : 'from'} ${selling ? trade.buyer : trade.seller}`));
-            receiptLine.append(el('p', 'muted', `${selling ? 'Received' : 'Paid'} ${fmtReceipt(trade.payment)} Money`));
-            transactions.append(receiptLine);
-          }
-          activity.append(transactions);
-        } else {
-          activity.append(el('p', 'muted', 'No transactions for this agent.'));
-        }
-      } else {
-        activity.append(el('p', 'muted', `${agent.transaction_count} transactions in this range · select a single period for receipts.`));
-      }
-      card.append(activity);
-      reports.append(card);
+  if (data.comparison) {
+    const comparison = data.comparison;
+    const body = el('div', 'comparison-body');
+    body.append(el('p', 'scope-note', comparison.label));
+    if (comparison.available) {
+      appendComparisonLegend(body, comparison);
+      appendComparisonMetrics(body, comparison.metrics);
     }
-    shell.append(reports);
-    if (!report.trades.length) shell.append(el('p', 'no-trade', report.scope === 'cumulative'
-      ? 'No trades in this period range.' : '0 trades · work, production and consumption still occurred.'));
-  } else {
-    shell.append(el('h3', '', 'Agent outcomes'));
-    shell.append(el('p', 'section-intro', evolving ? 'Goods consumed this period; money before and after trading.' : 'Starting and final balances for the whole submitted run.'));
-    const outcomes = el('div', 'outcomes');
-    for (const agent of data.agents) {
-    const card = el('article', 'outcome-card');
-    card.append(agentHeading('h4', agent));
-    if (working) {
-      const time = el('div', 'work-time');
-      time.append(el('strong', '', `Work ${fmt(100 * data.effort[agent.name], 1)}%`),
-        el('span', '', `Leisure ${fmt(100 * data.leisure_time[agent.name], 1)}%`));
-      card.append(time);
-    }
-    for (const asset of assets) {
-      if (evolving && asset === 'X') {
-        const flow = el('div', 'period-flow');
-        flow.append(el('p', '', `Produced ${fmt(data.produced[agent.name])} X`),
-          el('strong', '', `Consumed ${fmt(data.consumed[agent.name])} X`),
-          el('p', 'muted', `Stock: ${fmt(data.period_opening[agent.name].X)} at opening → ${fmt(data.period_closing[agent.name].X)} after consumption`));
-        card.append(flow);
-        continue;
+    body.append(el('p', 'note', comparison.note));
+    const changes = el('div', 'comparison-changes');
+    if (comparison.settings_changes.length) {
+      for (const setting of comparison.settings_changes) {
+        const value = number => typeof number === 'number' ? fmt(number) : String(number);
+        changes.append(row(`${setting.entity} · ${setting.label}`,
+          `${value(setting.baseline)} → ${value(setting.current)}${setting.unit ? ` ${setting.unit}` : ''}`));
       }
-      const start = agent.opening[asset];
-      const finish = agent.closing[asset];
-      const row = el('div', 'outcome-row');
-      const label = el('span', 'asset-label');
-      label.append(el('span', `asset-dot ${asset.toLowerCase()}`, asset === 'Money' ? 'M' : asset));
-      label.append(document.createTextNode(assetLabel(asset)));
-      row.append(label, el('span', 'start-finish', `${fmt(start)} → ${fmt(finish)}`));
-      const change = finish - start;
-      row.append(el('span', `change ${roundsToZero(change, 2) ? 'flat' : change > 0 ? 'up' : 'down'}`, signed(change)));
-      card.append(row);
-    }
-    const agentTrades = data.trades.filter(trade => trade.seller === agent.name || trade.buyer === agent.name);
-    if (agentTrades.length) {
-      const transactions = el('details', 'agent-transactions');
-      transactions.append(el('summary', '', `Show transactions · ${agentTrades.length}`));
-      for (const trade of agentTrades) {
-        const selling = trade.seller === agent.name;
-        const receipt = el('div', 'agent-transaction');
-        receipt.append(el('p', '', `${selling ? 'Sold' : 'Bought'} ${fmtReceipt(trade.quantity)} ${trade.good} ${selling ? 'to' : 'from'} ${selling ? trade.buyer : trade.seller}`));
-        receipt.append(el('p', 'muted', `${selling ? 'Received' : 'Paid'} ${fmtReceipt(trade.payment)} Money`));
-        transactions.append(receipt);
-      }
-      card.append(transactions);
     } else {
-      card.append(el('p', 'muted', 'No transactions for this agent.'));
+      changes.append(el('p', 'note', 'Both simulations use the same starting settings.'));
     }
-    outcomes.append(card);
-  }
-    shell.append(outcomes);
-    if (!data.trades.length) shell.append(el('p', 'no-trade', evolving ? '0 trades · see production and consumption above.' : '0 trades · starting balances unchanged.'));
+    body.append(details('comparison-settings', `Changed settings · ${comparison.settings_changes.length}`, changes, 'activity'));
+    shell.append(details('comparison', 'Compare with baseline', body, 'comparison'));
   }
 
-  if (!checksPassed) shell.append(el('div', 'failure', 'A check needs attention. Open “Verify this run” below.'));
-  const accounts = el('details', `accounts ${checksPassed ? 'passed' : 'failed'}`);
-  const summary = el('summary', '', `${checksPassed ? '✓ All checks passed' : '! Check failed'} · Verify this run`);
-  accounts.append(summary);
-  const accountBody = el('div', 'account-body');
+  const economyCard = el('article', 'card economy-card');
+  economyCard.append(el('h3', 'card-heading', 'Whole economy'));
+  const production = el('div', 'production-allocation');
+  production.append(el('div', 'statement-heading', 'WHERE THE OUTPUT WENT'));
+  production.append(el('div', 'output-total', `${fmt(economy.produced_x)} X produced`));
+  const bar = el('div', 'allocation-bar');
+  bar.setAttribute('role', 'img');
+  bar.setAttribute('aria-label', `${fmt(economy.consumed_x)} X consumed; ${fmt(economy.investment_quantity)} X installed as capital`);
+  const consumedBar = el('span', 'consumed-bar');
+  const investedBar = el('span', 'invested-bar');
+  const consumedShare = economy.produced_x > 0 ? economy.consumed_x / economy.produced_x : 0;
+  consumedBar.style.width = `${100 * consumedShare}%`;
+  investedBar.style.width = `${100 * (1 - consumedShare)}%`;
+  bar.append(consumedBar, investedBar);
+  production.append(bar);
+  const allocation = el('div', 'allocation-labels');
+  const consumedLabel = el('div', 'consumed-label');
+  consumedLabel.append(el('span', '', 'Consumed'), el('strong', '', `${fmt(economy.consumed_x)} X`));
+  const investedLabel = el('div', 'invested-label');
+  investedLabel.append(el('span', '', 'Added to capital'), el('strong', '', `${fmt(economy.investment_quantity)} X`));
+  allocation.append(consumedLabel, investedLabel);
+  production.append(allocation);
+  economyCard.append(production);
+  economyCard.append(targetSummary(economy, true));
+  economyCard.append(row('Capital units', `${fmt(economy.capital_open)} → ${fmt(economy.capital_close)}`, 'total'));
+  economyCard.append(row('Total money', money(economy.closing_money)));
+  economyCard.append(statement('INCOME · MONEY VALUE', [
+    ['Wages earned', money(economy.wages)],
+    ['Firms’ net profit', money(economy.net_operating_profit)],
+    ['Net economy income', money(economy.net_income), 'total'],
+  ]));
+  const economyBody = el('div', 'statement-body');
+  economyBody.append(statement('FROM OUTPUT TO NET INCOME', [
+    ['Output value', money(economy.production_value)],
+    ['Less capital wear', `−${money(economy.depreciation_value)}`],
+    ['Net economy income', money(economy.net_income), 'total'],
+  ]));
+  economyBody.append(el('p', 'note', 'Dividends move income between firms and their owners; they are not added to economy income again.'));
+  economyBody.append(el('p', 'note', 'Amounts are rounded for display. Totals use full precision, so rounded rows may not add exactly.'));
+  economyBody.append(statement('RESOURCES', [
+    ['Money at opening', money(economy.opening_money)],
+    ['Money at closing', money(economy.closing_money)],
+    ['Produced', `${fmt(economy.produced_x)} X`],
+    ['Consumed', `${fmt(economy.consumed_x)} X`],
+    ['Installed as capital', `${fmt(economy.investment_quantity)} X`],
+  ]));
+  economyBody.append(statement('BALANCE SHEET · CLOSING', [
+    ['Money', money(economy.closing_money)],
+    ['Capital at replacement price', money(economy.capital_value_close)],
+    ['Assets within this model', money(economy.assets_close), 'total'],
+  ]));
+  economyBody.append(el('p', 'note', 'Ownership claims are excluded here so the same firms’ assets are not counted twice.'));
+  economyCard.append(details('economy', 'Income and resource details', economyBody, 'activity'));
+  shell.append(economyCard);
 
-  accountBody.append(el('h4', '', evolving ? 'Goods accounted for · money conserved' : 'Conservation'));
-  const conservation = el('div', 'conservation');
-  for (const asset of assets) {
-    const row = el('div', 'conservation-row');
-    if (evolving && asset === 'X') {
-      const t = working && report ? {
-        opening: report.opening, produced: {X: report.produced},
-        consumed: {X: report.consumed}, closing: report.closing,
-      } : data.period_totals;
-      const goodsPassed = working && report ? report.checks.goods_identity : data.period_checks.goods;
-      row.className = 'period-accounting';
-      row.append(el('p', '', `X: ${fmt(t.opening.X)} opening + ${fmt(t.produced.X)} produced − ${fmt(t.consumed.X)} consumed = ${fmt(t.closing.X)} remaining`),
-        el('span', goodsPassed ? 'pass' : 'fail', goodsPassed ? 'Accounted for' : 'Check failed'));
-      conservation.append(row);
-      continue;
+  const firmHeading = firm => {
+    const heading = el('h3', 'party-heading');
+    const index = firms.findIndex(item => item.entity_id === firm.entity_id);
+    heading.append(el('span', `firm-marker firm-tone-${index}`, String.fromCharCode(65 + index)), document.createTextNode(firm.name));
+    return heading;
+  };
+  shell.append(el('h3', 'section-heading', 'Firms in this economy'));
+  shell.append(el('p', 'note', 'Share of sales counts X sold to households. Output kept as new capital is shown separately.'));
+  const overviews = el('div', 'firm-overviews');
+  for (const firm of firms) {
+    const card = el('article', 'card firm-overview');
+    card.setAttribute('data-firm', firm.entity_id);
+    card.append(firmHeading(firm));
+    const sales = el('div', 'sales-summary');
+    sales.append(el('span', '', `${fmt(firm.sold_x)} X sold`), el('strong', '', `${percent(firm.sales_share, 1)} share of sales`));
+    card.append(sales);
+    const grid = el('div', 'firm-metrics');
+    for (const [label, value] of [
+      ['Produced', `${fmt(firm.produced_x)} X`],
+      [cumulative ? 'Work-periods used' : 'Work used', fmt(firm.work_used)],
+      ['Net profit', money(firm.net_operating_profit)],
+      ['Closing capital', fmt(firm.capital_close)],
+    ]) {
+      const metric = el('div', 'firm-metric');
+      metric.append(el('span', '', label), el('strong', '', value));
+      grid.append(metric);
     }
-    const conserved = working && report && asset === 'Money' ? report.checks.money_identity
-      : data.conservation?.[asset] ?? data.checks[asset === 'Money' ? 'money' : 'accounts'];
-    const opening = working && report ? report.opening[asset] : data.totals.opening[asset];
-    const closing = working && report ? report.closing[asset] : data.totals.closing[asset];
-    row.append(el('span', '', assetLabel(asset)), el('strong', '', `${fmt(opening)} → ${fmt(closing)}`), el('span', conserved ? 'pass' : 'fail', conserved ? 'Conserved' : 'Check failed'));
-    conservation.append(row);
+    card.append(grid);
+    if (firm.funding_binding) card.append(el('p', 'funding-note',
+      `Hiring limited by available cash${cumulative ? ` · Period ${firm.funding_period}` : ''}.`));
+    overviews.append(card);
   }
-  accountBody.append(conservation);
-  if (working) {
-    const valid = report ? report.checks.work : Object.values(data.work_checks).every(Boolean);
-    accountBody.append(el('p', valid ? 'pass' : 'fail', valid
-      ? report?.scope === 'cumulative'
-        ? '✓ Time budgets and optimal work choices verified in every included period.'
-        : '✓ Time budgets and optimal work choices verified at the clearing price.'
-      : 'Work choices or time budgets need attention.'));
-  }
+  shell.append(overviews);
+  shell.append(el('p', 'note', 'One work unit is one household working for a full period.'));
 
-  const technical = el('details', 'technical');
-  technical.append(el('summary', '', report?.scope === 'cumulative' ? 'Selected period technical details' : 'Technical details'));
-  const technicalBody = el('div', 'technical-body');
-  technicalBody.append(
-    el('p', '', `Market error · ${diagnostic(data.market_error)}`),
-    el('p', '', `Clearing tolerance · ${diagnostic(data.clearing_tolerance)}`),
-    el('p', '', `Gross money payments · ${fmt(data.gross_money_payments, 4)}`),
-    el('p', '', `Ledger · ${data.trades.length} ${data.trades.length === 1 ? 'trade' : 'trades'} · ${data.trades.length * 2} transfer legs`),
-    el('p', 'muted', 'Balances use 2 decimal places; prices and receipts use 4. Calculations and the CSV retain full precision. Rounded amounts may not add up exactly.'),
-  );
-  if (working) technicalBody.append(el('p', '', `Joint work/price solution · ${data.solution.active_set_passes} active-set passes · ${data.solution.resting_agents} agents chose no work`));
-  technical.append(technicalBody); accountBody.append(technical);
-
-  const csvRows = [evolving ? ['period', 'agent', 'asset', 'opening', 'produced', 'received', 'sent', 'consumed', 'closing'] : ['agent', 'asset', 'start', 'received', 'sent', 'final']];
-  if (working) csvRows[0].push('work_fraction', 'leisure_fraction', 'productivity_x_per_full_work_period');
-  if (working && report) {
-    for (const row of report.rows) csvRows.push([row.period, row.agent, row.asset, raw(row.opening),
-      raw(row.produced), raw(row.received), raw(row.sent), raw(row.consumed), raw(row.closing),
-      raw(row.work_fraction), raw(row.leisure_fraction), raw(row.productivity)]);
-  } else for (const agent of data.agents) for (const asset of assets) {
-      const flow = movements[agent.name][asset];
-      csvRows.push(evolving ? [data.label, agent.name, asset, raw(data.period_opening[agent.name][asset]),
-        raw(asset === 'X' ? data.produced[agent.name] : 0), raw(flow.received), raw(flow.sent),
-        raw(asset === 'X' ? data.consumed[agent.name] : 0), raw(data.period_closing[agent.name][asset])]
-        : [agent.name, asset, raw(agent.opening[asset]), raw(flow.received), raw(flow.sent), raw(agent.closing[asset])]);
-      if (working) csvRows[csvRows.length - 1].push(raw(data.effort[agent.name]),
-        raw(data.leisure_time[agent.name]), raw(data.settings.agents.find(a => a.name === agent.name).productivity));
+  const renderFirmCard = firm => {
+    const firmCard = el('article', 'card firm-card');
+    firmCard.append(firmHeading(firm));
+    firmCard.append(el('p', 'parameters', `${percent(firm.parameters.reinvestment_rate)} reinvest surplus · ${percent(firm.parameters.depreciation_rate)} capital wear`));
+    firmCard.append(statement('PRODUCTION · X', [
+      ['Produced', fmt(firm.produced_x)],
+      ['Sold to households', fmt(firm.sold_x)],
+      ['Added to capital', fmt(firm.investment_quantity)],
+      ['Share of production', percent(firm.production_share, 1)],
+      ['Share of sales', percent(firm.sales_share, 1)],
+    ], 'production-statement'));
+    const capitalBridge = el('div', 'capital-bridge');
+    capitalBridge.append(row('Capital units', `${fmt(firm.capital_open)} → ${fmt(firm.capital_close)}`, 'total'));
+    capitalBridge.append(el('p', 'note', `Added ${fmt(firm.investment_quantity)} · Wear ${fmt(firm.depreciation_quantity)}. Closing capital works next period.`));
+    firmCard.append(capitalBridge);
+    firmCard.append(statement('INCOME · MONEY VALUE', [
+      ['Output value¹', money(firm.production_value)],
+      ['Wages', `−${money(firm.wages_paid)}`],
+      ['Surplus before wear', money(firm.gross_operating_surplus)],
+      ['Capital wear', `−${money(firm.depreciation_value)}`],
+      ['Net operating profit', money(firm.net_operating_profit), 'total'],
+    ], 'income-statement'));
+    firmCard.append(el('p', 'note output-note', '¹ Includes capital the firm made for itself.'));
+    const firmBody = el('div', 'statement-body');
+    firmBody.append(statement('CASH ACCOUNT', [
+      ['Opening money', money(firm.opening_money)],
+      ['Dividends paid', `−${money(firm.dividends_paid)}`],
+      ['Wages paid', `−${money(firm.wages_paid)}`],
+      ['Cash sales', `+${money(firm.sales_received)}`],
+      ['Closing money', money(firm.closing_money), 'total'],
+    ]));
+    firmBody.append(el('p', 'note', 'Installing the firm’s own output uses goods, not a cash payment.'));
+    firmBody.append(statement('CAPITAL · UNITS', [
+      ['Opening capital', fmt(firm.capital_open)],
+      ['Wear', `−${fmt(firm.depreciation_quantity)}`],
+      ['New capital', `+${fmt(firm.investment_quantity)}`],
+      ['Capital for next period', fmt(firm.capital_close), 'total'],
+    ]));
+    firmBody.append(statement('OUTPUT VALUE', [
+      ['Cash sales', money(firm.sales_received)],
+      ['Capital made for own use', money(firm.investment_value)],
+      ['Output value', money(firm.production_value), 'total'],
+    ]));
+    firmBody.append(statement('BALANCE SHEET · CLOSING', [
+      ['Money', money(firm.closing_money)],
+      ['Capital at replacement price', money(firm.capital_value_close)],
+      ['Equity · no debt', money(firm.equity_close), 'total'],
+    ]));
+    firmBody.append(statement('CHANGE IN EQUITY', [
+      ['Opening equity', money(firm.equity_open)],
+      ['Net operating profit', `${signed(firm.net_operating_profit)} M`],
+      ['Dividends paid', `−${money(firm.dividends_paid)}`],
+      ['Capital revaluation', `${signed(firm.holding_gain)} M`],
+      ['Closing equity', money(firm.equity_close), 'total'],
+    ]));
+    firmBody.append(statement('EQUITY ACCOUNTS · CLOSING', [
+      ['Initial contributed equity', money(firm.contributed_equity)],
+      ['Retained earnings', money(firm.retained_earnings_close)],
+      ['Revaluation reserve', money(firm.revaluation_reserve_close)],
+    ]));
+    firmBody.append(el('p', 'note', 'Capital uses the current replacement price of X. Revaluation changes asset value, not cash or operating profit.'));
+    firmBody.append(statement('SUBMITTED SETTINGS', [
+      ['Productivity', fmt(firm.parameters.productivity)],
+      ['Reinvest surplus', percent(firm.parameters.reinvestment_rate)],
+      ['Capital wear', percent(firm.parameters.depreciation_rate)],
+      ['Protected operating float', money(firm.protected_operating_float)],
+    ]));
+    firmCard.append(firmBody);
+    firmCard.append(el('p', 'dividend-note', firm.next_dividend_budget > 0
+      ? `Next-period dividend · ${money(firm.next_dividend_budget)}`
+      : 'No dividend available for next period.'));
+    const allocationBody = el('div', 'statement-body');
+    for (const allocation of firm.allocations || []) {
+      allocationBody.append(statement(allocation.name, [
+        ['Work supplied', `${fmt(allocation.work)} ${cumulative ? 'work-periods' : 'work units'}`],
+        ['Wages received', money(allocation.wages_paid)],
+        ['Dividends received', money(allocation.dividends_paid)],
+        ['Bought from this firm', `${fmt(allocation.sold_x)} X`],
+        ['Paid for purchases', money(allocation.sales_received)],
+      ]));
     }
-  const csv = csvRows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
-  const download = el('a', 'download', 'Download full-precision accounts (CSV)');
+    firmCard.append(details(`firm-${firm.entity_id}-households`, 'By household', allocationBody, 'activity'));
+    const compared = data.comparison;
+    if (compared) {
+      const comparisonBody = el('div', 'comparison-body');
+      const match = compared.firms?.find(item => item.entity_id === firm.entity_id);
+      comparisonBody.append(el('p', 'note', compared.label));
+      if (compared.available && match) {
+        appendComparisonLegend(comparisonBody, compared);
+        appendComparisonMetrics(comparisonBody, match.metrics);
+      }
+      comparisonBody.append(el('p', 'note', compared.note));
+      firmCard.append(details(`firm-${firm.entity_id}-comparison`, `${firm.name} vs baseline`, comparisonBody, 'activity'));
+    }
+    return firmCard;
+
+
+  };
+  const accountsBody = el('div', 'firm-account-body');
+  const selector = el('div', 'firm-selector');
+  selector.setAttribute('role', 'group');
+  selector.setAttribute('aria-label', 'Select firm account');
+  const selectedBody = el('div', 'selected-firm');
+  const selectFirm = firm => {
+    selectedFirm = firm;
+    for (const button of selector.querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(button.getAttribute('data-firm') === firm.entity_id));
+    }
+    selectedBody.replaceChildren(renderFirmCard(firm));
+  };
+  for (const firm of firms) {
+    const button = el('button', '', firm.name);
+    button.type = 'button';
+    button.setAttribute('data-firm', firm.entity_id);
+    button.setAttribute('aria-pressed', String(firm.entity_id === selectedFirm.entity_id));
+    button.addEventListener('click', () => {
+      selectFirm(firm);
+      if (setStateValue) setStateValue('selected_firm', firm.entity_id);
+    });
+    selector.append(button);
+  }
+  selectedBody.append(renderFirmCard(selectedFirm));
+  accountsBody.append(selector, selectedBody);
+  shell.append(details('firm-accounts', 'Firm accounts', accountsBody, 'firm-accounts'));
+
+  shell.append(el('h3', 'section-heading', 'Households'));
+  const households = el('div', 'cards');
+  report.households.forEach((household, index) => {
+    const card = el('article', 'card household-card');
+    card.append(partyHeading(household.name, index));
+    const weights = household.parameters.weights;
+    const priorities = el('div', 'priorities');
+    priorities.setAttribute('aria-label', 'Chosen base preference weights');
+    for (const [label, weight] of [['Consume', weights.consumption], ['Money', weights.money], ['Leisure', weights.leisure]]) {
+      const item = el('span', 'priority');
+      item.append(el('small', '', label), el('strong', '', percent(weight)));
+      priorities.append(item);
+    }
+    card.append(priorities);
+    card.append(row('Money', `${fmt(household.opening_money)} → ${fmt(household.closing_money)} M`, 'total'));
+    card.append(row('Consumed', `${fmt(household.consumed_x)} X`));
+    card.append(targetSummary(household));
+    card.append(row(cumulative ? 'Average work · leisure' : 'Work · leisure',
+      `${fmt(100 * household.average_work, 1)}% · ${fmt(100 * household.average_leisure, 1)}%`));
+    const body = el('div', 'statement-body');
+    body.append(statement('CASH ACCOUNT', [
+      ['Opening money', money(household.opening_money)],
+      ['Wages received', `+${money(household.wages_received)}`],
+      ['Dividends received', `+${money(household.dividends_received)}`],
+      ['Consumption purchases', `−${money(household.purchases_paid)}`],
+      ['Closing money', money(household.closing_money), 'total'],
+    ]));
+    body.append(statement('ASSETS · CLOSING', [
+      ['Spendable money', money(household.closing_money)],
+      ['Ownership of both firms', money(household.ownership_value_close)],
+      ['Assets within this model', money(household.assets_close), 'total'],
+    ]));
+    body.append(el('p', 'note', 'Ownership is a fixed share of firm equity, not spendable cash or a traded share price.'));
+    const scores = household.parameters.scores;
+    body.append(el('p', 'note', `Chosen scores · ${fmt(scores.consumption)} consume · ${fmt(scores.money)} money · ${fmt(scores.leisure)} leisure.`));
+    body.append(el('p', 'note', `Consumption target · ${fmt(household.parameters.consumption_target)} X each period. The preference scores stay fixed; target gaps add urgency without guaranteeing the target.`));
+    if (cumulative) body.append(row('Total work', `${fmt(household.total_work)} work-periods`));
+    const byFirm = el('div', 'statement-body');
+    for (const allocation of household.firms || []) {
+      byFirm.append(statement(allocation.name, [
+        ['Work supplied', `${fmt(allocation.work)} ${cumulative ? 'work-periods' : 'work units'}`],
+        ['Wages received', money(allocation.wages_received)],
+        ['Dividends received', money(allocation.dividends_received)],
+        ['Bought from this firm', `${fmt(allocation.consumed_x)} X`],
+        ['Paid for purchases', money(allocation.purchases_paid)],
+        [`Ownership · ${percent(allocation.ownership)}`, money(allocation.ownership_value_close)],
+      ]));
+    }
+    body.append(details(`household-${household.entity_id}-firms`, 'By firm', byFirm, 'activity'));
+    card.append(details(`household-${household.entity_id}`, 'Cash and ownership', body, 'activity'));
+    households.append(card);
+  });
+  shell.append(households);
+
+  const checkValues = Object.values(report.checks || {});
+  const checksPassed = checkValues.length > 0 && checkValues.every(Boolean);
+  if (!checksPassed) shell.append(el('div', 'failure', 'A check needs attention. Open the evidence below.'));
+  const evidenceBody = el('div', 'evidence-body');
+  for (const [label, passed] of Object.entries(report.checks || {})) {
+    evidenceBody.append(row(label.replaceAll('_', ' '), passed ? 'Verified' : 'Check failed', passed ? 'pass' : 'fail'));
+  }
+  if (report.transfers?.length) {
+    const ledger = el('div', 'ledger');
+    const visibleTransfers = report.transfers.slice(-80);
+    if (visibleTransfers.length < report.transfers.length) ledger.append(el('p', 'note', 'Showing the latest 80 transfers. The CSV includes every period.'));
+    for (const transfer of visibleTransfers) {
+      ledger.append(el('p', '', `P${transfer.period} · ${transfer.sender} → ${transfer.receiver} · ${fmt(transfer.quantity, 4)} ${transfer.asset} · ${transfer.kind.replaceAll('_', ' ')}`));
+    }
+    evidenceBody.append(details('transfers', `Settlement ledger · ${report.transfers.length} transfers`, ledger, 'ledger-details'));
+  }
+  if (data.diagnostics) {
+    const technical = el('div', 'technical');
+    const labels = {
+      candidate_count: 'Candidates found', candidate_prices: 'Candidate X prices',
+      selected_candidate: 'Selected candidate', reference_price: 'Reference X price',
+      selection_rule: 'Selection rule', root_search_complete: 'Search coverage',
+    };
+    for (const [label, value] of Object.entries(data.diagnostics)) {
+      let shown = Array.isArray(value) ? value.map(item => fmt(item, 4)).join(', ')
+        : typeof value === 'number' ? Number(value.toPrecision(4)).toString() : value;
+      if (label === 'selection_rule') shown = value === 'nearest_previous_price'
+        ? 'Closest proportional price to the previous period'
+        : 'Closest proportional price to the target-free economy';
+      if (label === 'root_search_complete') shown = value
+        ? 'Analytical target-free solution' : 'Sampled search; additional roots may exist';
+      technical.append(el('p', '', `${labels[label] || label.replaceAll('_', ' ')} · ${shown}`));
+    }
+    technical.append(el('p', 'note', 'Small nonzero values use scientific notation. Rounded rows may not add exactly; calculations and CSV values retain full precision.'));
+    evidenceBody.append(details('technical', 'Technical details', technical, 'technical-details'));
+  }
+  const columns = [...new Set((report.rows || []).flatMap(item => Object.keys(item)))];
+  const csvRows = [columns, ...(report.rows || []).map(item => columns.map(column => item[column] ?? ''))];
+  const csv = csvRows.map(values => values.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
+  const download = el('a', 'download', 'Download complete accounts (CSV)');
   download.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
-  download.download = `${(report?.label || data.label).toLowerCase().replaceAll(' ', '-')}-accounts.csv`;
-  accountBody.append(download);
-  accounts.append(accountBody); shell.append(accounts);
-  shell.append(el('p', 'boundary', valuedMoney ? data.run_rule : 'Independent experiments. Fresh opening money each time. No borrowing or cash constraint.'));
+  download.download = `tiny-economy-${report.label.toLowerCase().replaceAll(' ', '-').replace('–', '-')}-accounts.csv`;
+  evidenceBody.append(download);
+  shell.append(details('evidence', `${checksPassed ? '✓ All checks passed' : '! Check failed'} · Evidence`, evidenceBody, `evidence ${checksPassed ? 'passed' : 'failed'}`));
+  shell.append(el('p', 'boundary', 'Targets apply each period; target gaps do not become debt or build up extra urgency. Money and capital carry forward. No borrowing or money creation.'));
   root.append(shell);
 }

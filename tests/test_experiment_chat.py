@@ -4,14 +4,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from econ_agent_sim.economy_0_4 import run_economy_0_4
+from econ_agent_sim.engine import (
+    Firm,
+    Household,
+    advance_period,
+    default_firms,
+    default_households,
+)
 from econ_agent_sim.experiment_chat import (
     ChatUnavailable,
     answer_question,
     api_error_message,
     reserve_request,
 )
-from econ_agent_sim.run_workspace import SubmittedRun
+from econ_agent_sim.explanations import build_context
+from econ_agent_sim.reporting import build_report
 
 
 def test_budget_is_shared_atomic_and_expires(tmp_path):
@@ -59,7 +66,7 @@ def fake_connection(status=200, body=None):
             "output": [
                 {
                     "type": "message",
-                    "content": [{"type": "output_text", "text": "Y is fixed at 1."}],
+                    "content": [{"type": "output_text", "text": "Money is conserved."}],
                 }
             ],
         }
@@ -70,17 +77,21 @@ def fake_connection(status=200, body=None):
 def test_api_sends_bounded_context_and_no_tools_or_remote_storage(tmp_path):
     connection = fake_connection()
     history = [{"role": "user", "content": "Previous question"}] * 10
+    period = advance_period(
+        tuple(Household(**h) for h in default_households()),
+        tuple(Firm(**f) for f in default_firms()),
+    )
     with patch(
         "econ_agent_sim.experiment_chat.http.client.HTTPSConnection",
         return_value=connection,
     ) as factory:
         answer = answer_question(
             "Why?",
-            SubmittedRun(run_economy_0_4(), None, 1, 1).context(),
+            build_context(period, build_report((period,)), 1),
             history,
             **request_args(tmp_path),
         )
-    assert answer == "Y is fixed at 1."
+    assert answer == "Money is conserved."
     factory.assert_called_once_with("api.openai.com", timeout=30)
     payload = json.loads(connection.request.call_args.kwargs["body"])
     assert payload["store"] is False

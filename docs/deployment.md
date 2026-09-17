@@ -1,32 +1,35 @@
 # Streamlit Community Cloud deployment
 
-The simulator runs as a normal browser app on Streamlit Community Cloud, with GitHub `main` as the source of truth.
+[Live app](https://econ-agent-sim.streamlit.app/) uses repository
+`VasPappas/econ-agent-sim`, branch `main`, entrypoint
+`app/streamlit_app.py`, Python 3.11 and subdomain `econ-agent-sim`.
 
-## Live app
+No secrets are needed for the simulator or built-in explanations. Optional AI
+chat uses server-side Streamlit secrets described in [experiment_chat.md](experiment_chat.md).
+Never commit API keys.
 
-Permanent URL: https://econ-agent-sim.streamlit.app
+Community Cloud reads root `requirements.txt`, which installs the project with
+its app extra. Streamlit and its server dependency are pinned in pyproject.toml.
+CI installs the same dependencies, runs Ruff, Python and JavaScript tests, then
+starts a real Streamlit server and checks its health endpoint.
 
-This URL is the preferred way to use the simulator from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
+## Release checks
 
-## Deployment settings
+1. Run engine/accounting, report, persistence and UI tests before publishing.
+2. Recheck the remote branch before updating; never force-overwrite user changes.
+3. Update the requirements rebuild marker with a coordinated cross-module release.
+   This requests a fresh Cloud rebuild instead of relying solely on page hot reload.
+4. Verify CI, deployment and actual app interactions after publishing. A healthy
+   server alone does not establish that every UI route works.
+5. Review the root URL on a narrow screen, including setup, run, cumulative
+   results, firm selection, explanations, download/open and reset.
 
-- Repository: `VasPappas/econ-agent-sim`
-- Branch: `main`
-- Entrypoint file: `app/streamlit_app.py`
-- Python: `3.11`
-- App subdomain: `econ-agent-sim`
-- Secrets: none required
+## Single-app migration
 
-Because the repository is public, the deployed app can be public as well.
+Retired chapter routes and sidebar pages are removed. Existing bookmarks should
+use the root URL. Users should refresh after deployment; pre-release in-memory
+sessions are not migrated. Current format-4 files replay only under the matching
+engine. Older files fail with a clear compatibility message.
 
-## Dependencies
-
-Community Cloud reads `requirements.txt` from the repository root. That file installs the project together with its `app` extra. Streamlit is pinned to `1.62.0`, and Starlette is pinned to `1.6.0`, so Community Cloud cannot resolve an older incompatible Starlette server build during a fresh redeploy.
-
-CI installs the same app dependencies and now starts a real Streamlit server and checks its health endpoint after linting and tests. This catches server-startup failures that an in-process Streamlit `AppTest` alone would not detect.
-
-## Update behavior
-
-`main` remains authoritative. Changes merged into `main` are picked up by Streamlit Community Cloud automatically. Dependency changes trigger a redeploy.
-
-Community Cloud may hot-reload a changed Streamlit page while keeping already-imported project modules in memory. Therefore, when a page starts calling a changed Python API signature from `src/econ_agent_sim`, the deployment must also trigger a clean rebuild rather than rely on hot reload. In this project, touching the rebuild marker comment in `requirements.txt` is the explicit mechanism for that clean rebuild. This prevents a new page from calling an older cached module interface.
+Source recovery is available through Git history. Retired engines and tests are
+not kept in the active deployment.

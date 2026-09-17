@@ -1,0 +1,108 @@
+{
+  "format": "tiny-economy-experiment",
+  "format_version": 4,
+  "model": "tiny_economy",
+  "engine_version": "tiny-economy-2.0.0",
+  "current": {
+    "name": "Current model reference",
+    "draft": {
+      "households": [
+        {
+          "id": "household_1",
+          "name": "Household 1",
+          "money": 1.0,
+          "consumption_priority": 1.0,
+          "money_priority": 1.0,
+          "leisure_priority": 1.0,
+          "consumption_target": 1.25
+        },
+        {
+          "id": "household_2",
+          "name": "Household 2",
+          "money": 1.0,
+          "consumption_priority": 1.0,
+          "money_priority": 1.0,
+          "leisure_priority": 1.0,
+          "consumption_target": 0.5
+        }
+      ],
+      "firms": [
+        {
+          "id": "firm_a",
+          "name": "Firm A",
+          "money": 0.5,
+          "productivity": 2.0,
+          "theta": 0.5,
+          "capital": 0.5,
+          "reinvestment_rate": 0.4,
+          "depreciation_rate": 0.1
+        },
+        {
+          "id": "firm_b",
+          "name": "Firm B",
+          "money": 0.5,
+          "productivity": 2.0,
+          "theta": 0.5,
+          "capital": 0.5,
+          "reinvestment_rate": 0.4,
+          "depreciation_rate": 0.1
+        }
+      ]
+    },
+    "run": {
+      "households": [
+        {
+          "id": "household_1",
+          "name": "Household 1",
+          "money": 1.0,
+          "consumption_priority": 1.0,
+          "money_priority": 1.0,
+          "leisure_priority": 1.0,
+          "consumption_target": 0.5
+        },
+        {
+          "id": "household_2",
+          "name": "Household 2",
+          "money": 1.0,
+          "consumption_priority": 1.0,
+          "money_priority": 1.0,
+          "leisure_priority": 1.0,
+          "consumption_target": 0.5
+        }
+      ],
+      "firms": [
+        {
+          "id": "firm_a",
+          "name": "Firm A",
+          "money": 0.5,
+          "productivity": 2.0,
+          "theta": 0.5,
+          "capital": 0.5,
+          "reinvestment_rate": 0.4,
+          "depreciation_rate": 0.1
+        },
+        {
+          "id": "firm_b",
+          "name": "Firm B",
+          "money": 0.5,
+          "productivity": 2.0,
+          "theta": 0.5,
+          "capital": 0.5,
+          "reinvestment_rate": 0.4,
+          "depreciation_rate": 0.1
+        }
+      ],
+      "period_digests": [
+        "edc263d2633c721dd48b7c986cd5e4e0631595cd1c0af621dec7e4d9bd1cfe14",
+        "5b47cdfcb7c8bae50dd0a4dcc724173ae088801f37caf9f55a80629d03e25e7d",
+        "c0d5183aa25002420d63483f93a01c7c517d6573eff55b0a716a6220d123e6b9"
+      ]
+    },
+    "view": {
+      "selected_period": 2,
+      "report_scope": "Cumulative",
+      "selected_firm": "firm_b"
+    }
+  },
+  "baseline": null
+}

@@ -1,155 +1,60 @@
-# Econ Agent Sim
+# Tiny Economy
 
-An educational, auditable agent-based economic simulator built one economy at a time.
+One phone-friendly economic laboratory: households choose work, consumption,
+money and leisure; two independently funded firms produce, invest and pay dividends.
 
-**Live app:** https://econ-agent-sim.streamlit.app
+[Open Tiny Economy](https://econ-agent-sim.streamlit.app/).
 
-## Design principles
+## Explore
 
-1. **Start from the smallest textbook economy.** Add one mechanism at a time.
-2. **Never overwrite a completed economy.** Old scenarios remain runnable and tested.
-3. **Trace every transaction.** Transfers live in an append-only ledger.
-4. **Make accounting executable.** Stock-flow identities and conservation laws are tests.
-5. **Prefer optimization to behavioral tuning.** Agents use textbook optimization wherever possible.
-6. **Keep the economic engine independent of the UI and storage.** No database is needed yet.
-7. **Browser-first development.** GitHub Codespaces is the standard development environment; no local installation is required.
+1. Choose an optional starting preset, or edit the household and firm settings.
+2. Run the economy. **Results** shows firms, households and consolidated accounts.
+3. Advance one or ten periods. Money and capital carry forward under the submitted settings.
+4. Switch between **This period** and **Cumulative**. Historical flows keep their original prices.
+5. Use **Ask why** for built-in answers or the optional AI tutor.
+6. Open **Experiment** to save a baseline, edit a copy, compare, download/reopen or reset.
 
-## Economy 0 — Pure exchange
+There is one maintained model, not a catalogue of versioned apps. The four presets
+are editable configurations of that model: Everyday economy, Fixed productive
+capacity, Capital wears out, and Meeting a consumption target. They simplify
+particular mechanisms; they do not recreate every historical exchange model.
 
-Two agents exchange two goods. Alice begins with one unit of X; Bob begins with one unit of Y. Both have Cobb-Douglas utility `U(X,Y)=X^0.5 Y^0.5`. The Walrasian equilibrium is analytic: with `pY=1`, `pX=1`, and both agents finish with `(0.5 X, 0.5 Y)`.
+## What is explicit
 
-Read [`docs/economies/economy_0.md`](docs/economies/economy_0.md).
+- Household optimization and decreasing-returns-to-labor production use textbook building blocks.
+- Direct utility from money, soft consumption targets, cash-funded payroll and fixed
+  reinvestment/dividend rules are disclosed modeling choices.
+- All payments are funded and traced. Accounts reconcile cash, production, consumption,
+  investment, wear, profit and replacement-price holding gains.
+- Market clearing need not be unique. Candidate selection follows a documented
+  reference/continuation convention, not a simulated price-adjustment process.
+- No banks, credit, money creation, government, shocks, entry/exit or lifetime optimization.
 
-## Economy 0.1 — Walrasian price discovery
+See [model and accounting](docs/model.md), [market selection](docs/market_selection.md)
+and [architecture](docs/architecture/0001-core-principles.md).
 
-Economy 0.1 keeps Economy 0 intact and adds one standard textbook mechanism: Walrasian tâtonnement. The model starts from a trial relative price, agents optimize, excess demand is measured, and the trial price adjusts until the market clears. No trade occurs during the price-search phase; barter settlement happens only after convergence.
+## Save and reopen
 
-The analytic Economy 0 price remains visible as a regression benchmark but is not used by the tâtonnement update.
+The app holds experiments in the current browser session, not a user database.
+Download a JSON experiment before leaving to keep your run and baseline.
+Current files identify format **4** and engine **tiny-economy-2.0.0**. Opening
+replays the exact supported model and checks its accounts before replacing state.
+Files from retired models are rejected clearly, never silently reinterpreted.
+Earlier implementations remain recoverable from Git history, not in the working tree.
 
-Read [`docs/economies/economy_0_1.md`](docs/economies/economy_0_1.md).
+## Develop
 
-## Economy 0.2 — Many-agent pure exchange
-
-Economy 0.2 generalizes the exchange economy from two named agents to an arbitrary population. The canonical laboratory uses ten deterministic heterogeneous agents. Each agent optimizes independently, demands are aggregated, the same Walrasian tâtonnement process discovers the clearing price, and a deterministic clearing procedure matches net sellers to net buyers through the append-only ledger.
-
-The canonical population is deliberately non-random and has an analytic benchmark of `pX=1`, keeping the new many-agent mechanism reproducible and independently testable.
-
-Read [`docs/economies/economy_0_2.md`](docs/economies/economy_0_2.md).
-
-## Economy 0.3 — Repeated pure exchange
-
-Economy 0.3 introduces explicit time while preserving the Economy 0.2 market inside each period. The default experiment begins with a single baseline period. The user may then add as many new periods as desired by moving a chosen amount of Y from one agent to another while total X, total Y, identities, and preferences remain fixed.
-
-Each added period starts from that user-defined exogenous endowment schedule, runs its own tâtonnement process, settles only after convergence, and records all physical transfers with explicit period labels. Closing stocks are not carried into the next period yet, so time is introduced without also introducing saving, inventory accumulation, or intertemporal wealth dynamics.
-
-The original deterministic four-period rotating-Y schedule remains available in the engine as a legacy reproducible example, but it is no longer the default app experience.
-
-Read [`docs/economies/economy_0_3.md`](docs/economies/economy_0_3.md).
-
-## Economy 0.4 — Money and monetary settlement
-
-Economy 0.4 preserves the repeated X/Y exchange economy and introduces Money as a third balance-sheet stock and the unit used to settle trades. Every goods transfer is paired with an explicit reverse money-payment leg under the same trade ID.
-
-Money is deliberately passive at this stage: it does not enter Cobb-Douglas utility, does not enlarge the real demand budget, and does not constrain purchases. Changing the opening money balance therefore leaves the real equilibrium unchanged. The purpose of Economy 0.4 is to establish monetary prices, payment flows, and three-asset stock-flow accounting before liquidity, credit, or banking are introduced.
-
-Read [`docs/economies/economy_0_4.md`](docs/economies/economy_0_4.md).
-
-## Economy 0.8 — Firms and wages
-
-Economy 0.8 separates households from production. Households choose labor,
-consumption, liquid money and leisure; one representative price-taking firm hires
-labor and produces X with decreasing returns. Wages must be funded from the firm's
-cash, and realized profit is distributed equally to household owners at the start
-of the following period. Every wage, purchase, goods delivery and dividend remains
-an explicit ledger transfer.
-
-Read [`docs/economies/economy_0_8_design.md`](docs/economies/economy_0_8_design.md).
-
-## Economy 0.9 — Investment and growth
-
-The firm combines labor with productive capital. Some X is consumed; some becomes
-capital for the next period. An owner policy reinvests a share of gross operating
-surplus before depreciation. Opening capital wears out, and dividends are limited
-by prior-period net profit and cash above the initial operating float.
-
-Phone-friendly reports distinguish production, cash sales, investment, wear and
-profit. Capital uses current replacement-price valuation, with holding gains
-separate from income. Period and cumulative accounts preserve original prices,
-cash funding, physical continuity and consolidated ownership accounting.
-
-Read [`docs/economies/economy_0_9_design.md`](docs/economies/economy_0_9_design.md).
-
-### Economy 0.9.1 — Experiments
-
-Keep a baseline, edit a copy, and compare consumption, capital, work, prices,
-wage purchasing power and profit at the same period. Download a portable JSON
-file containing the simulation, setup draft and baseline; reopen it later to
-continue with verified accounts. No database or account is required.
-
-Read [`docs/economies/economy_0_9_1_experiments.md`](docs/economies/economy_0_9_1_experiments.md).
-
-## Economy 1.0 — Two firms, one market
-
-Two independently funded firms share the same goods price and wage. Each owns
-capital, hires labor, retains output for investment and pays its own eligible
-dividends. Households own equal shares of each firm and choose consumption,
-holding Money and leisure. The equal starting firms split the previous firm's
-resources, preserving the aggregate baseline rather than adding extra wealth.
-
-Compact firm summaries distinguish production from sales, with full statements
-for a selected firm and consolidated economy accounts. Cumulative flows retain
-original period prices; sales shares use summed physical quantities. Version 2
-experiment files save both firms, draft edits, a baseline and the selected view.
-Earlier economies and their original saved files remain runnable.
-
-The pure engine, canonical reports, comparisons, file format and UI are separate
-modules. Firms take prices as given; borrowing, strategic pricing, bankruptcy,
-entry/exit and shocks remain outside this model.
-
-Read [`docs/economies/economy_1_0_design.md`](docs/economies/economy_1_0_design.md).
-
-## Economy 1.1 — Consumption targets
-
-Households can set a flexible amount of X they aim to consume each period.
-Below that target, a smooth log-gap preference term raises the value of extra
-consumption. Money and leisure remain valued; no minimum delivery is guaranteed.
-The three base priorities stay fixed. A zero target recovers Economy 1.0's choices.
-
-The default target is 0.50 X; default first-period consumption already exceeds it.
-Try 1.00 X to activate the extra incentive. Results show each household's target,
-actual consumption and shortfall. Cumulative shortfalls sum each household's
-positive gaps in each period; excess elsewhere never cancels them. A target is
-a preference parameter, and the fixed urgency strength is a disclosed modeling
-choice, not an estimate of subsistence needs or Stone–Geary utility.
-
-Version 3 files identify the new engine. Earlier chapters and files retain their
-original models. Accounting, dividends, market structure and firm policies are
-unchanged. Read [`docs/economies/economy_1_1_design.md`](docs/economies/economy_1_1_design.md).
-
-## Hosted browser app
-
-Open the permanent Streamlit Community Cloud deployment at https://econ-agent-sim.streamlit.app. Normal use can happen directly from a tablet, phone, or desktop browser without opening GitHub or Codespaces.
-
-Deployment details are documented in [`docs/deployment.md`](docs/deployment.md).
-
-## Run in GitHub Codespaces
-
-1. In GitHub, select the branch you want to inspect. For work in progress, use its feature branch; for completed economies, use `main`.
-2. Click **Code** → **Codespaces** → **Create codespace**.
-3. Wait for setup to finish. Python, Streamlit, pytest, and Ruff are installed automatically.
-4. In the Codespaces terminal, run:
+Python 3.11 or newer:
 
 ```bash
+python -m pip install -e ".[dev,app]"
 streamlit run app/streamlit_app.py
-```
-
-GitHub will forward port `8501` and open the Streamlit app in your browser. Streamlit's page navigation lets you move between permanent economy versions.
-
-To run the same quality checks used by CI:
-
-```bash
 ruff check .
 pytest -q
+node --test tests/test*component.cjs
 ```
 
-GitHub Actions runs these checks automatically for pull requests.
+The pure engine has no Streamlit or database dependency. Tests cover independent
+household/firm optimality, funded ledger replay, accounting, units and scale,
+multiple roots, save/reopen integrity, UI state and rendering. CI also starts the
+real Streamlit server. See [deployment](docs/deployment.md) and [app guide](docs/app.md).

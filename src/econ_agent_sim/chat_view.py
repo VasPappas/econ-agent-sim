@@ -1,4 +1,4 @@
-"""A phone-friendly, session-local chat view for the selected experiment."""
+"""Scope-aware, session-local explanations for the current economy."""
 
 import os
 import tempfile
@@ -14,7 +14,7 @@ from econ_agent_sim.experiment_chat import (
     answer_question,
     context_id,
 )
-from econ_agent_sim.explanations import built_in_explanations
+from econ_agent_sim.explanations import build_context, built_in_explanations
 
 
 def chat_setting(name, default=""):
@@ -27,116 +27,34 @@ def chat_setting(name, default=""):
         return default
 
 
-def render_chat(run):
-    st.subheader("Let’s make sense of it.")
-    st.write("Make sense of the prices, the trades, and what changed.")
-    period = run.period
-    base_fingerprint = context_id(run.context())
-    identity = base_fingerprint
-    firms_wages = run.data.get("model") == "firms_wages"
-    working = run.data.get("model") == "work_leisure"
-    evolving = run.data.get("model") == "production_consumption" or working or firms_wages
-    valued_money = run.data.get("model") == "money_in_utility" or evolving
-    saved_focus = st.session_state.setdefault("economy04_saved_focus", {})
-    focus_key = (
-        f"fw_chat_transfer_{base_fingerprint[:16]}"
-        if firms_wages else "economy04_chat_trade"
+def render_chat(period, report, run_id, view_key, *, comparison=None):
+    st.subheader("Make sense of your economy")
+    st.caption(f"{report['label']} · Answers use the results you are viewing.")
+    answers = built_in_explanations(period, report)
+    if comparison is not None:
+        answers["How should I read the baseline comparison?"] = (
+            f"{comparison['label']}. {comparison['note']} "
+            "Each firm's comparison follows its identity across experiments. "
+            "Sales-share changes are percentage points. Changed settings compare "
+            "submitted runs, not unsubmitted edits. A higher number is not "
+            "automatically better for households with different priorities."
+        )
+    topic = st.selectbox(
+        "Explore a question", list(answers), key=f"{view_key}_question_topic",
     )
-    if not firms_wages:
-        identity_key = f"{focus_key}_identity"
-        if (st.session_state.get(identity_key) != identity
-                or focus_key not in st.session_state):
-            st.session_state[focus_key] = saved_focus.get(base_fingerprint, -1)
-            st.session_state[identity_key] = identity
-        if st.session_state.get(focus_key) is None:
-            st.session_state[focus_key] = -1
-    focus_items = period.transfers if firms_wages else period.trades
-    options = [-1, *range(len(focus_items))]
-
-    def focus_label(index):
-        if index == -1:
-            return "Whole period" if evolving else "Whole run"
-        if firms_wages:
-            transfer = focus_items[index]
-            kind = transfer.kind.replace("_", " ").title()
-            return f"{kind} {index + 1} of {len(focus_items)} · {transfer.sender} → {transfer.receiver}"
-        trade = focus_items[index]
-        return f"Trade {index + 1} of {len(focus_items)} · {trade.seller} → {trade.buyer}"
-
-    trade_index = st.selectbox(
-        "Focus",
-        options,
-        key=focus_key,
-        format_func=focus_label,
-        **({"index": 0} if firms_wages else {}),
-    )
-    saved_focus[base_fingerprint] = trade_index
-    while len(saved_focus) > 12:
-        saved_focus.pop(next(iter(saved_focus)))
-    trade_index = None if trade_index == -1 else trade_index
-    context = run.context(trade_index)
+    st.text(answers[topic])
+    st.caption("From the model · instant · no AI usage")
+    st.divider()
+    context = build_context(period, report, run_id, comparison=comparison)
     fingerprint = context_id(context)
-    # Restore the matching conversation; never apply another result's history.
-    conversations = st.session_state.setdefault("economy04_conversations", {})
-    history = conversations.setdefault(fingerprint, [])
-    # Bound session memory, preserving the most recently visited contexts.
-    conversations.pop(fingerprint)
+    conversations = st.session_state.setdefault("te_conversations", {})
+    history = conversations.pop(fingerprint, [])
     conversations[fingerprint] = history
     while len(conversations) > 12:
         conversations.pop(next(iter(conversations)))
-    st.session_state.economy04_chat_context = fingerprint
-    st.session_state.economy04_chat_messages = history
-    st.session_state.setdefault("economy04_chat_session", str(uuid4()))
-    population = period.households if firms_wages else period.population
-    with st.container(border=True):
-        st.markdown(
-            f"**{context['label']}** · {len(population)} "
-            f"{'households' if firms_wages else 'agents'} · "
-            f"X price **{period.prices['X']:.4f}** · "
-            + (f"wage **{period.wage:.4f}**" if firms_wages
-               else "Money is valued" if valued_money else "Y fixed at **1**")
-        )
-        st.caption("Your conversation stays with this run and trade focus.")
-    st.markdown("**Explore the explanation**")
-    st.caption("From the model · instant · no AI usage")
-    for title, explanation in built_in_explanations(context).items():
-        with st.expander(title):
-            st.write(explanation)
-    if working:
-        with st.expander("How were work and price found?"):
-            st.write("The model solves work choices and market clearing together. It checks which agents choose zero work, then solves the corresponding linear equation in 1/p. This is not a simulated price-adjustment path.")
-            st.latex(r"\ell_i=\max\left(0,\;1-\gamma_i-\frac{\gamma_i}{A_i}\left(x_i^0+\frac{m_i^0}{p}\right)\right)")
-            st.caption("ℓ is work time; γ is leisure preference; A is productivity. Opening X and Money are x⁰ and m⁰. Production is A × ℓ. The price makes total desired consumption equal opening X plus production.")
-    elif valued_money and not firms_wages:
-        with st.expander("How was the price found?"):
-            st.write("This version solves the clearing price directly; it does not simulate a price-adjustment path.")
-            st.latex(r"p_X = \frac{\sum_i \alpha_i m_i^0}{\sum_i (1-\alpha_i)x_i^0}")
-            st.caption("α is preference for consumption. Here x⁰ includes this period's production; m⁰ is carried money. The price clears the market before consumption." if evolving else "α is preference for the good. Starting money and goods are m⁰ and x⁰. The price makes total desired X equal total available X.")
-    elif not firms_wages:
-        render_price_history(period)
+    # Workspace resets clear conversations, not the request-budget identity.
+    st.session_state.setdefault("chat_session_id", str(uuid4()))
     render_conversation(context, history)
-
-
-def render_price_history(period):
-    with st.expander("How was the price found?"):
-        st.caption(
-            "The model adjusts the price of X until demand and supply clear. "
-            "Y stays fixed at 1 as the reference price."
-        )
-        st.dataframe(
-            [
-                {
-                    "step": step.iteration,
-                    "X price": step.price_x,
-                    "X excess demand": step.excess_demand_x,
-                    "Y excess demand": step.excess_demand_y,
-                    "market error": step.market_error,
-                }
-                for step in period.steps
-            ],
-            width="stretch",
-            hide_index=True,
-        )
 
 
 def render_conversation(context, history):
@@ -160,7 +78,7 @@ def render_conversation(context, history):
     with st.container():
         typed = st.chat_input(
             "Ask a question…",
-            key="economy04_chat_input",
+            key="te_chat_input",
             max_chars=MAX_QUESTION,
             disabled=not ready,
         )
@@ -177,7 +95,7 @@ def render_conversation(context, history):
                     model=str(chat_setting("OPENAI_MODEL", DEFAULT_MODEL)),
                     budget_path=Path(tempfile.gettempdir())
                     / "econ-chat-budget.sqlite3",
-                    session_id=st.session_state.economy04_chat_session,
+                    session_id=st.session_state.chat_session_id,
                     daily_limit=limit,
                 )
         except (ChatUnavailable, ValueError) as error:
@@ -197,9 +115,7 @@ def render_conversation(context, history):
                 ]
             )
             history[:] = history[-20:]
-            st.session_state.economy04_chat_messages = history
             st.rerun()
     if history and st.button("Clear conversation", width="stretch"):
         history.clear()
-        st.session_state.economy04_chat_messages = history
         st.rerun()
