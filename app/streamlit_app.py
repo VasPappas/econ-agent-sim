@@ -104,6 +104,8 @@ def render_setup(dirty):
 
     for index, firm in enumerate(st.session_state.te_firms):
         for field in FIRM_FIELDS:
+            if field == "required_return":
+                continue
             value = firm[field]
             st.session_state.setdefault(
                 f"te_firm_{field}_{index}",
@@ -122,16 +124,42 @@ def render_setup(dirty):
                 )
             st.caption("Productivity: X produced with 1 capital and 1 unit of work.")
             st.caption("EACH PERIOD")
+            policy = st.selectbox(
+                "Investment policy", options=("percentage", "user_cost"),
+                format_func=lambda value: (
+                    "Fixed percentage · benchmark" if value == "percentage"
+                    else "Forward-looking · user cost"
+                ),
+                key=f"te_firm_investment_policy_{index}",
+                on_change=capture, args=(st.session_state,),
+            )
             compact_input(
-                "firm", "reinvestment_rate", "Reinvest surplus %", minimum=0.0,
+                "firm", "reinvestment_rate",
+                "Maximum surplus invested %" if policy == "user_cost"
+                else "Reinvest surplus %", minimum=0.0,
                 maximum=90.0, step=10.0, index=index,
             )
+            if policy == "user_cost":
+                st.session_state[f"te_firm_required_return_{index}"] = (
+                    firm["required_return"] * 100
+                )
+                compact_input(
+                    "firm", "required_return", "Required return %", minimum=0.0,
+                    maximum=100.0, step=1.0, index=index,
+                )
             compact_input(
                 "firm", "depreciation_rate", "Capital wear %", minimum=0.0,
                 maximum=90.0, step=5.0, index=index,
             )
             st.caption(
-                "Reinvestment uses a share of output value after wages. "
+                "The budget caps the share of output value after wages kept as capital. "
+                "The firm compares expected returns with required return plus wear, "
+                "holding prices, wage and payroll cash at current values. "
+                "Required return is a decision threshold, not an interest payment."
+                if policy == "user_cost" else
+                "Reinvestment keeps a fixed share of output value after wages as capital."
+            )
+            st.caption(
                 "Wear uses a share of opening capital. Equal percentages need not balance."
             )
 
@@ -329,6 +357,7 @@ with setup_expander("How this economy works", "model"):
     st.caption(
         "The model uses textbook economic building blocks with explicit teaching "
         "assumptions: households plan one period at a time, money enters their preferences, "
-        "firms use a chosen reinvestment rate, and consumption targets add urgency below "
+        "firms use a fixed reinvestment share or a conditional user-cost investment rule, "
+        "and consumption targets add urgency below "
         "the target. Preferences can affect work as well as spending."
     )

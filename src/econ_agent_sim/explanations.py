@@ -6,8 +6,11 @@ MODEL_PASSPORT = (
     "preference scores form Cobb–Douglas-style log utility, with a custom smooth "
     "urgency term below an optional consumption target. Two price-taking firms "
     "share one goods price and one wage. Markets clear each period; firm payroll "
-    "must be funded from cash before current sales. Reinvestment is a selected "
-    "share of output value minus wages, before wear; it is not an optimized "
+    "must be funded from cash before current sales. Firms either reinvest a "
+    "fixed share of output value minus wages, before wear, or choose investment "
+    "within that share's budget using a conditional user-cost rule. That rule "
+    "holds prices, wage and payroll cash unchanged when comparing expected "
+    "marginal returns with required return plus wear. This is not an optimized "
     "lifetime investment plan. New capital works next period. Dividends pay "
     "preceding-period positive net profit only when cash exceeds the firm's "
     "initial operating float. Household ownership shares are equal and fixed. "
@@ -81,7 +84,7 @@ def _market_explanations(period, report: dict) -> dict[str, str]:
             "the firm's sold X divided by all firms' sold X. For example, equally "
             "productive and capitalized firms satisfying the unconstrained hiring "
             "condition can produce equal output but sell 40% and 60% of household "
-            "purchases when their reinvestment policies are 80% and 20%. "
+            "purchases when their fixed-percentage reinvestment policies are 80% and 20%. "
             "In cumulative reports, shares divide summed physical sales; they "
             "are not averages of period percentages or shares of cumulative Money receipts."
         ),
@@ -107,16 +110,20 @@ def _market_explanations(period, report: dict) -> dict[str, str]:
             f"Households consumed {amount(economy['consumed_x'])} X and firms "
             f"installed {amount(economy['investment_quantity'])} X as capital. "
             "Each firm retains some of its own output; it does not pay itself "
-            "or buy capital from the other firm. Reinvestment is a share of "
-            "output value minus wages, before capital wear. It is not a share of "
-            "all output or net profit. New capital becomes productive next period."
+            "or buy capital from the other firm. The percentage policy invests "
+            "a fixed share of output value minus wages, before capital wear. "
+            "The user-cost policy treats that share as an investment budget and "
+            "may invest less. Neither share is applied to all output or net profit. "
+            "New capital becomes productive next period."
         ),
         "Why did capital change?": (
             f"For {scope}: {capital}. Capital grows when additions exceed wear. "
             "Wear applies to each period's opening capital. Reinvestment and wear "
             "percentages use different bases, so equal percentages do not keep "
-            "capital constant. A higher reinvestment policy keeps more goods from "
-            "current consumption and does not guarantee higher long-run consumption."
+            "capital constant. More actual investment keeps more goods from "
+            "current consumption and does not guarantee higher long-run consumption. "
+            "Raising the user-cost budget can leave investment unchanged when "
+            "expected returns already limit the chosen amount."
         ),
         "Who receives each firm's dividends?": (
             f"Each of the {len(period.households)} households owns an equal share "
@@ -195,6 +202,53 @@ def built_in_explanations(period, report):
         "household and period. They are physical X quantities, not money flows."
     )
     answers.update(market_answers)
+    answers["How do the investment policies differ?"] = (
+        "Fixed percentage invests the chosen share of output value after wages, "
+        "before wear. Forward-looking user cost makes that share a maximum "
+        "investment budget. It compares the expected extra operating surplus "
+        "from one more capital unit with required return plus depreciation. "
+        "Expected prices, wage and payroll cash stay at current levels; future "
+        "hiring is chosen subject to that cash constraint. These conditional "
+        "expectations can be wrong when the next period's market clears. "
+        "Required return is an assumed opportunity cost, not paid interest. "
+        "Investment still uses the firm's own output, and there is no borrowing. "
+        "Several equally worthwhile investment amounts may exist; the model "
+        "selects among them to clear the current goods market. Households still "
+        "make current-period choices, so this is not a joint lifetime plan."
+    )
+    decisions = []
+    reasons = {
+        "returns_below_cost": "Expected returns do not justify adding capital.",
+        "budget_limited": "The investment budget limits the chosen addition.",
+        "interior": "Expected marginal return meets user cost at the chosen capital.",
+        "indifferent": (
+            "Several investment amounts earn the same forecast score; "
+            "this amount clears the goods market."
+        ),
+    }
+    for firm in report["firms"]:
+        decision = firm.get("investment_decision")
+        if decision is None:
+            continue
+        decisions.append(
+            f"{firm['name']}: invested {amount(decision['investment_quantity'])} X "
+            f"from a maximum budget of {amount(decision['investment_budget_quantity'])} X. "
+            f"Wear to replace was {amount(decision['replacement_quantity'])} X. "
+            "At the chosen closing capital, expected marginal return was "
+            f"{amount(100 * decision['expected_marginal_return'])}% and user cost "
+            f"was {amount(100 * decision['user_cost'])}% "
+            "(required return plus wear). "
+            + reasons.get(decision["reason"], "Investment follows the user-cost rule.")
+        )
+    if decisions:
+        answers["Why did firms choose this investment?"] = (
+            f"These decisions describe Period {period.number}, including in a "
+            "cumulative report. Forecasts are not summed across periods. "
+            + " ".join(decisions)
+            + " Forecasts hold prices, wage and payroll cash unchanged. "
+            "Replacement is a comparison with actual wear, not a mandatory "
+            "minimum: capital can shrink when investment is below wear."
+        )
     answers["What does this model assume?"] = MODEL_PASSPORT
     candidates = period.solution.get("candidate_count", 1)
     reference = (

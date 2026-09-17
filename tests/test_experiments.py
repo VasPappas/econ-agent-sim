@@ -25,12 +25,13 @@ from econ_agent_sim.experiments import (
 )
 
 
-def experiment(count=3):
+def experiment(count=3, *, firms=None):
     households = tuple(
         Household(**{**item, "consumption_target": 1.2345678912345})
         for item in default_households()
     )
-    firms = tuple(Firm(**item) for item in default_firms())
+    if firms is None:
+        firms = tuple(Firm(**item) for item in default_firms())
     history = []
     for _ in range(count):
         history.append(advance_period(
@@ -50,7 +51,7 @@ def test_roundtrip_preserves_dirty_draft_baseline_and_continuation():
     encoded = dump_experiment(current, baseline=baseline)
     payload = json.loads(encoded)
     assert (payload["model"], payload["engine_version"], payload["format_version"]) == (
-        "tiny_economy", "tiny-economy-2.0.0", 4,
+        "tiny_economy", "tiny-economy-3.0.0", 5,
     )
     reopened = load_experiment(encoded)
     assert reopened.current == current
@@ -84,6 +85,66 @@ def test_supported_unicode_names_roundtrip_in_literal_and_escaped_json():
         reopened = load_experiment(data)
         assert reopened.current == current
         assert reopened.baseline == current
+
+
+@pytest.mark.parametrize("policies", [
+    ("user_cost", "user_cost"), ("user_cost", "percentage"),
+])
+def test_investment_policies_roundtrip_dirty_draft_baseline_and_continuation(policies):
+    firms = tuple(
+        replace(Firm(**item), investment_policy=policy, required_return=.08)
+        for item, policy in zip(default_firms(), policies, strict=True)
+    )
+    submitted = experiment(2, firms=firms)
+    current = replace(
+        submitted,
+        draft_firms=(
+            replace(firms[0], investment_policy="percentage", required_return=.21),
+            replace(firms[1], investment_policy="user_cost", reinvestment_rate=.7),
+        ),
+    )
+    baseline = experiment(1)
+    encoded = dump_experiment(current, baseline=baseline)
+    restored = load_experiment(encoded)
+    assert restored.current == current
+    assert restored.baseline == baseline
+    assert dump_experiment(restored.current, baseline=restored.baseline) == encoded
+    previous = restored.current.periods[-1]
+    assert advance_period(previous.households, previous.firms, previous) == advance_period(
+        submitted.periods[-1].households, firms, submitted.periods[-1],
+    )
+
+
+@pytest.mark.parametrize("field,value", [
+    ("investment_policy", None), ("investment_policy", True),
+    ("investment_policy", "unknown"), ("investment_policy", []),
+    ("required_return", -.01), ("required_return", 1.01),
+    ("required_return", float("nan")), ("required_return", float("inf")),
+    ("required_return", True), ("required_return", ".05"),
+])
+def test_invalid_policy_settings_are_rejected(field, value):
+    payload = json.loads(dump_experiment(experiment(0)))
+    payload["current"]["draft"]["firms"][0][field] = value
+    with pytest.raises(ExperimentError):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("field", ["investment_policy", "required_return"])
+def test_current_format_requires_explicit_policy_settings(field):
+    payload = json.loads(dump_experiment(experiment(0)))
+    del payload["current"]["draft"]["firms"][0][field]
+    with pytest.raises(ExperimentError, match="firm fields"):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("field,value", [
+    ("investment_policy", "user_cost"), ("required_return", .15),
+])
+def test_changed_submitted_policy_cannot_reuse_original_period_checks(field, value):
+    payload = json.loads(dump_experiment(experiment(1)))
+    payload["current"]["run"]["firms"][0][field] = value
+    with pytest.raises(ExperimentError, match="reproduced"):
+        load_experiment(json.dumps(payload))
 
 
 @pytest.mark.parametrize("codepoint", [0xD800, 0xDFFF, 0xDABC])
@@ -126,7 +187,7 @@ def test_retired_files_are_rejected_before_replay_without_dead_links(version):
 def test_reject_duplicate_keys_nonfinite_unknown_fields_and_oversize_input():
     encoded = dump_experiment(experiment(0)).decode()
     for malformed in (
-        encoded.replace('"format_version": 4', '"format_version": 4, "format_version": 4'),
+        encoded.replace('"format_version": 5', '"format_version": 5, "format_version": 5'),
         encoded.replace('"consumption_target": 1.2345678912345', '"consumption_target": NaN'),
         encoded.replace('"selected_period": 1', '"selected_period": 1, "extra": 2'),
         " " * (MAX_FILE_BYTES + 1),
@@ -152,6 +213,42 @@ def test_unsupported_engine_cannot_silently_recalculate_saved_results():
         load_experiment(json.dumps(payload))
 
 
+@pytest.mark.parametrize("version,engine", [
+    (4, "tiny-economy-3.0.0"), (5, "tiny-economy-2.0.0"),
+])
+def test_engine_identity_must_match_its_exact_supported_format(version, engine):
+    payload = json.loads(dump_experiment(experiment(0)))
+    payload.update(format_version=version, engine_version=engine)
+    with pytest.raises(ExperimentError, match="different engine version"):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("part", ["current", "baseline"])
+@pytest.mark.parametrize("settings", ["draft", "run"])
+@pytest.mark.parametrize("field,value", [
+    ("investment_policy", "percentage"), ("required_return", .05),
+])
+def test_legacy_files_reject_policy_fields_even_when_they_match_defaults(
+    part, settings, field, value,
+):
+    fixture = Path(__file__).parent / "fixtures/current_model_workspace.json"
+    payload = json.loads(fixture.read_bytes())
+    payload["baseline"] = json.loads(json.dumps(payload["current"]))
+    payload[part][settings]["firms"][0][field] = value
+    with pytest.raises(ExperimentError, match="firm fields"):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("part", ["current", "baseline"])
+def test_legacy_period_corruption_is_rejected_before_migration(part):
+    fixture = Path(__file__).parent / "fixtures/current_model_workspace.json"
+    payload = json.loads(fixture.read_bytes())
+    payload["baseline"] = json.loads(json.dumps(payload["current"]))
+    payload[part]["run"]["period_digests"][1] = "0" * 64
+    with pytest.raises(ExperimentError, match="reproduced"):
+        load_experiment(json.dumps(payload))
+
+
 def test_frozen_current_file_and_continuation_preserve_the_published_contract():
     fixture = Path(__file__).parent / "fixtures/current_model_workspace.json"
     restored = load_experiment(fixture.read_bytes()).current
@@ -161,6 +258,10 @@ def test_frozen_current_file_and_continuation_preserve_the_published_contract():
     assert restored.selected_firm == "firm_b"
     assert restored.draft_households[0].consumption_target == 1.25
     assert restored.periods[0].households[0].consumption_target == .5
+    assert all(
+        firm.investment_policy == "percentage" and firm.required_return == .05
+        for firm in (*restored.draft_firms, *restored.periods[0].firms)
+    )
     # Independent symmetric-equilibrium benchmark: the target is slack.
     first = restored.periods[0]
     consumption = .8 * sqrt(10 / 13)
@@ -171,4 +272,28 @@ def test_frozen_current_file_and_continuation_preserve_the_published_contract():
     assert first.closing_cash["household_1"] == pytest.approx(8 / 11)
     previous = restored.periods[-1]
     future = advance_period(previous.households, previous.firms, previous)
-    assert _digest(future) == "31078a50cec4d819ae2a644f1f5704f2671551614256a74371c596e36f90d437"
+    assert _digest(future, legacy=True) == (
+        "31078a50cec4d819ae2a644f1f5704f2671551614256a74371c596e36f90d437"
+    )
+    encoded = dump_experiment(restored, baseline=restored)
+    migrated = json.loads(encoded)
+    assert migrated["format_version"] == 5
+    assert migrated["engine_version"] == "tiny-economy-3.0.0"
+    assert migrated["current"]["run"]["period_digests"] != json.loads(
+        fixture.read_bytes(),
+    )["current"]["run"]["period_digests"]
+    reopened = load_experiment(encoded)
+    assert reopened.current == reopened.baseline == restored
+    assert advance_period(
+        reopened.current.periods[-1].households,
+        reopened.current.periods[-1].firms,
+        reopened.current.periods[-1],
+    ) == future
+
+
+def test_legacy_hash_keeps_other_fields_named_like_the_new_policy_fields():
+    period = experiment(1).periods[0]
+    changed_check = replace(period, checks={**period.checks, "investment_policy": False})
+    changed_solution = replace(period, solution={**period.solution, "required_return": .9})
+    assert _digest(period, legacy=True) != _digest(changed_check, legacy=True)
+    assert _digest(period, legacy=True) != _digest(changed_solution, legacy=True)

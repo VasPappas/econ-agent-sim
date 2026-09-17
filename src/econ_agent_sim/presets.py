@@ -34,6 +34,11 @@ PRESETS = {
             "Each household aims for 1.00 X per period. Explore how a target gap "
             "changes the trade-off between consumption, money and leisure.",
         ),
+        Preset(
+            "firms_look_ahead", "Firms look ahead",
+            "Both firms compare expected capital returns with required return and wear. "
+            "Firm A is less productive: explore why one holds back while the other invests.",
+        ),
     )
 }
 
@@ -53,4 +58,8 @@ def build_preset(key: str) -> tuple[list[dict], list[dict]]:
     elif key == "meeting_a_target":
         for household in households:
             household["consumption_target"] = 1.0
+    elif key == "firms_look_ahead":
+        for firm in firms:
+            firm["investment_policy"] = "user_cost"
+        firms[0]["productivity"] = .5
     return households, firms

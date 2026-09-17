@@ -57,6 +57,9 @@ fractional = advance_period(households, (
 renamed_identity = advance_period(
     households, (firms[0], replace(firms[1], id='imported_firm')),
 )
+forward_firms = (replace(firms[0], investment_policy='user_cost', required_return=.05), firms[1])
+forward_first = advance_period(households, forward_firms)
+forward_second = advance_period(households, forward_firms, forward_first)
 print(json.dumps([
     build_report((first,)), build_report((first, second), cumulative=True),
     comparison, unavailable_comparison, build_report(asymmetric),
@@ -64,6 +67,7 @@ print(json.dumps([
     build_report(advance_period((replace(households[0], consumption_target=4), households[1]), firms)),
     build_report(fractional), build_report(renamed_identity),
     compare_runs((renamed_identity,), (first,), selected_period=1),
+    build_report(forward_first), build_report((forward_first, forward_second), cumulative=True),
 ]))
 `], {cwd: repo, env: {...process.env, PYTHONPATH: path.join(repo, 'src')}, encoding: 'utf8'}));
 
@@ -153,6 +157,31 @@ assert(allText(root).includes('Capital wear 0.1%'));
 render(reports[7], {selected_firm: reports[7].firms[1].entity_id});
 assert.equal(root.querySelector('.parameters').textContent, '1e−10% reinvest surplus · 0% capital wear');
 assert(allText(root).includes('Reinvest surplus 1e−10%'));
+
+// Forward-looking choices expose their budget and selected-period forecasts.
+render(reports[10], {selected_firm: reports[10].firms[0].entity_id});
+assert(allText(root).includes('Forward-looking · user cost'));
+assert(allText(root).includes('Maximum surplus invested'));
+assert(allText(root).includes('Required return 5%'));
+assert(allText(root).includes('INVESTMENT DECISION · PERIOD 1'));
+assert(allText(root).includes('Investment budget'));
+assert(allText(root).includes('Wear to replace'));
+assert(allText(root).includes('not an interest payment'));
+assert(!/NaN|Unavailable|undefined/.test(allText(root)));
+const investmentDisclosure = `firm-${reports[10].firms[0].entity_id}-investment`;
+assert(!disclosure(investmentDisclosure).open);
+disclosure(investmentDisclosure).open = true;
+render(reports[11], {selected_firm: reports[11].firms[0].entity_id});
+assert(disclosure(investmentDisclosure).open);
+assert(allText(root).includes('INVESTMENT DECISION · PERIOD 2'));
+assert(allText(root).includes('forecasts are not added across periods'));
+const forwardCsv = decodeURIComponent(root.querySelector('.download').href);
+assert(forwardCsv.includes('"investment_policy"'));
+assert(forwardCsv.includes('"required_return"'));
+assert(forwardCsv.includes('"investment_decision_expected_marginal_return"'));
+render(reports[11], {selected_firm: reports[11].firms[1].entity_id});
+assert(!root.querySelector('.investment-decision'));
+assert(allText(root).includes('Fixed percentage · benchmark'));
 
 // Names are always plain text, including imported labels that resemble markup.
 const renamed = structuredClone(reports[0]);

@@ -14,16 +14,18 @@ money and leisure; two independently funded firms produce, invest and pay divide
 5. Use **Ask why** for built-in explanations of the results and model rules.
 6. Open **Experiment** to save a baseline, edit a copy, compare, download/reopen or reset.
 
-There is one maintained model, not a catalogue of versioned apps. The four presets
+There is one maintained model, not a catalogue of versioned apps. The five presets
 are editable configurations of that model: Everyday economy, Fixed productive
-capacity, Capital wears out, and Meeting a consumption target. They simplify
+capacity, Capital wears out, Meeting a consumption target, and Firms look ahead. They simplify
 particular mechanisms; they do not recreate every historical exchange model.
 
 ## What is explicit
 
 - Household optimization and decreasing-returns-to-labor production use textbook building blocks.
-- Direct utility from money, soft consumption targets, cash-funded payroll and fixed
-  reinvestment/dividend rules are disclosed modeling choices.
+- Firms can retain a fixed surplus share or choose forward-looking investment
+  with a textbook user-cost criterion and an explicit internal budget.
+- Direct utility from money, soft consumption targets, cash-funded payroll and
+  dividend rules are disclosed modeling choices.
 - All payments are funded and traced. Accounts reconcile cash, production, consumption,
   investment, wear, profit and replacement-price holding gains.
 - Market clearing need not be unique. Candidate selection follows a documented
@@ -33,19 +35,21 @@ particular mechanisms; they do not recreate every historical exchange model.
 See [model and accounting](docs/model.md), [market selection](docs/market_selection.md)
 and [architecture](docs/architecture/0001-core-principles.md).
 
-The [audit fixes](docs/hardening_notes.md) improve reliability without changing
-economic policies. The next milestone follows a [textbook foundation](docs/textbook_foundation.md),
-starting with an isolated optimal-growth reference checked against its known
-solution. The [earlier investment proposal](docs/investment_design.md) is deferred.
-These reference calculations are not active simulation behavior.
+The [forward-looking investment guide](docs/forward_investment.md) explains the
+user-cost policy, its textbook foundation and its financing/forecast assumptions.
+Use **Firms look ahead** or select a firm's policy in Set up. The separate
+[optimal-growth reference](docs/textbook_foundation.md) remains an analytical
+validation benchmark. The [earlier runoff proposal](docs/investment_design.md)
+is deferred.
 
 ## Save and reopen
 
 The app holds experiments in the current browser session, not a user database.
 Download a JSON experiment before leaving to keep your run and baseline.
-Current files identify format **4** and engine **tiny-economy-2.0.0**. Opening
-replays the exact supported model and checks its accounts before replacing state.
-Files from retired models are rejected clearly, never silently reinterpreted.
+New files identify format **5** and engine **tiny-economy-3.0.0**. Opening replays
+and checks accounts before replacing state. Released format-4 / engine-2.0.0
+percentage files migrate only after their original results verify exactly.
+Files from earlier retired models are rejected clearly, never silently reinterpreted.
 Earlier implementations remain recoverable from Git history, not in the working tree.
 
 ## Develop

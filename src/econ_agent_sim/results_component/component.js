@@ -263,7 +263,10 @@ export default function render({ data, parentElement, setStateValue }) {
   const renderFirmCard = firm => {
     const firmCard = el('article', 'card firm-card');
     firmCard.append(firmHeading(firm));
-    firmCard.append(el('p', 'parameters', `${policyPercent(firm.parameters.reinvestment_rate)} reinvest surplus · ${policyPercent(firm.parameters.depreciation_rate)} capital wear`));
+    const forwardLooking = firm.parameters.investment_policy === 'user_cost';
+    firmCard.append(el('p', 'parameters', forwardLooking
+      ? `Forward-looking · user cost · ${policyPercent(firm.parameters.reinvestment_rate)} maximum surplus invested · ${policyPercent(firm.parameters.depreciation_rate)} capital wear`
+      : `${policyPercent(firm.parameters.reinvestment_rate)} reinvest surplus · ${policyPercent(firm.parameters.depreciation_rate)} capital wear`));
     firmCard.append(statement('PRODUCTION · X', [
       ['Produced', fmt(firm.produced_x)],
       ['Sold to households', fmt(firm.sold_x)],
@@ -275,6 +278,26 @@ export default function render({ data, parentElement, setStateValue }) {
     capitalBridge.append(row('Capital units', `${fmt(firm.capital_open)} → ${fmt(firm.capital_close)}`, 'total'));
     capitalBridge.append(el('p', 'note', `Added ${fmt(firm.investment_quantity)} · Wear ${fmt(firm.depreciation_quantity)}. Closing capital works next period.`));
     firmCard.append(capitalBridge);
+    const decision = firm.investment_decision;
+    if (decision) {
+      const reasons = {
+        returns_below_cost: 'Expected returns do not justify adding capital at the required return and wear rate.',
+        budget_limited: 'Investment reaches the chosen budget ceiling.',
+        interior: 'Expected marginal return meets user cost at the chosen closing capital.',
+        indifferent: 'Several investment amounts earn the same forecast score; this amount clears the goods market.',
+      };
+      const decisionBody = el('div', 'investment-decision');
+      decisionBody.append(statement(`INVESTMENT DECISION · PERIOD ${decision.period}`, [
+        ['Invested', `${fmt(decision.investment_quantity)} X`],
+        ['Investment budget', `${fmt(decision.investment_budget_quantity)} X`],
+        ['Wear to replace', `${fmt(decision.replacement_quantity)} X`],
+        ['Expected marginal return', policyPercent(decision.expected_marginal_return)],
+        ['User cost · return + wear', policyPercent(decision.user_cost)],
+      ]));
+      decisionBody.append(el('p', 'note', reasons[decision.reason] || 'Investment follows the submitted user-cost policy.'));
+      decisionBody.append(el('p', 'note', `Forecast at unchanged prices, wage and payroll cash. Required return is a decision threshold, not an interest payment. These figures describe Period ${decision.period}; forecasts are not added across periods.`));
+      firmCard.append(details(`firm-${firm.entity_id}-investment`, 'Why this investment?', decisionBody));
+    }
     firmCard.append(statement('INCOME · MONEY VALUE', [
       ['Output value¹', money(firm.production_value)],
       ['Wages', `−${money(firm.wages_paid)}`],
@@ -323,7 +346,9 @@ export default function render({ data, parentElement, setStateValue }) {
     firmBody.append(el('p', 'note', 'Capital uses the current replacement price of X. Revaluation changes asset value, not cash or operating profit.'));
     firmBody.append(statement('SUBMITTED SETTINGS', [
       ['Productivity', fmt(firm.parameters.productivity)],
-      ['Reinvest surplus', policyPercent(firm.parameters.reinvestment_rate)],
+      ['Investment policy', forwardLooking ? 'Forward-looking · user cost' : 'Fixed percentage · benchmark'],
+      [forwardLooking ? 'Maximum surplus invested' : 'Reinvest surplus', policyPercent(firm.parameters.reinvestment_rate)],
+      ...(forwardLooking ? [['Required return', policyPercent(firm.parameters.required_return)]] : []),
       ['Capital wear', policyPercent(firm.parameters.depreciation_rate)],
       ['Protected operating float', money(firm.protected_operating_float)],
     ]));

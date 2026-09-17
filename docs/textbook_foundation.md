@@ -1,8 +1,9 @@
 # Textbook foundations for investment and saving
 
-Status: reference benchmark implemented and tested separately from the app.
-The live model, household decisions, firm decisions and saved-file format have
-not been replaced. The previous project-specific investment proposal is deferred.
+Status: the optimal-growth reference remains separate from the app. The
+[forward-looking firm policy](forward_investment.md) now implements a conditional
+neoclassical user-cost criterion with explicit financing and forecast assumptions.
+The previous three-period/runoff investment proposal remains deferred.
 
 ## Modeling requirement
 
@@ -110,12 +111,12 @@ reported converged result can have appreciable coefficient error. Analytical
 evaluation also incurs floating-point rounding. These diagnostics must remain
 visible when this reference is used for further numerical work.
 
-## What still needs to be specified for firms
+## Mapping textbooks to the firm extension
 
-The firm milestone should begin with discounted owner value and the standard
-capital law `K_next=(1-delta)*K+I`. Specify the investment good's price, the timing
-of production and payouts, any adjustment costs and the financing opportunities.
-Then derive hiring and investment together under those assumptions.
+The implemented firm policy uses the standard capital law
+`K_next=(1-delta)*K+I` and the textbook desired-capital/user-cost criterion.
+Financing, timing and forecasts are specified in the new firm guide. It does not
+claim to solve lifetime owner-value maximization with the app's payout constraints.
 
 There is a concrete complication in the current technology. At fixed real wage
 `u`, unconstrained hiring with `Q=A*sqrt(K*L)` gives:
@@ -131,7 +132,7 @@ unconstrained fixed-price problem. The equilibrium price response or an explicit
 motivated constraint/cost must address scale. Quietly replacing that technology
 with decreasing returns in capital would change the model.
 
-The following existing features require an explicit mapping before integration:
+The following features require explicit treatment in any further integration:
 
 | Existing feature | Required treatment |
 | --- | --- |
@@ -148,9 +149,8 @@ investment and are not being implemented as the default foundation.
 
 ## Boundary of this change
 
-This reference validates one textbook allocation problem. It does not yet solve
-the two-firm monetary equilibrium, provide the next firm policy or establish
-welfare comparisons for the app. No engine-version change or live deployment is
-part of this benchmark. The next model-design step is a source-backed firm
-specification with an explicit bridge to household saving, followed by isolated
-firm tests and only then market integration. Exogenous shocks remain postponed.
+This reference validates one textbook allocation problem. It does not solve
+the two-firm monetary equilibrium or establish household welfare comparisons.
+The user-cost policy is a separate extension with its own independent tests and
+market integration. Household intertemporal saving still requires an explicit
+ownership/valuation specification. Exogenous shocks remain postponed.
