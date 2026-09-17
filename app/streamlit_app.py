@@ -4,12 +4,12 @@ from math import fsum
 
 import streamlit as st
 
-from econ_agent_sim.chat_view import render_chat
 from econ_agent_sim.comparison import compare_runs
 from econ_agent_sim.experiment_view import (
     initialize_experiments,
     render_experiment_controls,
 )
+from econ_agent_sim.explanation_view import render_explanations
 from econ_agent_sim.presets import PRESETS, build_preset
 from econ_agent_sim.reporting import build_report
 from econ_agent_sim.results_component import render_results
@@ -278,10 +278,7 @@ def render_run(view, history, dirty):
             on_select_firm=select_firm,
         )
     else:
-        render_chat(
-            history[selected - 1], report,
-            st.session_state.te_generation, "te_chat", comparison=comparison,
-        )
+        render_explanations(history[selected - 1], report, comparison=comparison)
 
 
 st.set_page_config(

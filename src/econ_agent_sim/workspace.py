@@ -37,7 +37,7 @@ def initialize(state: State) -> None:
     """Fill missing durable state without replacing a draft on navigation."""
     for key, value in {
         "households": default_households(), "firms": default_firms(), "count": 2,
-        "history": [], "submitted": None, "generation": 0, "view": "Set up",
+        "history": [], "submitted": None, "view": "Set up",
         "error": None, "expanded": {}, "period_focus": 1,
         "selected_firm": default_firms()[0]["id"],
         "saved_scope": state.get("te_report_scope", "This period"),
@@ -93,12 +93,10 @@ def resize(state: State) -> None:
 
 def reset(state: State) -> None:
     """Reset this run and draft, retaining an explicitly saved baseline."""
-    generation = state["te_generation"] + 1
     baseline = state["te_baseline"]
     for key in list(state):
         if key.startswith("te_"):
             del state[key]
-    state["te_generation"] = generation
     state["te_baseline"] = baseline
     initialize(state)
     state["te_notice"] = (
@@ -140,7 +138,6 @@ def start(state: State) -> None:
     state["te_submitted"] = (households, firms)
     if state["te_selected_firm"] not in {firm.id for firm in firms}:
         state["te_selected_firm"] = firms[0].id
-    state["te_generation"] += 1
     state["te_selected"] = 1
     state["te_period_focus"] = 1
     state["te_error"] = None
@@ -287,7 +284,6 @@ def restore_experiment(state: State, data: bytes | str) -> None:
         "te_selected": current.selected_period, "te_period_focus": current.selected_period,
         "te_report_scope": current.report_scope, "te_saved_scope": current.report_scope,
         "te_selected_firm": current.selected_firm,
-        "te_generation": state["te_generation"] + 1,
         "te_view": "Results" if history else "Set up", "te_error": None,
         "te_notice": "Experiment reopened. Your setup, results and baseline are restored.",
         "te_preset_name": "Custom",

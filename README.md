@@ -11,7 +11,7 @@ money and leisure; two independently funded firms produce, invest and pay divide
 2. Run the economy. **Results** shows firms, households and consolidated accounts.
 3. Advance one or ten periods. Money and capital carry forward under the submitted settings.
 4. Switch between **This period** and **Cumulative**. Historical flows keep their original prices.
-5. Use **Ask why** for built-in answers or the optional AI tutor.
+5. Use **Ask why** for built-in explanations of the results and model rules.
 6. Open **Experiment** to save a baseline, edit a copy, compare, download/reopen or reset.
 
 There is one maintained model, not a catalogue of versioned apps. The four presets

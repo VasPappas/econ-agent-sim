@@ -38,14 +38,12 @@ def test_failed_start_and_partially_failed_batch_preserve_completed_run(monkeypa
     state = running_workspace()
     history = state["te_history"]
     submitted = state["te_submitted"]
-    generation = state["te_generation"]
     for household in state["te_households"]:
         household["money"] = 0
     workspace.start(state)
     assert "Could not start" in state["te_error"]
     assert state["te_history"] is history
     assert state["te_submitted"] == submitted
-    assert state["te_generation"] == generation
     calls = 0
 
     def fail_second(*args, **kwargs):

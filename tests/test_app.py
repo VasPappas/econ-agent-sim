@@ -82,9 +82,12 @@ def test_preset_requires_apply_and_preserves_results_and_baseline_until_start():
     assert app.session_state.te_baseline == baseline
 
 
-def test_imported_names_are_literal_and_reset_keeps_chat_budget_identity():
+def test_imported_names_are_literal_in_explanations_and_reset_clears_run(monkeypatch):
     from econ_agent_sim.ui_text import literal
 
+    # Old deployment settings must not bring the retired chat UI back.
+    monkeypatch.setenv("ECON_CHAT_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "unused-test-key")
     app = open_app()
     name = "![preview](https://example.com/image)"
     app.session_state.te_experiment_name = name
@@ -95,15 +98,18 @@ def test_imported_names_are_literal_and_reset_keeps_chat_budget_identity():
     assert any(item.label == literal(name) for item in app.expander)
     button(app, "Start new simulation").click().run()
     switch_view(app, "Ask why")
-    app.selectbox(key="te_chat_question_topic").set_value(
+    app.selectbox(key="te_explanation_question_topic").set_value(
         "Why does one firm sell more?"
     ).run()
     assert not app.exception
     assert any(name in item.value for item in app.text)
     assert not any(name in item.value for item in app.markdown)
-    identity = app.session_state.chat_session_id
+    assert not app.chat_input
+    assert not app.chat_message
     button(app, "Reset to default").click().run()
-    assert app.session_state.chat_session_id == identity
+    assert not app.exception
+    assert not app.session_state.te_history
+    assert app.session_state.te_experiment_name == "My experiment"
 
 
 def test_bulk_preferences_leave_money_and_submitted_settings_unchanged():
@@ -140,12 +146,29 @@ def test_cumulative_navigation_and_reset_keep_explicit_baseline():
     assert report["economy"]["needed_x"] == pytest.approx(16.5)
     app.session_state.te_selected_firm = "firm_b"
     switch_view(app, "Ask why")
-    assert any(item.label == "Explore a question" for item in app.selectbox)
+    app.selectbox(key="te_explanation_question_topic").set_value(
+        "How are target gaps counted?"
+    ).run()
+    assert any("Periods 1–11" in item.value for item in app.text)
+    app.selectbox(key="te_selected").set_value(3).run()
+    assert any("Periods 1–3" in item.value for item in app.text)
+    app.pills(key="te_report_scope").set_value("This period").run()
+    assert any("Period 3" in item.value for item in app.text)
+    app.pills(key="te_report_scope").set_value("Cumulative").run()
+    app.selectbox(key="te_selected").set_value(11).run()
     switch_view(app, "Results")
     assert app.pills(key="te_report_scope").value == "Cumulative"
     assert payload(app)["selected_firm"] == "firm_b"
     button(app, "Save as baseline").click().run()
     baseline = app.session_state.te_baseline
+    comparison = payload(app)["comparison"]
+    switch_view(app, "Ask why")
+    app.selectbox(key="te_explanation_question_topic").set_value(
+        "How should I read the baseline comparison?"
+    ).run()
+    assert any(comparison["note"] in item.value for item in app.text)
+    button(app, "Next period →").click().run()
+    assert any("Both experiments need Period 12" in item.value for item in app.text)
     button(app, "Reset to default").click().run()
     assert not app.exception
     assert not app.session_state.te_history

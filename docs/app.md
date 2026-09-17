@@ -34,9 +34,9 @@ Compact summaries come first. Open statements, transactions and technical checks
 when needed. Firms are selectable; households show their submitted priorities.
 Consolidated accounts eliminate household claims on firm equity.
 
-Ask why uses the selected period and report range. Built-in explanations require
-no AI requests. Optional chat sends the current report, recent conversation and
-question to OpenAI only when the user submits a question.
+Ask why offers built-in explanations of the selected period and report range.
+Choose a question to explore the results, accounting rules or model assumptions.
+When a baseline is saved, a comparison explanation is also available.
 
 ## Experiment controls
 

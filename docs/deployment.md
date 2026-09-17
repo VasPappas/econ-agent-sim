@@ -4,9 +4,7 @@
 `VasPappas/econ-agent-sim`, branch `main`, entrypoint
 `app/streamlit_app.py`, Python 3.11 and subdomain `econ-agent-sim`.
 
-No secrets are needed for the simulator or built-in explanations. Optional AI
-chat uses server-side Streamlit secrets described in [experiment_chat.md](experiment_chat.md).
-Never commit API keys.
+No API keys or other secrets are needed for the simulator or built-in explanations.
 
 Community Cloud reads root `requirements.txt`, which installs the project with
 its app extra. Streamlit and its server dependency are pinned in pyproject.toml.

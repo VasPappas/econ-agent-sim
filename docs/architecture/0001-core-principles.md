@@ -17,10 +17,10 @@ directory or imports from historical engines. Presets are configurations, not fo
 | Choice and clearing | market.py, numerics.py | Household optimization, wage/price candidates and documented selection |
 | Settlement | engine.py | Six explicit phases; funded transfers; physical and accounting certification |
 | Reporting | reporting.py, comparison.py | One canonical period/cumulative report, comparison and full-precision CSV |
-| Explanation | explanations.py, experiment_chat.py | Deterministic answers and bounded read-only AI requests |
+| Explanation | explanations.py | Deterministic answers based on canonical reports |
 | Workspace | workspace.py | Framework-independent draft, submitted history and baseline transitions |
 | Portable files | experiments.py | Versioned validation, deterministic replay and atomic restore |
-| Presentation | app/streamlit_app.py, experiment_view.py, chat_view.py, results_component, workspace_style.py | Streamlit controls and compact results rendering |
+| Presentation | app/streamlit_app.py, experiment_view.py, explanation_view.py, results_component, workspace_style.py | Streamlit controls and compact results rendering |
 
 Economic modules do not import Streamlit. UI code does not re-solve or invent
 accounts. Reports are the authoritative presentation input. A prospective

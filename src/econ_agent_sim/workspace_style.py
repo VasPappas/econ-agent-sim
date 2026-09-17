@@ -38,7 +38,6 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.5rem) !important; }
 [data-testid="stButton"] button[kind="primary"] {
     background: var(--economy-primary); border-color: var(--economy-primary); color: white;
 }
-[data-testid="stChatMessage"] { background: #e6eee5; color: var(--economy-ink); border-radius: 16px; }
 .st-key-te_mobile_nav [data-testid="stButtonGroup"] { width: 100%; flex-wrap: nowrap; }
 .st-key-te_mobile_nav button {
     min-height: 44px; padding: .4rem .45rem; border-radius: 12px;
