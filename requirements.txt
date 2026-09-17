@@ -1,2 +1,2 @@
-# Rebuild marker: Tiny Economy audit fixes and textbook foundation revision 4
+# Rebuild marker: Tiny Economy forward-looking investment revision 5
 -e .[app]

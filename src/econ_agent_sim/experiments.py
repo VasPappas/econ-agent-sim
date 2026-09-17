@@ -22,10 +22,13 @@ from econ_agent_sim.engine import (
 )
 
 FORMAT = "tiny-economy-experiment"
-FORMAT_VERSION = 4
+FORMAT_VERSION = 5
 MODEL = "tiny_economy"
 # Bump whenever solving, settlement or accounting changes saved snapshots.
-ENGINE_VERSION = "tiny-economy-2.0.0"
+ENGINE_VERSION = "tiny-economy-3.0.0"
+LEGACY_FORMAT_VERSION = 4
+LEGACY_ENGINE_VERSION = "tiny-economy-2.0.0"
+_NEW_FIRM_FIELDS = {"investment_policy", "required_return"}
 MAX_FILE_BYTES = 256 * 1024
 MAX_PERIODS = 100
 MAX_HOUSEHOLDS = 20
@@ -140,7 +143,15 @@ def _object(value: object, keys: set[str], label: str) -> dict:
     return value
 
 
-def _parse_settings(value: object) -> tuple[tuple[Household, ...], tuple[Firm, ...]]:
+def _investment_policy(value: object) -> str:
+    if not isinstance(value, str) or value not in ("percentage", "user_cost"):
+        raise ExperimentError("Choose percentage or user_cost for the investment policy.")
+    return value
+
+
+def _parse_settings(
+    value: object, *, legacy: bool = False,
+) -> tuple[tuple[Household, ...], tuple[Firm, ...]]:
     settings = _object(value, {"households", "firms"}, "settings")
     items = settings["households"]
     if not isinstance(items, list) or not 2 <= len(items) <= MAX_HOUSEHOLDS:
@@ -165,8 +176,11 @@ def _parse_settings(value: object) -> tuple[tuple[Household, ...], tuple[Firm, .
     if not isinstance(items, list) or len(items) != 2:
         raise ExperimentError("This economy needs exactly two firms.")
     firms = []
+    firm_fields = {field.name for field in fields(Firm)}
+    if legacy:
+        firm_fields -= _NEW_FIRM_FIELDS
     for item in items:
-        item = _object(item, {field.name for field in fields(Firm)}, "firm")
+        item = _object(item, firm_fields, "firm")
         firms.append(Firm(
             id=_entity_id(item["id"]),
             name=_entity_name(item["name"], "Firm name"),
@@ -176,6 +190,12 @@ def _parse_settings(value: object) -> tuple[tuple[Household, ...], tuple[Firm, .
             theta=_number(item["theta"], "Labor exponent", .5, .5),
             reinvestment_rate=_number(item["reinvestment_rate"], "Reinvestment", 0, .9),
             depreciation_rate=_number(item["depreciation_rate"], "Capital wear", 0, .9),
+            investment_policy="percentage" if legacy else _investment_policy(
+                item["investment_policy"],
+            ),
+            required_return=.05 if legacy else _number(
+                item["required_return"], "Required return", 0, 1,
+            ),
         ))
     ids = [entity.id for entity in (*households, *firms)]
     if len(set(ids)) != len(ids):
@@ -199,22 +219,31 @@ def _settings(households: tuple[Household, ...], firms: tuple[Firm, ...]) -> dic
     }
 
 
-def _plain(value: object) -> object:
+def _plain(value: object, *, legacy: bool = False) -> object:
     """Canonicalize every snapshot field, including frozen nested mappings."""
     if is_dataclass(value):
-        return {field.name: _plain(getattr(value, field.name)) for field in fields(value)}
+        return {
+            field.name: _plain(getattr(value, field.name), legacy=legacy)
+            for field in fields(value)
+            if not (legacy and isinstance(value, Firm) and field.name in _NEW_FIRM_FIELDS)
+        }
     if isinstance(value, Mapping):
-        return {key: _plain(item) for key, item in value.items()}
+        return {key: _plain(item, legacy=legacy) for key, item in value.items()}
     if isinstance(value, (tuple, list)):
-        return [_plain(item) for item in value]
+        return [_plain(item, legacy=legacy) for item in value]
     if type(value) in (int, float):
         return float(value)
     return value
 
 
-def _digest(period: EconomyPeriod) -> str:
+def _digest(period: EconomyPeriod, *, legacy: bool = False) -> str:
+    if legacy and any(
+        firm.investment_policy != "percentage" or firm.required_return != .05
+        for firm in period.firms
+    ):
+        raise ExperimentError("Only migrated percentage settings have legacy period checks.")
     canonical = json.dumps(
-        _plain(period), sort_keys=True, ensure_ascii=False,
+        _plain(period, legacy=legacy), sort_keys=True, ensure_ascii=False,
         allow_nan=False, separators=(",", ":"),
     ).encode("utf-8")
     return sha256(canonical).hexdigest()
@@ -280,10 +309,10 @@ def _reject_constant(value: str) -> None:
     raise ExperimentError("Experiment numbers must be finite.")
 
 
-def _restore(payload: object) -> Experiment:
+def _restore(payload: object, *, legacy: bool = False) -> Experiment:
     payload = _object(payload, {"name", "draft", "run", "view"}, "experiment")
     name = validate_experiment_name(payload["name"])
-    households_draft, firms_draft = _parse_settings(payload["draft"])
+    households_draft, firms_draft = _parse_settings(payload["draft"], legacy=legacy)
     view = _object(
         payload["view"], {"selected_period", "report_scope", "selected_firm"}, "view",
     )
@@ -292,7 +321,7 @@ def _restore(payload: object) -> Experiment:
         run = _object(payload["run"], {"households", "firms", "period_digests"}, "run")
         households, firms = _parse_settings({
             "households": run["households"], "firms": run["firms"],
-        })
+        }, legacy=legacy)
         digests = run["period_digests"]
         if not isinstance(digests, list) or not 1 <= len(digests) <= MAX_PERIODS:
             raise ExperimentError(f"A saved run needs 1–{MAX_PERIODS} completed periods.")
@@ -304,7 +333,7 @@ def _restore(payload: object) -> Experiment:
         previous = None
         for expected in digests:
             previous = advance_period(households, firms, previous)
-            if _digest(previous) != expected:
+            if _digest(previous, legacy=legacy) != expected:
                 raise ExperimentError(
                     "The saved accounts could not be reproduced exactly. The file "
                     "may have changed, or this runtime differs from the one that "
@@ -332,7 +361,7 @@ def load_experiment(data: bytes | str) -> ExperimentFile:
             isinstance(payload, dict)
             and payload.get("format") == FORMAT
             and type(payload.get("format_version")) is int
-            and 1 <= payload["format_version"] < FORMAT_VERSION
+            and 1 <= payload["format_version"] < LEGACY_FORMAT_VERSION
         ):
             raise RetiredExperimentError(
                 "This file was saved by a retired model. Its results cannot be "
@@ -345,17 +374,23 @@ def load_experiment(data: bytes | str) -> ExperimentFile:
         }, "file")
         if payload["format"] != FORMAT:
             raise ExperimentError("This is not a Tiny Economy experiment file.")
-        if type(payload["format_version"]) is not int or payload["format_version"] != FORMAT_VERSION:
+        version = payload["format_version"]
+        if type(version) is not int or version not in (LEGACY_FORMAT_VERSION, FORMAT_VERSION):
             raise ExperimentError("This experiment file version is not supported.")
         if payload["model"] != MODEL:
             raise ExperimentError("This experiment belongs to a different economy.")
-        if payload["engine_version"] != ENGINE_VERSION:
+        legacy = version == LEGACY_FORMAT_VERSION
+        expected_engine = LEGACY_ENGINE_VERSION if legacy else ENGINE_VERSION
+        if payload["engine_version"] != expected_engine:
             raise ExperimentError(
                 "This experiment uses a different engine version. Its saved "
                 "accounts cannot be safely reopened by this version of the app."
             )
-        current = _restore(payload["current"])
-        baseline = _restore(payload["baseline"]) if payload["baseline"] is not None else None
+        current = _restore(payload["current"], legacy=legacy)
+        baseline = (
+            _restore(payload["baseline"], legacy=legacy)
+            if payload["baseline"] is not None else None
+        )
         if baseline is not None and not baseline.periods:
             raise ExperimentError("A baseline needs at least one completed period.")
         return ExperimentFile(current=current, baseline=baseline)

@@ -68,12 +68,16 @@ def test_copy_preset_and_reset_preserve_baseline_and_do_not_apply_stale_widgets(
     history = state["te_history"]
     state["te_household_money_0"] = 99
     state["te_firm_reinvestment_rate_0"] = 90
+    state["te_firm_investment_policy_0"] = "user_cost"
+    state["te_firm_required_return_0"] = 75
     households, firms = default_households(), default_firms()
     households[0]["consumption_target"] = 0
     workspace.apply_preset(state, households, firms, "No targets")
     workspace.capture(state)
     assert state["te_households"][0]["consumption_target"] == 0
     assert state["te_households"][0]["money"] == households[0]["money"]
+    assert state["te_firms"][0]["investment_policy"] == "percentage"
+    assert state["te_firms"][0]["required_return"] == .05
     assert state["te_history"] is history
     assert state["te_baseline"] is baseline
     workspace.edit_baseline_copy(state)
@@ -238,6 +242,11 @@ def test_restore_is_atomic_and_restores_view_dirty_draft_and_submitted_run():
         current, name="Saved experiment", report_scope="Cumulative", selected_firm="firm_b",
         draft_households=(replace(current.draft_households[0], consumption_target=8),
                           current.draft_households[1]),
+        draft_firms=(
+            replace(current.draft_firms[0], investment_policy="user_cost",
+                    required_return=.12345, reinvestment_rate=.6789),
+            replace(current.draft_firms[1], required_return=.321),
+        ),
     )
     data = dump_experiment(saved, baseline=source["te_baseline"])
     state = running_workspace()
@@ -246,6 +255,12 @@ def test_restore_is_atomic_and_restores_view_dirty_draft_and_submitted_run():
     assert state["te_view"] == "Results"
     assert state["te_households"][0]["consumption_target"] == 8
     assert state["te_submitted"][0][0].consumption_target == .5
+    assert state["te_firms"][0]["investment_policy"] == "user_cost"
+    assert state["te_firms"][0]["required_return"] == .12345
+    assert state["te_firms"][0]["reinvestment_rate"] == .6789
+    assert state["te_firms"][1]["investment_policy"] == "percentage"
+    assert state["te_firms"][1]["required_return"] == .321
+    assert state["te_submitted"][1][0].investment_policy == "percentage"
     snapshot = dict(state)
     corrupted = json.loads(data)
     corrupted["baseline"]["run"]["period_digests"][0] = "0" * 64

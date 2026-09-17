@@ -26,8 +26,9 @@ starts a real Streamlit server and checks its health endpoint.
 
 Retired chapter routes and sidebar pages are removed. Existing bookmarks should
 use the root URL. Users should refresh after deployment; pre-release in-memory
-sessions are not migrated. Current format-4 files replay only under the matching
-engine. Older files fail with a clear compatibility message.
+sessions are not migrated. New files use format 5 / engine 3.0.0. Released
+format-4 / engine-2.0.0 percentage files migrate after their original replay
+digests verify. Older files fail with a clear compatibility message.
 
 Source recovery is available through Git history. Retired engines and tests are
 not kept in the active deployment.

@@ -54,6 +54,45 @@ def test_fractional_policy_inputs_remain_visible_and_reach_the_run():
         assert app.number_input(key=key).value == pytest.approx(value)
 
 
+def test_investment_policy_switches_preserve_inputs_and_submitted_run():
+    app = open_app()
+    policy_key = "te_firm_investment_policy_0"
+    return_key = "te_firm_required_return_0"
+    budget_key = "te_firm_reinvestment_rate_0"
+    app.selectbox(key=policy_key).set_value("user_cost").run()
+    app.number_input(key=return_key).set_value(17.125).run()
+    app.number_input(key=budget_key).set_value(62.5).run()
+    assert app.number_input(key=budget_key).label == "Maximum surplus invested %"
+    assert app.session_state.te_firms[1]["investment_policy"] == "percentage"
+    app.selectbox(key=policy_key).set_value("percentage").run()
+    assert all(widget.key != return_key for widget in app.number_input)
+    assert app.number_input(key=budget_key).value == 62.5
+    assert app.session_state.te_firms[0]["required_return"] == pytest.approx(.17125)
+    app.selectbox(key=policy_key).set_value("user_cost").run()
+    assert app.number_input(key=return_key).value == 17.125
+    switch_view(app, "Ask why")
+    switch_view(app, "Set up")
+    assert app.selectbox(key=policy_key).value == "user_cost"
+    assert app.number_input(key=return_key).value == 17.125
+    assert app.number_input(key=budget_key).value == 62.5
+    button(app, "Start new simulation").click().run()
+    assert not app.exception
+    firm = payload(app)["reporting"]["firms"][0]
+    assert firm["parameters"]["investment_policy"] == "user_cost"
+    assert firm["parameters"]["required_return"] == pytest.approx(.17125)
+    assert firm["parameters"]["reinvestment_rate"] == .625
+    switch_view(app, "Set up")
+    app.number_input(key=return_key).set_value(22.0).run()
+    switch_view(app, "Results")
+    button(app, "Next period →").click().run()
+    assert not app.exception
+    assert app.session_state.te_history[-1].firms[0].required_return == .17125
+    switch_view(app, "Set up")
+    button(app, "Start new simulation").click().run()
+    assert not app.exception
+    assert app.session_state.te_history[0].firms[0].required_return == .22
+
+
 def test_draft_and_expansion_survive_navigation_and_run_uses_submitted_settings():
     app = open_app()
     app.session_state.te_open_household_0 = True

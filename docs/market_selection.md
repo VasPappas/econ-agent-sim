@@ -32,7 +32,8 @@ explicit and records it in the solution diagnostics.
 ## Selection convention
 
 1. In the first period, compute the otherwise identical economy's equilibrium
-   with all consumption targets set to zero. Use its price as the reference.
+   with all consumption targets set to zero and firms using percentage policies
+   (the same investment-budget fractions). Use its price as the reference.
 2. In later periods, use the previous accepted period's price as the reference.
 3. Among the detected, numerically validated candidates, select the one with
    the smallest `abs(log(candidate_price / reference_price))`.
@@ -70,12 +71,32 @@ includes firm funding breakpoints, and refines detected sign-change brackets.
 
 This is a finite search, **not a proof that every root has been found**.
 Very close pairs of roots or a root that only touches zero without changing
-sign can evade a sign-change scan. For target-aware searches the diagnostics
+sign can evade a sign-change scan. For target-aware or forward-investment searches the diagnostics
 therefore record `root_search_complete = False`. A count of one means one
 candidate was found, not that uniqueness has been proved.
 
-When all targets are zero, the model retains its specialized Cobb–Douglas
-solution. There is no need to add a target scan to that case.
+When all targets are zero and every firm uses the percentage policy, the model
+retains its specialized Cobb–Douglas solution. Forward-looking firms require
+the general search even with zero targets.
+
+## Forward-looking investment
+
+The user-cost criterion can have a flat optimal-investment interval. Goods
+clearing selects within it, allocating additional retention across indifferent
+firms in proportion to their interval capacities. Stable IDs resolve roundoff.
+Every final allocation must pass an independent investment certificate; the
+solver never treats a sign jump between incompatible firm choices as a root.
+
+The budget caps retention below 100% of surplus. Thus total production value
+bounds offered sales above at the low search end, and the corresponding
+percentage-policy sales bound them below at the high end. These bounds bracket
+the search without assuming a monotone variable-investment goods residual.
+
+With default symmetric firms, zero consumption targets, forward-looking policies
+and a 75% required return per period (10% wear), tests reproduce three clearing
+prices: approximately 0.816496580928, 0.927694406546 and 0.999697006181. The middle
+case uses a nonzero investment from each firm's flat optimum. These parameters
+are illustrative, not an empirical calibration.
 
 ## Reporting and saved experiments
 

@@ -20,6 +20,12 @@ Firms have starting cash, capital, productivity, investment policy and capital
 wear. Their cash funds wages independently. The setup shows starting totals and
 keeps optional detail in disclosures.
 
+For each firm choose **Percentage policy** or **Forward-looking · user cost**.
+Forward-looking mode shows a required return and a maximum surplus investment
+budget. The firm may invest less than that budget or nothing. Required return
+is an assumed opportunity cost per period, not interest paid on money. The
+**Firms look ahead** preset demonstrates different firm decisions.
+
 Run starts a new history from the draft. Returning to setup keeps the draft;
 changing it does not change completed results.
 
@@ -34,6 +40,11 @@ Compact summaries come first. Open statements, transactions and technical checks
 when needed. Firms are selectable; households show their submitted priorities.
 Consolidated accounts eliminate household claims on firm equity.
 
+For forward-looking firms, **Firm accounts → Why this investment?** compares
+expected marginal return with required return plus wear, and shows investment,
+budget and replacement needs. In cumulative view, this explanation is explicitly
+for the selected period.
+
 Ask why offers built-in explanations of the selected period and report range.
 Choose a question to explore the results, accounting rules or model assumptions.
 When a baseline is saved, a comparison explanation is also available.
@@ -47,6 +58,7 @@ When a baseline is saved, a comparison explanation is also available.
   baseline remains available; use Clear baseline to remove it. Downloaded files are untouched.
 
 There is no account database. Download before leaving if you want to preserve an
-experiment. Current files use format 4, model tiny_economy and engine
-tiny-economy-2.0.0. Historical files are identified as incompatible; old models
-are available through Git history, not active pages.
+experiment. New files use format 5, model tiny_economy and engine
+tiny-economy-3.0.0. Released format-4 / engine-2.0.0 percentage experiments migrate
+after replay verifies their original results. Earlier formats remain incompatible;
+old models are available through Git history, not active pages.

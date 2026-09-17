@@ -9,7 +9,7 @@ and one X price p. Households own equal, fixed shares in each firm.
 
 Cobb–Douglas preferences and production are textbook building blocks. Direct
 utility from money, soft consumption targets, cash-funded payroll and fixed
-investment/dividend rules are additional explicit teaching assumptions. This is
+investment budgets/dividend rules are additional explicit teaching assumptions. This is
 not a calibrated forecasting model, strict Stone–Geary subsistence, strategic
 duopoly or a forward-looking growth equilibrium.
 
@@ -44,15 +44,21 @@ For each firm independently:
 ```text
 Q = A sqrt(K L)
 w L <= post_dividend_cash
-I = r (p Q - w L) / p
+Percentage policy: I = theta (p Q - w L) / p
+Forward-looking policy: choose 0 <= I <= theta (p Q - w L) / p
 sold_X = Q - I
 next_K = (1-delta) K + I
 ```
 
-K is opening capital, A productivity, r the reinvestment policy and delta wear.
+K is opening capital, A productivity, theta the reinvestment fraction and delta wear.
 At fixed prices firms maximize gross production surplus pQ-wL subject to funded
 payroll. An unconstrained firm hires until p Q/(2L)=w. Funding can bind sooner.
-The policy reinvests a share of gross surplus, not total output or net profit.
+The percentage policy reinvests a share of gross surplus, not total output or net profit.
+Forward-looking firms maximize a conditional neoclassical user-cost criterion
+for next capital. The same fraction becomes their maximum investment budget;
+expected capital returns, required return and wear determine how much they use.
+Prices, real wages and real payroll funds are forecast unchanged.
+See [the complete decision and assumptions](forward_investment.md).
 Investment retains the firm's own output: no self-sale or cash investment payment.
 New capital first produces and depreciates in the next period.
 
@@ -81,10 +87,12 @@ are allocated in proportion to each firm's sold X. Labor-service and goods
 deliveries pair with reverse money transfers; dividends only transfer money.
 There is no cash pooling between firms, borrowing or money creation.
 
-Zero targets use the analytical active-set clearing path. Positive targets use
-bounded candidate detection. More than one valid clearing outcome can exist:
+Percentage-only runs with zero targets use the analytical active-set clearing
+path. Positive targets or forward-looking investment use bounded candidate
+detection, including genuine investment indifference intervals. More than one
+valid clearing outcome can exist:
 period 1 selects the candidate closest in log price to the otherwise identical
-target-free reference, later periods the closest to the previous price; lower
+target-free percentage-policy reference, later periods the closest to the previous price; lower
 price wins numerical ties. See [market_selection.md](market_selection.md) for
 reproduction and finite-scan limitations. This is not a simulated adjustment
 process, completeness guarantee or stability result.

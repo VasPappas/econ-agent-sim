@@ -184,6 +184,11 @@ def build_report(
             "funding_period": last.number,
             "parameters": asdict(specification),
         }
+        decision = last.solution.get("investment_decisions", {}).get(identity)
+        report["investment_decision"] = {
+            **dict(decision), "period": last.number, "scope": "selected_period",
+            "replacement_quantity": closing.depreciation_quantity,
+        } if decision is not None else None
         for field in _FIRM_STOCKS:
             report[f"{field}_open"] = getattr(opening, f"{field}_open")
             report[f"{field}_close"] = getattr(closing, f"{field}_close")
@@ -267,12 +272,12 @@ def build_report(
             "target_coverage": "Target gaps sum separately for each household and period. Extra consumption cannot offset a gap. Zero-target coverage is not applicable; below-target counts ignore numerical dust.",
             "markets": "Both firms take the same goods price and wage. Each funds its own payroll before receiving current sales.",
             "matching": "Work and purchases are allocated proportionally across equal-wage firms selling the same good.",
-            "investment": "Each firm's fixed share of output value minus wages, before capital wear, becomes its own capital next period.",
+            "investment": "Firms retain their own output as capital for next period. The percentage policy invests a fixed surplus share. The user-cost policy chooses within that share's budget, comparing expected marginal returns with required return plus wear at unchanged prices, wage and payroll cash.",
             "dividend": "Each firm separately pays previous-period positive net operating profit, limited to cash above its initial operating float; past retained losses are not a payout gate.",
             "valuation": "Capital uses the current X replacement price; initial capital uses the first solved price. Holding gains remain separate from operating profit.",
             "ownership": "Equal fixed shares in each firm's equity; ownership is not spendable cash. Consolidated assets eliminate both ownership claims.",
             "sales_share": "Share of sales means physical X sold to households, divided by all household X sales in this report range; it is not share of production.",
-            "cumulative": "Flows sum at each period's original price. Stocks use first opening and selected closing. Prices and funding conditions describe the selected period; household work and leisure are period averages.",
+            "cumulative": "Flows sum at each period's original price. Stocks use first opening and selected closing. Prices, funding conditions and investment decisions describe the selected period; forecasts are not summed. Household work and leisure are period averages.",
         },
     }
 
@@ -354,6 +359,14 @@ def _account_rows(periods):
                 "productivity": firm.productivity, "theta": firm.theta,
                 "reinvestment_rate": firm.reinvestment_rate,
                 "depreciation_rate": firm.depreciation_rate,
+                "investment_policy": firm.investment_policy,
+                "required_return": firm.required_return,
+                **{
+                    f"investment_decision_{key}": value
+                    for key, value in period.solution.get(
+                        "investment_decisions", {}
+                    ).get(firm.id, {}).items()
+                },
             })
         rows.extend({
             **common, "record_type": "allocation", **asdict(item)

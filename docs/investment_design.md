@@ -9,6 +9,8 @@ textbook specification. In particular, the three-period horizon, constant-price
 forecast, capped dividends and runoff continuation do not together constitute
 an established textbook model.
 
+The implemented alternative is the [neoclassical user-cost policy](forward_investment.md).
+
 This is the next economic milestone in the roadmap (previously called 1.2),
 within the same Tiny Economy app. It is separate from the software's saved-file
 and engine version identifiers.

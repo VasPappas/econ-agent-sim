@@ -90,6 +90,8 @@ class Firm:
     capital: float = 0.5
     reinvestment_rate: float = 0.4
     depreciation_rate: float = 0.1
+    investment_policy: str = "percentage"
+    required_return: float = 0.05
 
     def __post_init__(self) -> None:
         require_finite(
@@ -100,6 +102,7 @@ class Firm:
             self.capital,
             self.reinvestment_rate,
             self.depreciation_rate,
+            self.required_return,
         )
         if not self.id.strip() or not self.name.strip():
             raise ValueError("Use a firm ID and name.")
@@ -107,6 +110,10 @@ class Firm:
             raise ValueError("Firm money, productivity and capital must be positive.")
         if self.theta != 0.5:
             raise ValueError("The current model uses a fixed labor exponent of 0.5.")
+        if self.investment_policy not in ("percentage", "user_cost"):
+            raise ValueError("Choose percentage or forward-looking investment.")
+        if not 0 <= self.required_return <= 1:
+            raise ValueError("The required return must be between zero and 100% per period.")
         if not 0 <= self.reinvestment_rate < 1 or not 0 <= self.depreciation_rate < 1:
             raise ValueError(
                 "Reinvestment and capital wear must lie from zero to below 100%."

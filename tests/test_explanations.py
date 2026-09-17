@@ -1,4 +1,6 @@
 """Built-in explanations retain the actual scope and model assumptions."""
+from dataclasses import replace
+
 from econ_agent_sim.engine import (
     Firm,
     Household,
@@ -38,3 +40,33 @@ def test_model_passport_states_economic_assumptions_and_no_version_chapters():
     assert "before current sales" in passport
     assert "textbook" in passport and "custom" in passport
     assert all("Economy 1." not in answer for answer in answers.values())
+
+
+def test_forward_looking_explanations_use_selected_decision_in_cumulative_report():
+    households = tuple(Household(**item) for item in default_households())
+    firms = tuple(
+        replace(Firm(**item), investment_policy="user_cost")
+        for item in default_firms()
+    )
+    first = advance_period(households, firms)
+    second = advance_period(households, firms, first)
+    report = build_report((first, second), cumulative=True)
+    answers = built_in_explanations(second, report)
+    policy = answers["How do the investment policies differ?"]
+    assert "maximum investment budget" in policy
+    assert "not paid interest" in policy
+    assert "current-period choices" in policy
+    decision_answer = answers["Why did firms choose this investment?"]
+    assert "Period 2" in decision_answer
+    assert "Forecasts are not summed" in decision_answer
+    assert "not a mandatory minimum" in decision_answer
+    for firm in report["firms"]:
+        decision = firm["investment_decision"]
+        source = second.solution["investment_decisions"][firm["entity_id"]]
+        assert decision["period"] == 2
+        assert decision["scope"] == "selected_period"
+        assert decision["investment_quantity"] == source["investment_quantity"]
+        assert decision["investment_budget_quantity"] == source["investment_budget_quantity"]
+        assert decision["replacement_quantity"] == second.firm_accounts[firm["entity_id"]].depreciation_quantity
+        decision["investment_quantity"] = -1
+        assert source["investment_quantity"] >= 0

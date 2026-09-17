@@ -204,10 +204,14 @@ def market_candidates(households, firms, available, funding, capital):
     """
     households = tuple(sorted(households, key=lambda item: item.id))
     firms = tuple(sorted(firms, key=lambda item: item.id))
+    variable_investment = any(f.investment_policy != "percentage" for f in firms)
+    if variable_investment:
+        from econ_agent_sim.investment import investment_bounds
+
     reference = _solve_cobb_douglas_market(
         households, firms, available, funding, capital
     )
-    if all(h.consumption_target == 0 for h in households):
+    if not variable_investment and all(h.consumption_target == 0 for h in households):
         price, wage, wages, bills, solution = reference
         _certify_candidate(
             households, firms, available, funding, capital, price, wage, wages, bills
@@ -269,6 +273,51 @@ def market_candidates(households, firms, available, funding, capital):
 
     evaluations = 0
     inner_iterations = 0
+
+    def choose_investment(values, payroll, price, wage, spending):
+        """Clear goods within the firms' genuine indifference intervals.
+
+        Hiring remains the funded current-surplus optimum. At a user-cost
+        threshold a firm's optimal investment can be set-valued; selecting
+        inside that interval is not interpolating between suboptimal policies.
+        Proportional capacity and stable IDs make simultaneous ties repeatable.
+        """
+        bounds = {
+            f.id: investment_bounds(
+                f, capital[f.id], values[f.id], payroll[f.id], caps[f.id], price, wage
+            )
+            for f in firms
+        }
+        lower = {key: interval[0] for key, interval in bounds.items()}
+        upper = {key: interval[1] for key, interval in bounds.items()}
+        minimum_sales = fsum(values[key] - upper[key] for key in values)
+        maximum_sales = fsum(values[key] - lower[key] for key in values)
+        if spending >= maximum_sales:
+            selected = lower
+        elif spending <= minimum_sales:
+            selected = upper
+        else:
+            room = {key: upper[key] - lower[key] for key in values}
+            total_room = fsum(room.values())
+            required = maximum_sales - spending
+            if total_room <= 0 or not 0 <= required <= total_room * (1 + TOLERANCE):
+                raise ValueError(
+                    "The investment indifference allocation exceeds numerical precision."
+                )
+            required = min(required, total_room)
+            last = max(room, key=lambda key: (room[key], key))
+            increments = {
+                key: min(room[key], required * (room[key] / total_room))
+                for key in sorted(room) if key != last
+            }
+            increments[last] = min(
+                room[last], max(0.0, required - fsum(increments.values()))
+            )
+            selected = {key: lower[key] + increments[key] for key in values}
+        sales = fsum(values[key] - selected[key] for key in values)
+        require_finite("Selected investment and sales", sales, *selected.values())
+        indifferent = tuple(key for key in sorted(bounds) if upper[key] > lower[key])
+        return sales, selected, indifferent
 
     def evaluate(psi):
         nonlocal evaluations, inner_iterations
@@ -336,6 +385,13 @@ def market_candidates(households, firms, available, funding, capital):
                     "The household wage solution exceeds numerical precision."
                 )
         wages = {key: choice[3] for key, choice in choices.items()}
+        if variable_investment:
+            sales, investments, indifferent = choose_investment(
+                values, payroll, price, wage, spending
+            )
+            return (
+                sales - spending, wage, price, wages, payroll, investments, indifferent
+            )
         return sales - spending, wage, price, wages, payroll
 
     def firm_totals(psi):
@@ -356,7 +412,13 @@ def market_candidates(households, firms, available, funding, capital):
             (1 - f.reinvestment_rate) * (production_value[f.id] - payroll[f.id])
             for f in firms
         )
-        return sales, sales_less_payroll
+        # A variable policy can retain less than its budget cap. Production is
+        # therefore the safe upper bound on sales at the low end; the original
+        # percentage-cap expression remains a safe lower bound at the high end.
+        return (
+            fsum(production_value.values()) if variable_investment else sales,
+            sales_less_payroll,
+        )
 
     # No household can spend less than its target-free optimum from opening
     # cash, or more than opening cash plus wages. These firm-only bounds
@@ -448,7 +510,7 @@ def market_candidates(households, firms, available, funding, capital):
             normalized_price,
             normalized_wages,
             normalized_bills,
-        ) = candidate
+        ) = candidate[:5]
         wage, price = normalized_wage * scale, normalized_price * scale
         wages = {key: value * scale for key, value in normalized_wages.items()}
         bills = {
@@ -462,8 +524,13 @@ def market_candidates(households, firms, available, funding, capital):
             raise ValueError(
                 "The equilibrium price, wage or firm payroll is below numerical precision."
             )
+        investments = (
+            {key: value * scale for key, value in candidate[5].items()}
+            if variable_investment else None
+        )
         _certify_candidate(
-            households, firms, available, funding, capital, price, wage, wages, bills
+            households, firms, available, funding, capital, price, wage, wages, bills,
+            investment_values=investments,
         )
         results.append(
             (
@@ -490,6 +557,16 @@ def market_candidates(households, firms, available, funding, capital):
                 },
             )
         )
+        if variable_investment:
+            results[-1][4].update(
+                {
+                    "method": "scanned_investment_goods_and_labor",
+                    "investment_values": investments,
+                    "reference_policy": "percentage_zero_target_benchmark",
+                    "investment_tie_rule": "proportional_indifference_capacity",
+                    "indifferent_firms": candidate[6],
+                }
+            )
     results.sort(key=lambda result: result[0])
     candidate_prices = tuple(result[0] for result in results)
     for index, result in enumerate(results, 1):
@@ -504,7 +581,8 @@ def market_candidates(households, firms, available, funding, capital):
 
 
 def _certify_candidate(
-    households, firms, available, funding, capital, price, wage, wages, bills
+    households, firms, available, funding, capital, price, wage, wages, bills,
+    *, investment_values=None,
 ):
     """Check unnormalized household budgets and firm KKT before selecting a root."""
     choices = {
@@ -514,11 +592,25 @@ def _certify_candidate(
         f.id: f.productivity * sqrt(capital[f.id]) * sqrt(bills[f.id] / wage)
         for f in firms
     }
-    sales = fsum(
-        (1 - f.reinvestment_rate) * price * output[f.id]
-        + f.reinvestment_rate * bills[f.id]
-        for f in firms
-    )
+    if investment_values is None:
+        sales = fsum(
+            (1 - f.reinvestment_rate) * price * output[f.id]
+            + f.reinvestment_rate * bills[f.id]
+            for f in firms
+        )
+    else:
+        from econ_agent_sim.investment import certify_investment
+
+        require_finite("Candidate investment", *investment_values.values())
+        if not all(
+            certify_investment(
+                f, capital[f.id], price * output[f.id], bills[f.id], funding[f.id],
+                price, wage, investment_values[f.id],
+            )
+            for f in firms
+        ):
+            raise ValueError("A candidate investment choice exceeded numerical precision.")
+        sales = fsum(price * output[f.id] - investment_values[f.id] for f in firms)
     spending = fsum(choice["purchases"] for choice in choices.values())
     require_finite(
         "Candidate market quantities",
@@ -553,8 +645,9 @@ def solve_market(
     """Select the detected root nearest the previous or target-free price in log space.
 
     This deterministic continuation convention is not a stability theorem.
-    The lower price wins a numerical tie. Target-free markets retain the exact
-    analytical household-payroll optimization.
+    The lower price wins a numerical tie. Percentage-only, target-free markets
+    retain the exact analytical household-payroll optimization. User-cost runs
+    initially use the counterfactual zero-target percentage price as their anchor.
     """
     if previous_price is not None:
         require_finite("Previous market price", previous_price)
@@ -580,6 +673,8 @@ def solve_market(
             "selected_candidate": index + 1,
             "selection_rule": "nearest_previous_price"
             if previous_price is not None
+            else "nearest_percentage_benchmark_price"
+            if "investment_values" in diagnostics
             else "nearest_target_free_price",
             "reference_price": reference_price,
         }

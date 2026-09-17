@@ -26,6 +26,7 @@ from econ_agent_sim.domain import (
     default_firms,
     default_households,
 )
+from econ_agent_sim.investment import certify_investment, investment_diagnostics
 from econ_agent_sim.market import (
     SHORTFALL_STRENGTH,
     _spend,
@@ -345,6 +346,25 @@ class _PeriodBuilder:
         self.investment_value = {
             f.id: f.reinvestment_rate * self.gross[f.id] for f in self.ordered_f
         }
+        decisions = {}
+        for firm in self.ordered_f:
+            if firm.investment_policy != "user_cost":
+                continue
+            selected = self.solution["investment_values"][firm.id]
+            budget = self.investment_value[firm.id]
+            # Funded wage settlement can move a bill by a few ULPs. Enforce the
+            # actual surplus ceiling without accepting a material policy change.
+            if selected > budget and not _close(selected, budget):
+                raise ValueError("Planned investment exceeds the settled surplus budget.")
+            self.investment_value[firm.id] = min(selected, budget)
+            decisions[firm.id] = investment_diagnostics(
+                firm, self.capital[firm.id], self.values[firm.id],
+                self.bills[firm.id], self.funding[firm.id], self.price, self.wage,
+                self.investment_value[firm.id],
+            )
+        if decisions:
+            self.solution["investment_values"] = dict(self.investment_value)
+            self.solution["investment_decisions"] = decisions
         self.investment = {
             key: value / self.price for key, value in self.investment_value.items()
         }
@@ -688,9 +708,10 @@ class _PeriodBuilder:
                 for f in self.ordered_f
             ),
             "investment_policy": all(
-                _close(
-                    self.accounts[f.id].investment_value,
-                    f.reinvestment_rate * self.accounts[f.id].gross_operating_surplus,
+                certify_investment(
+                    f, self.capital[f.id], self.accounts[f.id].production_value,
+                    self.accounts[f.id].wage_bill, self.funding[f.id], self.price,
+                    self.wage, self.accounts[f.id].investment_value,
                 )
                 for f in self.ordered_f
             ),

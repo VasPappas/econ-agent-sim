@@ -30,8 +30,9 @@ PREFERENCE_FIELDS = (
 HOUSEHOLD_FIELDS = ("money", "consumption_target", *PREFERENCE_FIELDS)
 FIRM_FIELDS = (
     "money", "capital", "productivity", "reinvestment_rate", "depreciation_rate",
+    "investment_policy", "required_return",
 )
-PERCENT_FIELDS = ("reinvestment_rate", "depreciation_rate")
+PERCENT_FIELDS = ("reinvestment_rate", "depreciation_rate", "required_return")
 State = MutableMapping[str, Any]
 
 
@@ -57,10 +58,14 @@ def capture(state: State) -> None:
             changed |= value != household[field]
             household[field] = value
     for index, firm in enumerate(state["te_firms"]):
+        return_was_visible = firm["investment_policy"] == "user_cost"
         for field in FIRM_FIELDS:
+            # A hidden widget can leave stale state behind after a policy switch.
+            if field == "required_return" and not return_was_visible:
+                continue
             key = f"te_firm_{field}_{index}"
             if key in state:
-                value = float(state[key])
+                value = state[key] if field == "investment_policy" else float(state[key])
                 value = value / 100 if field in PERCENT_FIELDS else value
                 changed |= value != firm[field]
                 firm[field] = value
