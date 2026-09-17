@@ -1,2 +1,2 @@
-# Rebuild marker: Tiny Economy unified workspace revision 3
+# Rebuild marker: Tiny Economy audit fixes and textbook foundation revision 4
 -e .[app]
