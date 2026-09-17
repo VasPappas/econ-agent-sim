@@ -33,6 +33,11 @@ particular mechanisms; they do not recreate every historical exchange model.
 See [model and accounting](docs/model.md), [market selection](docs/market_selection.md)
 and [architecture](docs/architecture/0001-core-principles.md).
 
+The [audit fixes](docs/hardening_notes.md) improve reliability without changing
+economic policies. [Purposeful investment](docs/investment_design.md) is the next
+proposed milestone; its design and worked examples are for review, not active
+simulation behavior.
+
 ## Save and reopen
 
 The app holds experiments in the current browser session, not a user database.

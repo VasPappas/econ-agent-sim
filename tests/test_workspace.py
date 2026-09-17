@@ -123,6 +123,112 @@ def test_resize_removes_stale_widgets_and_respects_expander_state():
     assert state["te_households"][2]["money"] == default_households(3)[2]["money"]
 
 
+def test_adding_households_after_import_keeps_all_entity_ids_unique_and_can_run():
+    source = {}
+    workspace.initialize(source)
+    source["te_households"][0]["id"] = "household_3"
+    source["te_firms"][0]["id"] = "household_4"
+    source["te_firms"][1]["id"] = "household_5"
+    source["te_selected_firm"] = "household_4"
+    data = dump_experiment(workspace.current_experiment(source))
+    state = {}
+    workspace.initialize(state)
+    workspace.restore_experiment(state, data)
+    workspace.start(state)
+    workspace.save_baseline(state)
+    baseline = state["te_baseline"]
+    retained = [dict(item) for item in state["te_households"]]
+    firms = [dict(item) for item in state["te_firms"]]
+    state["te_count"] = 20
+    workspace.resize(state)
+    ids = [item["id"] for item in (*state["te_households"], *state["te_firms"])]
+    assert len(set(ids)) == len(ids) == 22
+    assert state["te_households"][:2] == retained
+    assert state["te_firms"] == firms
+    workspace.start(state)
+    assert state["te_error"] is None
+    assert len(state["te_history"][0].households) == 20
+    assert state["te_baseline"] is baseline
+    current = workspace.current_experiment(state)
+    restored = {}
+    workspace.initialize(restored)
+    workspace.restore_experiment(restored, dump_experiment(current, baseline=baseline))
+    assert workspace.current_experiment(restored) == current
+    assert restored["te_baseline"] == baseline
+
+
+@pytest.mark.parametrize("name", ["bad\tname", "bad\ud800name", "x" * 81])
+def test_invalid_name_edits_keep_last_valid_name_run_and_baseline(name):
+    state = running_workspace()
+    workspace.save_baseline(state)
+    history, baseline = state["te_history"], state["te_baseline"]
+    state["te_copy_name"] = "Pending variation"
+    state["te_name_input"] = name
+    workspace.remember_experiment_name(state)
+    assert "Could not rename" in state["te_error"]
+    assert state["te_name_input"] == state["te_experiment_name"] == "My experiment"
+    assert state["te_history"] is history
+    assert state["te_baseline"] is baseline
+    assert state["te_copy_name"] == "Pending variation"
+    assert dump_experiment(workspace.current_experiment(state), baseline=baseline)
+    state["te_name_input"] = "  Another economy 🌍  "
+    workspace.remember_experiment_name(state)
+    assert state["te_name_input"] == state["te_experiment_name"] == "Another economy 🌍"
+    assert state["te_error"] is None
+    assert "te_copy_name" not in state
+
+
+@pytest.mark.parametrize("old_name", ["bad\tname", "bad\ud800name"])
+def test_valid_import_recovers_even_if_outgoing_name_is_invalid(old_name):
+    source = running_workspace()
+    workspace.save_baseline(source)
+    current = replace(workspace.current_experiment(source), name="Restored economy")
+    data = dump_experiment(current, baseline=source["te_baseline"])
+    state = running_workspace()
+    state["te_experiment_name"] = old_name
+    state["te_name_input"] = old_name
+    workspace.restore_experiment(state, data)
+    assert workspace.current_experiment(state) == current
+    assert state["te_name_input"] == "Restored economy"
+    assert state["te_baseline"] == source["te_baseline"]
+    assert state["te_error"] is None
+
+
+@pytest.mark.parametrize("path", [
+    ("current", "name"),
+    ("baseline", "name"),
+    ("current", "draft", "households", 0, "name"),
+    ("current", "run", "firms", 0, "name"),
+    ("baseline", "draft", "firms", 0, "name"),
+    ("baseline", "run", "households", 0, "name"),
+])
+def test_surrogate_import_rejection_preserves_entire_workspace(path):
+    source = running_workspace()
+    workspace.save_baseline(source)
+    payload = json.loads(dump_experiment(
+        workspace.current_experiment(source), baseline=source["te_baseline"],
+    ))
+    target = payload
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = "broken\ud800name"
+    state = running_workspace()
+    workspace.next_period(state)
+    workspace.save_baseline(state)
+    state["te_households"][0]["consumption_target"] = 8
+    state["te_household_consumption_target_0"] = 8
+    state["te_name_input"] = "My experiment"
+    current = workspace.current_experiment(state)
+    snapshot = dict(state)
+    baseline, history = state["te_baseline"], state["te_history"]
+    with pytest.raises(ExperimentError, match="valid Unicode text"):
+        workspace.restore_experiment(state, json.dumps(payload))
+    assert state == snapshot
+    assert state["te_history"] is history
+    assert state["te_baseline"] is baseline
+    assert workspace.current_experiment(state) == current
+
+
 def test_restore_is_atomic_and_restores_view_dirty_draft_and_submitted_run():
     source = running_workspace()
     workspace.next_period(source)

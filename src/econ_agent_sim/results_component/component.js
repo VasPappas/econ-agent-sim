@@ -17,6 +17,12 @@ export default function render({ data, parentElement, setStateValue }) {
   const money = value => `${fmt(value)} M`;
   const signed = value => `${value > 0 ? '+' : ''}${fmt(value)}`;
   const percent = (value, places = 0) => `${fmt(100 * value, places)}%`;
+  const policyPercent = value => {
+    const number = 100 * Number(value);
+    if (!Number.isFinite(number)) return 'Unavailable';
+    // Keep editable fractions and tiny positive policies visible without padding.
+    return `${String(Number(number.toPrecision(12))).replace('e-', 'e−')}%`;
+  };
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -257,7 +263,7 @@ export default function render({ data, parentElement, setStateValue }) {
   const renderFirmCard = firm => {
     const firmCard = el('article', 'card firm-card');
     firmCard.append(firmHeading(firm));
-    firmCard.append(el('p', 'parameters', `${percent(firm.parameters.reinvestment_rate)} reinvest surplus · ${percent(firm.parameters.depreciation_rate)} capital wear`));
+    firmCard.append(el('p', 'parameters', `${policyPercent(firm.parameters.reinvestment_rate)} reinvest surplus · ${policyPercent(firm.parameters.depreciation_rate)} capital wear`));
     firmCard.append(statement('PRODUCTION · X', [
       ['Produced', fmt(firm.produced_x)],
       ['Sold to households', fmt(firm.sold_x)],
@@ -317,8 +323,8 @@ export default function render({ data, parentElement, setStateValue }) {
     firmBody.append(el('p', 'note', 'Capital uses the current replacement price of X. Revaluation changes asset value, not cash or operating profit.'));
     firmBody.append(statement('SUBMITTED SETTINGS', [
       ['Productivity', fmt(firm.parameters.productivity)],
-      ['Reinvest surplus', percent(firm.parameters.reinvestment_rate)],
-      ['Capital wear', percent(firm.parameters.depreciation_rate)],
+      ['Reinvest surplus', policyPercent(firm.parameters.reinvestment_rate)],
+      ['Capital wear', policyPercent(firm.parameters.depreciation_rate)],
       ['Protected operating float', money(firm.protected_operating_float)],
     ]));
     firmCard.append(firmBody);
@@ -341,9 +347,11 @@ export default function render({ data, parentElement, setStateValue }) {
       const comparisonBody = el('div', 'comparison-body');
       const match = compared.firms?.find(item => item.entity_id === firm.entity_id);
       comparisonBody.append(el('p', 'note', compared.label));
-      if (compared.available && match) {
+      if (compared.available && match?.available) {
         appendComparisonLegend(comparisonBody, compared);
         appendComparisonMetrics(comparisonBody, match.metrics);
+      } else if (compared.available) {
+        comparisonBody.append(el('p', 'note', match?.note || 'This firm has no matching identity in the baseline.'));
       }
       comparisonBody.append(el('p', 'note', compared.note));
       firmCard.append(details(`firm-${firm.entity_id}-comparison`, `${firm.name} vs baseline`, comparisonBody, 'activity'));

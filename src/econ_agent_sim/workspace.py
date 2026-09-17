@@ -19,7 +19,9 @@ from econ_agent_sim.experiments import (
     MAX_HOUSEHOLDS,
     MAX_PERIODS,
     Experiment,
+    ExperimentError,
     load_experiment,
+    validate_experiment_name,
 )
 
 PREFERENCE_FIELDS = (
@@ -77,10 +79,17 @@ def resize(state: State) -> None:
         raise ValueError(f"Use between 2 and {MAX_HOUSEHOLDS} households.")
     households = state["te_households"]
     defaults = default_households(count)
-    state["te_households"] = [
-        households[index] if index < len(households) else defaults[index]
-        for index in range(count)
-    ]
+    resized = households[:count]
+    used_ids = {item["id"] for item in (*resized, *state["te_firms"])}
+    for index in range(len(resized), count):
+        household = defaults[index]
+        suffix = index + 1
+        while f"household_{suffix}" in used_ids:
+            suffix += 1
+        household["id"] = f"household_{suffix}"
+        used_ids.add(household["id"])
+        resized.append(household)
+    state["te_households"] = resized
     if count != len(households):
         state["te_preset_name"] = "Custom"
     for index in range(count, MAX_HOUSEHOLDS):
@@ -170,14 +179,30 @@ def next_period(state: State, count: int = 1) -> None:
     state["te_error"] = None
 
 
-def replace_draft(state: State, households, firms) -> None:
+def remember_experiment_name(state: State) -> None:
+    """Keep the last valid name if a text edit cannot safely be displayed/saved."""
+    name = state["te_name_input"].strip() or "My experiment"
+    try:
+        validate_experiment_name(name)
+    except ExperimentError as error:
+        state["te_name_input"] = state["te_experiment_name"]
+        state["te_error"] = f"Could not rename this experiment: {error}"
+        return
+    state["te_experiment_name"] = name
+    state["te_name_input"] = name
+    state.pop("te_copy_name", None)
+    state["te_error"] = None
+
+
+def replace_draft(state: State, households, firms, *, name: str | None = None) -> None:
     """Replace draft settings and discard widgets bound to the previous draft."""
     household_settings = tuple(
         item if isinstance(item, Household) else Household(**item) for item in households
     )
     firm_settings = tuple(item if isinstance(item, Firm) else Firm(**item) for item in firms)
     Experiment(
-        state["te_experiment_name"], household_settings, firm_settings,
+        state["te_experiment_name"] if name is None else name,
+        household_settings, firm_settings,
         selected_firm=firm_settings[0].id,
     )
     for key in list(state):
@@ -275,7 +300,7 @@ def restore_experiment(state: State, data: bytes | str) -> None:
     bundle = load_experiment(data)
     current = bundle.current
     history = list(current.periods)
-    replace_draft(state, current.draft_households, current.draft_firms)
+    replace_draft(state, current.draft_households, current.draft_firms, name=current.name)
     state.update({
         "te_experiment_name": current.name, "te_name_input": current.name,
         "te_history": history,

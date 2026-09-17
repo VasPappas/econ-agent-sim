@@ -50,11 +50,20 @@ unavailable_comparison = compare_runs(
 asymmetric = advance_period(
     households, (replace(firms[0], productivity=2.4), firms[1]),
 )
+fractional = advance_period(households, (
+    replace(firms[0], reinvestment_rate=.123456, depreciation_rate=.001),
+    replace(firms[1], reinvestment_rate=1e-12, depreciation_rate=0),
+))
+renamed_identity = advance_period(
+    households, (firms[0], replace(firms[1], id='imported_firm')),
+)
 print(json.dumps([
     build_report((first,)), build_report((first, second), cumulative=True),
     comparison, unavailable_comparison, build_report(asymmetric),
     build_report(advance_period(tuple(replace(h, consumption_target=0) for h in households), firms)),
     build_report(advance_period((replace(households[0], consumption_target=4), households[1]), firms)),
+    build_report(fractional), build_report(renamed_identity),
+    compare_runs((renamed_identity,), (first,), selected_period=1),
 ]))
 `], {cwd: repo, env: {...process.env, PYTHONPATH: path.join(repo, 'src')}, encoding: 'utf8'}));
 
@@ -136,6 +145,15 @@ assert(allText(root).includes('2.00e−12 X'));
 assert(allText(root).includes('2.00e−9 M'));
 assert(!allText(root).includes('-0.00'));
 
+// Editable policy fractions use their own precision, including tiny active values.
+render(reports[7], {selected_firm: reports[7].firms[0].entity_id});
+assert.equal(root.querySelector('.parameters').textContent, '12.3456% reinvest surplus · 0.1% capital wear');
+assert(allText(root).includes('Reinvest surplus 12.3456%'));
+assert(allText(root).includes('Capital wear 0.1%'));
+render(reports[7], {selected_firm: reports[7].firms[1].entity_id});
+assert.equal(root.querySelector('.parameters').textContent, '1e−10% reinvest surplus · 0% capital wear');
+assert(allText(root).includes('Reinvest surplus 1e−10%'));
+
 // Names are always plain text, including imported labels that resemble markup.
 const renamed = structuredClone(reports[0]);
 renamed.firms[1].name = '<script>unsafe()</script>';
@@ -156,6 +174,17 @@ render(reports[1], {comparison: reports[3]});
 assert.equal(root.querySelectorAll('.comparison-metric').length, 0);
 assert(disclosure('comparison').open);
 assert(allText(root).includes('Both experiments need Period 2'));
+
+// A missing firm identity must explain its absence while economy metrics remain.
+render(reports[8], {comparison: reports[9], selected_firm: 'imported_firm'});
+const unmatched = disclosure('firm-imported_firm-comparison');
+assert(allText(unmatched).includes('This firm has no matching identity in the baseline.'));
+assert.equal(unmatched.querySelectorAll('.comparison-metric').length, 0);
+assert.equal(root.querySelectorAll('.comparison-metric').length, reports[9].metrics.length);
+render(reports[8], {comparison: reports[9], selected_firm: reports[8].firms[0].entity_id});
+const matched = disclosure(`firm-${reports[8].firms[0].entity_id}-comparison`);
+assert.equal(matched.querySelectorAll('.comparison-metric').length, reports[9].firms[0].metrics.length);
+assert(!allText(matched).includes('no matching identity'));
 
 const failed = structuredClone(reports[0]);
 failed.checks.money = false;

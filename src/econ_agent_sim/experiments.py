@@ -54,7 +54,7 @@ class Experiment:
         object.__setattr__(self, "draft_households", tuple(self.draft_households))
         object.__setattr__(self, "draft_firms", tuple(self.draft_firms))
         object.__setattr__(self, "periods", tuple(self.periods))
-        _name(self.name, "Experiment name")
+        validate_experiment_name(self.name)
         _settings(self.draft_households, self.draft_firms)
         if len(self.periods) > MAX_PERIODS:
             raise ExperimentError(f"An experiment supports up to {MAX_PERIODS} periods.")
@@ -101,7 +101,14 @@ def _name(value: object, label: str) -> str:
         raise ExperimentError(
             f"{label} needs 1–{MAX_NAME_LENGTH} characters without control characters."
         )
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise ExperimentError(f"{label} must contain valid Unicode text.")
     return value
+
+
+def validate_experiment_name(value: object) -> str:
+    """Validate editable labels before publishing them to the workspace."""
+    return _name(value, "Experiment name")
 
 
 def _entity_name(value: object, label: str) -> str:
@@ -275,7 +282,7 @@ def _reject_constant(value: str) -> None:
 
 def _restore(payload: object) -> Experiment:
     payload = _object(payload, {"name", "draft", "run", "view"}, "experiment")
-    name = _name(payload["name"], "Experiment name")
+    name = validate_experiment_name(payload["name"])
     households_draft, firms_draft = _parse_settings(payload["draft"])
     view = _object(
         payload["view"], {"selected_period", "report_scope", "selected_firm"}, "view",
