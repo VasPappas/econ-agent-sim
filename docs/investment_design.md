@@ -1,6 +1,13 @@
 # Purposeful investment — proposed economic specification
 
-Status: design for discussion; not implemented in the economic engine.
+Status: earlier project-specific proposal, now deferred following the requirement
+to use named textbook models. Not implemented in the economic engine.
+
+Start with [the textbook foundation](textbook_foundation.md). The equations and
+examples below remain a record of the earlier proposal; they are not the selected
+textbook specification. In particular, the three-period horizon, constant-price
+forecast, capped dividends and runoff continuation do not together constitute
+an established textbook model.
 
 This is the next economic milestone in the roadmap (previously called 1.2),
 within the same Tiny Economy app. It is separate from the software's saved-file
@@ -223,13 +230,13 @@ still a physical event, and every actual money payment still has a counterparty.
    prototype passes these gates. Deploy the reliability fixes separately from
    this new economic behavior.
 
-## Decision requested before changing the model
+## Reassessment before changing the model
 
-Approve or revise the proposed package: joint hiring/investment; constant-current-
-price forecasts; a common managerial discount factor; and dividend-based runoff
-continuation. Three periods and 0.95 are prototype starting points, subject to the
-sensitivity/runtime checks above. The next implementation step is the isolated
-firm prototype, followed by market integration if those checks succeed.
+The textbook requirement supersedes this package as the implementation plan.
+The isolated optimal-growth reference now checks a named model against its known
+solution. The next firm specification must start from neoclassical investment,
+state financing and ownership assumptions, and identify every extension needed
+by Tiny Economy. Do not integrate this earlier runoff proposal by default.
 
 ## Method reference
 
