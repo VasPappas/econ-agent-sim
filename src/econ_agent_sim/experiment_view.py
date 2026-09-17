@@ -14,10 +14,7 @@ def initialize_experiments():
 
 
 def remember_experiment_name():
-    st.session_state.te_experiment_name = (
-        st.session_state.te_name_input.strip() or "My experiment"
-    )
-    st.session_state.pop("te_copy_name", None)
+    workspace.remember_experiment_name(st.session_state)
 
 
 def current_experiment():

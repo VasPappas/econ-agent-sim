@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from math import ceil, exp, fsum, isfinite, log, sqrt
+from math import ceil, exp, fsum, isfinite, log, nextafter, sqrt
 
 from econ_agent_sim.domain import TOLERANCE, Household
 from econ_agent_sim.numerics import require_finite
@@ -322,7 +322,19 @@ def market_candidates(households, firms, available, funding, capital):
         spending = fsum(choice[0] for choice in choices.values())
         require_finite("Market residual", sales, spending, wage, price, labor_residual)
         if abs(labor_residual) > 1e-11 * total_payroll:
-            raise ValueError("The household wage solution exceeds numerical precision.")
+            # Near a no-work corner, payroll subtracts nearly equal wage-sized
+            # amounts. Adjacent floating-point wages can then bracket a root
+            # without resolving payroll to relative precision. Keep that scan
+            # point only if the sign bracket is exhausted; every actual market
+            # candidate still faces strict aggregate clearing below.
+            resolved_bracket = (
+                nextafter(low, high) == high
+                and household_payroll(low)[0] <= 0 <= household_payroll(high)[0]
+            )
+            if not resolved_bracket:
+                raise ValueError(
+                    "The household wage solution exceeds numerical precision."
+                )
         wages = {key: choice[3] for key, choice in choices.items()}
         return sales - spending, wage, price, wages, payroll
 

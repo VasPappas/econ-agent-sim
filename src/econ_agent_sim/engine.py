@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import fields
-from math import fsum, nextafter, sqrt
+from math import fsum, nextafter, sqrt, ulp
 
 from econ_agent_sim.domain import (
     CAPITAL,
@@ -51,6 +51,28 @@ __all__ = [
 
 def _close(a: float, b: float, scale: float = 0.0) -> bool:
     return abs(a - b) <= TOLERANCE * max(abs(a), abs(b), abs(scale))
+
+
+def _net_income_balances(account: FirmAccount) -> bool:
+    """Certify income without losing small output to large depreciation.
+
+    Gross surplus and net profit each store one rounded subtraction. Allow one
+    ULP of each stored result (conservatively covering its half-ULP rounding),
+    while keeping the economic tolerance at the production-value scale.
+    Compensated summation avoids rounding the large cancelling terms again.
+    """
+    residual = fsum(
+        (
+            account.production_value,
+            -account.wage_bill,
+            -account.net_operating_profit,
+            -account.depreciation_value,
+        )
+    )
+    rounding = ulp(account.gross_operating_surplus) + ulp(
+        account.net_operating_profit
+    )
+    return abs(residual) <= TOLERANCE * abs(account.production_value) + rounding
 
 
 def _dividend(profit: float, cash: float, protected: float) -> float:
@@ -692,11 +714,7 @@ class _PeriodBuilder:
                 for a in self.accounts.values()
             ),
             "net_income": all(
-                _close(
-                    a.production_value,
-                    a.wage_bill + a.net_operating_profit + a.depreciation_value,
-                )
-                for a in self.accounts.values()
+                _net_income_balances(a) for a in self.accounts.values()
             ),
             "equity_bridge": all(
                 _close(

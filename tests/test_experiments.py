@@ -65,6 +65,33 @@ def test_roundtrip_preserves_dirty_draft_baseline_and_continuation():
     )
 
 
+def test_supported_unicode_names_roundtrip_in_literal_and_escaped_json():
+    draft = experiment(0)
+    households = tuple(
+        replace(item, name=f"Οικογένεια {index} · 家庭 · 👩🏽‍🔬")
+        for index, item in enumerate(draft.draft_households, 1)
+    )
+    firms = tuple(
+        replace(item, name=f"مؤسسة {index} · Cafe\u0301")
+        for index, item in enumerate(draft.draft_firms, 1)
+    )
+    current = replace(
+        draft, name="Οικονομία · 経済 · 🌍", draft_households=households,
+        draft_firms=firms, periods=(advance_period(households, firms),),
+    )
+    encoded = dump_experiment(current, baseline=current)
+    for data in (encoded, json.dumps(json.loads(encoded))):
+        reopened = load_experiment(data)
+        assert reopened.current == current
+        assert reopened.baseline == current
+
+
+@pytest.mark.parametrize("codepoint", [0xD800, 0xDFFF, 0xDABC])
+def test_experiment_construction_rejects_non_unicode_scalar_names(codepoint):
+    with pytest.raises(ExperimentError, match="valid Unicode text"):
+        replace(experiment(0), name=f"broken{chr(codepoint)}name")
+
+
 @pytest.mark.parametrize("target", [-1, 101, float("nan"), True, "0.5"])
 def test_invalid_target_is_not_interpreted_as_a_preference_score(target):
     payload = json.loads(dump_experiment(experiment(0)))

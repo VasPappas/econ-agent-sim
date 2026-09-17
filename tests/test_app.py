@@ -31,6 +31,29 @@ def switch_view(app, view):
     assert not app.exception
 
 
+def test_fractional_policy_inputs_remain_visible_and_reach_the_run():
+    app = open_app()
+    settings = {
+        "te_firm_reinvestment_rate_0": 12.3456,
+        "te_firm_depreciation_rate_0": .1,
+        "te_firm_reinvestment_rate_1": 1e-10,
+    }
+    for key, value in settings.items():
+        app.number_input(key=key).set_value(value).run()
+        widget = app.number_input(key=key)
+        assert float(widget.proto.format % widget.value) == pytest.approx(value)
+        assert float(widget.proto.format % widget.value) > 0
+    button(app, "Start new simulation").click().run()
+    assert not app.exception
+    firms = payload(app)["reporting"]["firms"]
+    assert firms[0]["parameters"]["reinvestment_rate"] == pytest.approx(.123456)
+    assert firms[0]["parameters"]["depreciation_rate"] == pytest.approx(.001)
+    assert firms[1]["parameters"]["reinvestment_rate"] == pytest.approx(1e-12, abs=0)
+    switch_view(app, "Set up")
+    for key, value in settings.items():
+        assert app.number_input(key=key).value == pytest.approx(value)
+
+
 def test_draft_and_expansion_survive_navigation_and_run_uses_submitted_settings():
     app = open_app()
     app.session_state.te_open_household_0 = True
@@ -110,6 +133,60 @@ def test_imported_names_are_literal_in_explanations_and_reset_clears_run(monkeyp
     assert not app.exception
     assert not app.session_state.te_history
     assert app.session_state.te_experiment_name == "My experiment"
+
+
+def test_invalid_name_edit_preserves_run_and_baseline_then_recovers():
+    app = open_app()
+    button(app, "Start new simulation").click().run()
+    button(app, "Save as baseline").click().run()
+    history = tuple(app.session_state.te_history)
+    baseline = app.session_state.te_baseline
+    name = app.session_state.te_experiment_name
+    app.text_input(key="te_name_input").set_value("Bad\tname").run()
+    assert not app.exception
+    assert any("Could not rename this experiment" in item.value for item in app.error)
+    assert app.session_state.te_experiment_name == name
+    assert app.text_input(key="te_name_input").value == name
+    assert tuple(app.session_state.te_history) == history
+    assert app.session_state.te_baseline == baseline
+    app.text_input(key="te_name_input").set_value("Recovered experiment").run()
+    assert not app.exception
+    assert not app.error
+    assert app.session_state.te_experiment_name == "Recovered experiment"
+    assert tuple(app.session_state.te_history) == history
+    assert app.session_state.te_baseline == baseline
+
+
+def test_invalid_unicode_upload_shows_error_without_replacing_work(monkeypatch):
+    from io import BytesIO
+
+    import streamlit as st
+
+    document = json.loads(
+        (Path(__file__).parent / "fixtures/current_model_workspace.json").read_bytes()
+    )
+    document["current"]["draft"]["firms"][0]["name"] = "Bad\ud800name"
+    uploaded = BytesIO(json.dumps(document).encode())
+
+    # AppTest has no uploader driver; substitute the upload boundary and use
+    # the app's real Open experiment button and callback for the entire restore.
+    def file_uploader(*args, **kwargs):
+        st.session_state[kwargs["key"]] = uploaded
+        return uploaded
+
+    monkeypatch.setattr(st, "file_uploader", file_uploader)
+    app = open_app()
+    button(app, "Start new simulation").click().run()
+    button(app, "Save as baseline").click().run()
+    history = tuple(app.session_state.te_history)
+    baseline = app.session_state.te_baseline
+    name = app.session_state.te_experiment_name
+    button(app, "Open experiment").click().run()
+    assert not app.exception
+    assert any("valid Unicode text" in item.value for item in app.error)
+    assert tuple(app.session_state.te_history) == history
+    assert app.session_state.te_baseline == baseline
+    assert app.session_state.te_experiment_name == name
 
 
 def test_bulk_preferences_leave_money_and_submitted_settings_unchanged():

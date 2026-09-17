@@ -55,7 +55,7 @@ def compact_input(owner, field, label, *, minimum, maximum, step, index):
         with input_column:
             st.number_input(
                 label, min_value=minimum, max_value=maximum, step=step,
-                format="%.0f" if field in PERCENT_FIELDS else "%.2f",
+                format="%.12g" if field in PERCENT_FIELDS else "%.2f",
                 key=f"te_{owner}_{field}_{index}", on_change=capture,
                 args=(st.session_state,), label_visibility="collapsed",
             )
