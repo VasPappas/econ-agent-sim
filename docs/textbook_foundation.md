@@ -5,6 +5,11 @@ Status: the optimal-growth reference remains separate from the app. The
 neoclassical user-cost criterion with explicit financing and forecast assumptions.
 The previous three-period/runoff investment proposal remains deferred.
 
+The reference now also includes [partial-depreciation transitions with work and
+leisure](growth_transition.md), alongside the exact fixed-labor special case
+below. This numerical reference implements the [minimal real model](minimal_reference_economy.md);
+the [monetary transition design](monetary_foundation.md) is not yet implemented.
+
 ## Modeling requirement
 
 Start each new behavioral mechanism from a named model with a source, an

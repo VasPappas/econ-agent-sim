@@ -296,8 +296,9 @@ a separate benchmark comparison, not an executable cash-settlement shortcut.
 
 Before changing the app:
 
-- Implement and validate the Step 1 partial-depreciation/labor reference using
-  its exact special cases and stationary allocation.
+- The Step 1 partial-depreciation/labor reference is now implemented and checked
+  against its exact special cases and stationary allocation. See
+  [the numerical method and acceptance checks](growth_transition.md).
 - Build the symmetric monetary transition solver against the budgets above,
   checking household optimality, firm complementarity, terminal treatment,
   forecast consistency, and every funded transaction. Use the stationary fixture
@@ -308,7 +309,8 @@ Before changing the app:
 - Integrate the resulting single model only after those checks, with explicit
   saved-file/version handling. Its behavior differs from the present engine.
 
-No transition solver, application behavior or deployment changes are included in
-this design step. The next executable milestone is the independently verified
-real reference, followed by the monetary transition problem. Market adjustment
-and self-regulation remain a later architectural step; shocks remain postponed.
+The real-reference transition solver is available separately; this monetary
+design and its stationary checker do not change the application or implement
+monetary transitions. The next executable milestone is the monetary transition
+problem. Market adjustment and self-regulation remain a later architectural
+step; shocks remain postponed.

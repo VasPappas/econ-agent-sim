@@ -42,6 +42,10 @@ Use **Firms look ahead** or select a firm's policy in Set up. The separate
 validation benchmark. The [earlier runoff proposal](docs/investment_design.md)
 is deferred.
 
+The isolated reference also supports [partial depreciation and household
+work–leisure transitions](docs/growth_transition.md), with explicit checks for
+numerical continuation. It does not change the running monetary app.
+
 ## Save and reopen
 
 The app holds experiments in the current browser session, not a user database.

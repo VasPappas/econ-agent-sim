@@ -199,8 +199,10 @@ l_t = (1-alpha) / [(1-alpha) + chi (1-alpha beta)]
 This supplies an additional independent check for a future labor solver; it is
 not an implemented feature of the current reference module.
 
-Not yet implemented: partial-depreciation transition paths and endogenous labor
-for this reference, or a monetary household/firm model consistent with it.
+Now implemented: partial-depreciation transition paths and endogenous labor in
+the isolated reference. See [the numerical method and acceptance checks](growth_transition.md).
+The [monetary household/firm foundation](monetary_foundation.md) is specified,
+but its transition solver is not yet implemented.
 
 Before relying on an extended numerical solver, verify resource feasibility,
 labor optimality, Euler residuals along transitions, the stationary allocation,
