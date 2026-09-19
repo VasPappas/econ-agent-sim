@@ -1,14 +1,16 @@
 # Step 2 — Saving, investment and funded owner payouts
 
-Status: economic specification, following [Step 1](minimal_reference_economy.md).
+Status: specification of the current application model, following
+[Step 1](minimal_reference_economy.md).
 The [first executable monetary regime](monetary_transitions.md) implements
 symmetric transitions with positive distributions and interior investment.
 The [constrained extension](monetary_boundaries.md) also permits zero investment
 and distributions, with independently verified binding opening funding.
-Unspent-opening-cash regimes remain unimplemented. The running model in `model.md`
-is unchanged. This document specifies a joint replacement for its household saving,
-conditional investment and prescribed dividend rules; it is not a patch that
-removes individual safeguards from the existing solver.
+The application uses that constrained solver for household saving, firm
+investment and owner distributions together; see [the application model](model.md).
+Unspent-opening-cash regimes remain unimplemented and are explicitly rejected.
+An input satisfying the application's parameter bounds is not guaranteed to
+produce a supported, numerically verified equilibrium.
 
 ## Decision and textbook basis
 
@@ -96,8 +98,8 @@ lim as T -> infinity beta^T lambda_iT h_i,T+1 = 0
 ```
 
 At zero work, the corresponding one-sided labor inequality applies. The money
-condition now includes a continuation value; it is no longer the current app's
-one-period consumption/money split.
+condition includes a continuation value: the application solves an
+intertemporal choice rather than a one-period consumption/money split.
 
 Household cash saving is the change in its money balance. Retained firm earnings
 and investment affect its ownership claim and future payouts separately. Fixed
@@ -146,9 +148,9 @@ arbitrary terminal asset value. A finite screen or numerical horizon must not
 silently force liquidation at its end.
 
 `D` is an owner distribution, which may include accumulated funds rather than
-only current or previous accounting earnings. The previous-profit cap and the
-permanent reserve equal to initial cash are replaced by optimization subject to
-these budgets. There is no separate hurdle-rate or surplus-investment-fraction
+only current or previous accounting earnings. Payouts are optimized subject to
+these budgets, with no previous-profit cap or permanent reserve equal to
+initial cash. There is no separate hurdle-rate or surplus-investment-fraction
 input. Cash needed for future operation is valuable through the continuation
 problem, rather than through a preset reserve fraction.
 
@@ -168,10 +170,10 @@ Boundaries need the full constrained problem, not these interior equalities.
 Zero firm cash or zero capital prevents productive recovery without external
 finance or capital purchases. Remaining capital may still depreciate, and a
 firm with no capital may distribute remaining cash; its entire state need not
-stay unchanged. Such choices must be represented when solving the firm's
-problem; the old engine's strict-positive-production checks cannot be inherited
-as economic assumptions. The initial symmetric baseline requires positive cash
-and capital for both firms.
+stay unchanged. Such choices are included when checking deviations from the
+supported candidate paths, rather than ruled out as economic assumptions.
+The application's initial symmetric baseline requires positive cash and
+capital for both firms; its path solver does not search all inactive-state regimes.
 
 ## Equilibrium and funded settlement
 
@@ -289,7 +291,7 @@ The checker also uses `eta=1`: stationary real quantities stay the same while
 the money split and price level change. That result is specific to this
 stationary regime; it is not neutrality of every transition.
 
-## Relation to Step 1 and implementation gates
+## Relation to Step 1, verification and remaining limits
 
 Reducing `eta` to zero does not recover Step 1. The prepaid-wage effect remains,
 and the household cash choice reaches a boundary outside these interior money
@@ -298,7 +300,7 @@ monetary funding restriction, allow reversible capital and frictionless capital
 finance, and use a justified ownership mapping. Dropping those restrictions is
 a separate benchmark comparison, not an executable cash-settlement shortcut.
 
-Before changing the app:
+Implemented verification and integration:
 
 - The Step 1 partial-depreciation/labor reference is now implemented and checked
   against its exact special cases and stationary allocation. See
@@ -310,15 +312,24 @@ Before changing the app:
   verification. The constrained extension now handles zero investment and
   distributions by solving cash/capital values and complementary conditions
   jointly, rejecting paths where unspent opening cash would instead be optimal.
-- Establish a supported initial-state domain and investigate multiple paths,
-  corners, numerical convergence and continuation sensitivity. A stationary
-  example does not resolve those transition questions.
-- Integrate the resulting single model only after those checks, with explicit
-  saved-file/version handling. Its behavior differs from the present engine.
+- The application uses the constrained monetary solver as its one current
+  model. It verifies a complete 100-period displayable path before accepting a
+  run; continuation extends beyond that window. Revealing more periods does
+  not re-solve or revise earlier choices.
+- Dated book accounts reconcile cash, capital, profit, dividends and holding
+  gains. Ownership claims are eliminated in whole-economy totals. Saved
+  experiments carry the current model and engine identifiers; incompatible
+  historical model files are rejected explicitly rather than reinterpreted.
 
-Real, interior monetary and constrained monetary references are available
-separately from the application. The remaining economic implementation question
-is the unresolved unspent-opening-cash regime; integration also requires
-explicit model/version handling and a declared supported initial-state domain.
+The real allocation and interior monetary solvers remain independent benchmarks.
+The constrained solver supports paths with positive productive states and
+binding opening funding, including zero investment and distributions. Failed
+optimality, settlement, horizon or regime checks produce no usable history;
+the application preserves the existing experiment if a new solve fails.
+
+Unspent-opening-cash regimes remain unresolved. The supported initial-state
+domain is characterized by individual checked solutions and regression cases,
+not by a proof covering the entire application input range. Global existence,
+uniqueness and equilibrium selection across regimes remain open questions.
 Market adjustment and self-regulation remain a later architectural step;
 shocks remain postponed.

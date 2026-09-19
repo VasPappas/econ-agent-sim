@@ -1,16 +1,20 @@
-"""Exercise the actual single-app widgets and their durable workspace state."""
+"""Exercise the actual current-model controls, charts and stateful user journeys."""
 
 import json
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from econ_agent_sim.domain import Settings
+from econ_agent_sim.presets import PRESETS, build_preset
+
 APP = Path(__file__).parents[1] / "app/streamlit_app.py"
 
 
 def open_app():
-    app = AppTest.from_file(APP, default_timeout=30).run()
+    app = AppTest.from_file(APP, default_timeout=45).run()
     assert not app.exception
     return app
 
@@ -19,274 +23,247 @@ def button(app, label):
     return next(item for item in app.button if item.label == label)
 
 
-def payload(app):
-    data = json.loads(app.get("bidi_component")[0].proto.json)
-    assert all(isinstance(value, (str, int, float, bool, list))
-               for value in data["diagnostics"].values())
-    return data
-
-
 def switch_view(app, view):
     app.pills(key="te_view").set_value(view).run()
     assert not app.exception
 
 
-def test_fractional_policy_inputs_remain_visible_and_reach_the_run():
-    app = open_app()
-    settings = {
-        "te_firm_reinvestment_rate_0": 12.3456,
-        "te_firm_depreciation_rate_0": .1,
-        "te_firm_reinvestment_rate_1": 1e-10,
-    }
-    for key, value in settings.items():
-        app.number_input(key=key).set_value(value).run()
-        widget = app.number_input(key=key)
-        assert float(widget.proto.format % widget.value) == pytest.approx(value)
-        assert float(widget.proto.format % widget.value) > 0
+def start_default(app):
     button(app, "Start new simulation").click().run()
     assert not app.exception
-    firms = payload(app)["reporting"]["firms"]
-    assert firms[0]["parameters"]["reinvestment_rate"] == pytest.approx(.123456)
-    assert firms[0]["parameters"]["depreciation_rate"] == pytest.approx(.001)
-    assert firms[1]["parameters"]["reinvestment_rate"] == pytest.approx(1e-12, abs=0)
-    switch_view(app, "Set up")
-    for key, value in settings.items():
-        assert app.number_input(key=key).value == pytest.approx(value)
+    assert app.session_state.te_visible_periods == 1
+    return app.session_state.te_run
 
 
-def test_investment_policy_switches_preserve_inputs_and_submitted_run():
+def test_setup_has_six_current_controls_and_no_retired_model_or_chat(monkeypatch):
+    monkeypatch.setenv("ECON_CHAT_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "unused")
     app = open_app()
-    policy_key = "te_firm_investment_policy_0"
-    return_key = "te_firm_required_return_0"
-    budget_key = "te_firm_reinvestment_rate_0"
-    app.selectbox(key=policy_key).set_value("user_cost").run()
-    app.number_input(key=return_key).set_value(17.125).run()
-    app.number_input(key=budget_key).set_value(62.5).run()
-    assert app.number_input(key=budget_key).label == "Maximum surplus invested %"
-    assert app.session_state.te_firms[1]["investment_policy"] == "percentage"
-    app.selectbox(key=policy_key).set_value("percentage").run()
-    assert all(widget.key != return_key for widget in app.number_input)
-    assert app.number_input(key=budget_key).value == 62.5
-    assert app.session_state.te_firms[0]["required_return"] == pytest.approx(.17125)
-    app.selectbox(key=policy_key).set_value("user_cost").run()
-    assert app.number_input(key=return_key).value == 17.125
+    assert len(app.number_input) == 6
+    assert len(app.selectbox) == 1
+    assert tuple(app.selectbox(key="te_preset_choice").options) == tuple(
+        preset.title for preset in PRESETS.values()
+    )
+    assert not app.chat_input and not app.chat_message
+    assert not app.get("bidi_component")
+    assert app.session_state.te_draft == Settings()
+
+
+def test_start_reports_both_agents_and_consistent_economy_totals():
+    app = open_app()
+    run = start_default(app)
+    assert app.pills(key="te_view").value == "Results"
+    assert len(run.periods) == 100
+    assert len(app.dataframe[0].value) == 2
+    assert app.dataframe[0].value["Household"].tolist() == ["Household 1", "Household 2"]
+    first = run.periods[0]
+    output = next(metric for metric in app.metric if metric.label == "Total output · X")
+    assert float(output.value.replace(",", "")) == pytest.approx(2 * first.output, abs=5e-5)
+    assert any("accounts balance" in message.value for message in app.success)
+
+
+def test_percent_controls_preserve_precision_drafts_and_submitted_run():
+    app = open_app()
+    app.number_input(key="te_input_beta").set_value(95.125).run()
+    app.number_input(key="te_input_initial_firm_cash_share").set_value(50.125).run()
+    assert app.session_state.te_draft.beta == pytest.approx(.95125)
+    assert app.session_state.te_draft.initial_firm_cash_share == pytest.approx(.50125)
     switch_view(app, "Ask why")
     switch_view(app, "Set up")
-    assert app.selectbox(key=policy_key).value == "user_cost"
-    assert app.number_input(key=return_key).value == 17.125
-    assert app.number_input(key=budget_key).value == 62.5
-    button(app, "Start new simulation").click().run()
-    assert not app.exception
-    firm = payload(app)["reporting"]["firms"][0]
-    assert firm["parameters"]["investment_policy"] == "user_cost"
-    assert firm["parameters"]["required_return"] == pytest.approx(.17125)
-    assert firm["parameters"]["reinvestment_rate"] == .625
+    assert app.number_input(key="te_input_beta").value == 95.125
+    run = start_default(app)
     switch_view(app, "Set up")
-    app.number_input(key=return_key).set_value(22.0).run()
+    app.number_input(key="te_input_initial_capital").set_value(2.).run()
     switch_view(app, "Results")
-    button(app, "Next period →").click().run()
-    assert not app.exception
-    assert app.session_state.te_history[-1].firms[0].required_return == .17125
-    switch_view(app, "Set up")
-    button(app, "Start new simulation").click().run()
-    assert not app.exception
-    assert app.session_state.te_history[0].firms[0].required_return == .22
-
-
-def test_draft_and_expansion_survive_navigation_and_run_uses_submitted_settings():
-    app = open_app()
-    app.session_state.te_open_household_0 = True
-    app.session_state.te_expanded["household_0"] = True
-    app.number_input(key="te_household_consumption_target_0").set_value(1.0).run()
-    assert app.session_state.te_open_household_0 is True
-    button(app, "Start new simulation").click().run()
-    assert not app.exception
-    assert payload(app)["reporting"]["households"][0]["parameters"]["consumption_target"] == 1
-    switch_view(app, "Set up")
-    assert app.session_state.te_open_household_0 is True
-    app.number_input(key="te_household_consumption_target_0").set_value(.8).run()
-    switch_view(app, "Results")
-    assert any("Draft changed" in notice.value for notice in app.info)
-    button(app, "Next period →").click().run()
-    assert app.session_state.te_history[-1].households[0].consumption_target == 1
-    switch_view(app, "Set up")
-    assert app.number_input(key="te_household_consumption_target_0").value == .8
-    button(app, "Start new simulation").click().run()
-    assert len(app.session_state.te_history) == 1
-    assert app.session_state.te_history[0].households[0].consumption_target == .8
-
-
-def test_preset_requires_apply_and_preserves_results_and_baseline_until_start():
-    app = open_app()
-    button(app, "Start new simulation").click().run()
-    first = app.session_state.te_history[0]
-    button(app, "Save as baseline").click().run()
-    baseline = app.session_state.te_baseline
-    switch_view(app, "Set up")
-    app.selectbox(key="te_preset_choice").set_value("fixed_capacity").run()
-    assert app.session_state.te_households[0]["consumption_target"] == .5
-    button(app, "Use this setup").click().run()
-    assert not app.exception
-    assert app.session_state.te_history == [first]
-    assert app.session_state.te_baseline == baseline
-    assert all(item["consumption_target"] == 0 for item in app.session_state.te_households)
-    assert all(item["reinvestment_rate"] == item["depreciation_rate"] == 0
-               for item in app.session_state.te_firms)
-    button(app, "Start new simulation").click().run()
-    assert payload(app)["comparison"] is not None
+    assert any("Draft changed" in item.value for item in app.info)
     button(app, "+10 periods").click().run()
     assert not app.exception
-    assert len(app.session_state.te_history) == 11
+    assert app.session_state.te_run is run
+    assert run.settings.initial_capital == 1.
+    assert app.session_state.te_visible_periods == 11
+    switch_view(app, "Set up")
+    assert app.number_input(key="te_input_initial_capital").value == 2.
+
+
+def test_advancing_and_historical_cumulative_views_never_resolve(monkeypatch):
+    from econ_agent_sim import workspace
+
+    app = open_app()
+    run = start_default(app)
+
+    def unexpected_solve(*args, **kwargs):
+        pytest.fail("Revealing or selecting a period must not solve a new plan")
+
+    monkeypatch.setattr(workspace, "simulate", unexpected_solve)
+    button(app, "+10 periods").click().run()
+    assert not app.exception
+    app.selectbox(key="te_period_picker").set_value(4).run()
+    app.pills(key="te_scope_picker").set_value("Cumulative").run()
+    assert any(item.value == "Periods 1–4" for item in app.subheader)
+    assert app.session_state.te_scope == "Cumulative"
+    switch_view(app, "Ask why")
+    app.selectbox(key="te_question").set_value("Why did capital change?").run()
+    assert not app.exception
+    switch_view(app, "Set up")
+    switch_view(app, "Results")
+    assert app.selectbox(key="te_period_picker").value == 4
+    assert app.pills(key="te_scope_picker").value == "Cumulative"
+    button(app, "Next period →").click().run()
+    assert app.session_state.te_visible_periods == 12
+    assert app.session_state.te_selected_period == 12
+    assert app.session_state.te_run is run
+    assert not app.exception
+
+
+def test_preset_selection_requires_apply_and_keeps_current_run_and_baseline():
+    app = open_app()
+    run = start_default(app)
+    button(app, "Save as baseline").click().run()
+    baseline = app.session_state.te_baseline
+    switch_view(app, "Set up")
+    app.selectbox(key="te_preset_choice").set_value("capital_abundant").run()
+    assert app.session_state.te_draft == Settings()
+    button(app, "Use this setup").click().run()
+    assert app.number_input(key="te_input_initial_capital").value == 100.
+    assert app.session_state.te_run is run
+    assert app.session_state.te_baseline is baseline
+    button(app, "Start new simulation").click().run()
+    assert not app.exception
+    assert app.session_state.te_run.periods[0].investment == 0
+    assert any("invest zero" in item.value for item in app.info)
+    button(app, "+10 periods").click().run()
+    assert any("Both experiments need Period 11" in item.value for item in app.info)
+    app.selectbox(key="te_period_picker").set_value(1).run()
+    assert not any("Both experiments need" in item.value for item in app.info)
     button(app, "Copy baseline setup").click().run()
     assert app.pills(key="te_view").value == "Set up"
-    assert app.number_input(key="te_household_consumption_target_0").value == .5
-    assert len(app.session_state.te_history) == 11
-    assert app.session_state.te_baseline == baseline
+    assert app.session_state.te_draft == Settings()
+    assert app.session_state.te_visible_periods == 11
+    assert app.session_state.te_baseline is baseline
 
 
-def test_imported_names_are_literal_in_explanations_and_reset_clears_run(monkeypatch):
+def test_unsupported_setup_keeps_existing_results_and_baseline_and_can_recover():
+    app = open_app()
+    run = start_default(app)
+    button(app, "Save as baseline").click().run()
+    baseline = app.session_state.te_baseline
+    switch_view(app, "Set up")
+    app.number_input(key="te_input_initial_capital").set_value(.1).run()
+    app.number_input(key="te_input_initial_firm_cash_share").set_value(99.).run()
+    button(app, "Start new simulation").click().run()
+    assert not app.exception
+    assert any("opening money unspent" in item.value for item in app.error)
+    assert app.session_state.te_run is run
+    assert app.session_state.te_baseline is baseline
+    assert app.session_state.te_visible_periods == 1
+    app.selectbox(key="te_preset_choice").set_value("growing").run()
+    button(app, "Use this setup").click().run()
+    button(app, "Start new simulation").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state.te_run.settings == Settings()
+
+
+def test_stationary_preset_does_not_round_away_the_analytical_start():
+    app = open_app()
+    app.selectbox(key="te_preset_choice").set_value("stationary").run()
+    button(app, "Use this setup").click().run()
+    expected = build_preset("stationary")
+    assert app.session_state.te_draft == expected
+    button(app, "Start new simulation").click().run()
+    assert not app.exception
+    run = app.session_state.te_run
+    assert run.settings.initial_capital == expected.initial_capital
+    assert run.settings.initial_firm_cash_share == pytest.approx(expected.initial_firm_cash_share)
+    assert run.periods[-1].capital == pytest.approx(run.periods[0].capital, rel=1e-8)
+
+
+def test_invalid_rename_recovers_and_user_names_are_literal():
     from econ_agent_sim.ui_text import literal
 
-    # Old deployment settings must not bring the retired chat UI back.
-    monkeypatch.setenv("ECON_CHAT_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "unused-test-key")
     app = open_app()
-    name = "![preview](https://example.com/image)"
-    app.session_state.te_experiment_name = name
-    app.session_state.te_firms[0]["name"] = name
-    app.run()
-    assert not app.exception
-    assert any(literal(name) in item.value for item in app.caption)
-    assert any(item.label == literal(name) for item in app.expander)
-    button(app, "Start new simulation").click().run()
-    switch_view(app, "Ask why")
-    app.selectbox(key="te_explanation_question_topic").set_value(
-        "Why does one firm sell more?"
-    ).run()
-    assert not app.exception
-    assert any(name in item.value for item in app.text)
-    assert not any(name in item.value for item in app.markdown)
-    assert not app.chat_input
-    assert not app.chat_message
-    button(app, "Reset to default").click().run()
-    assert not app.exception
-    assert not app.session_state.te_history
-    assert app.session_state.te_experiment_name == "My experiment"
-
-
-def test_invalid_name_edit_preserves_run_and_baseline_then_recovers():
-    app = open_app()
-    button(app, "Start new simulation").click().run()
-    button(app, "Save as baseline").click().run()
-    history = tuple(app.session_state.te_history)
-    baseline = app.session_state.te_baseline
-    name = app.session_state.te_experiment_name
+    run = start_default(app)
     app.text_input(key="te_name_input").set_value("Bad\tname").run()
-    assert not app.exception
-    assert any("Could not rename this experiment" in item.value for item in app.error)
-    assert app.session_state.te_experiment_name == name
-    assert app.text_input(key="te_name_input").value == name
-    assert tuple(app.session_state.te_history) == history
-    assert app.session_state.te_baseline == baseline
-    app.text_input(key="te_name_input").set_value("Recovered experiment").run()
-    assert not app.exception
-    assert not app.error
-    assert app.session_state.te_experiment_name == "Recovered experiment"
-    assert tuple(app.session_state.te_history) == history
-    assert app.session_state.te_baseline == baseline
+    assert any("Could not rename" in item.value for item in app.error)
+    assert app.text_input(key="te_name_input").value == "My experiment"
+    assert app.session_state.te_run is run
+    name = "![preview](https://example.com/image)"
+    app.text_input(key="te_name_input").set_value(name).run()
+    assert not app.exception and not app.error
+    assert any(literal(name) in item.value for item in app.caption)
+    assert not any(name in item.value for item in app.markdown)
 
 
-def test_invalid_unicode_upload_shows_error_without_replacing_work(monkeypatch):
-    from io import BytesIO
-
+def test_old_file_open_fails_atomically_and_reset_retains_baseline(monkeypatch):
     import streamlit as st
 
-    document = json.loads(
-        (Path(__file__).parent / "fixtures/current_model_workspace.json").read_bytes()
-    )
-    document["current"]["draft"]["firms"][0]["name"] = "Bad\ud800name"
-    uploaded = BytesIO(json.dumps(document).encode())
+    uploaded = BytesIO(json.dumps({"format": "tiny-economy-experiment", "format_version": 5}).encode())
 
-    # AppTest has no uploader driver; substitute the upload boundary and use
-    # the app's real Open experiment button and callback for the entire restore.
-    def file_uploader(*args, **kwargs):
+    def uploader(*args, **kwargs):
         st.session_state[kwargs["key"]] = uploaded
         return uploaded
 
-    monkeypatch.setattr(st, "file_uploader", file_uploader)
+    monkeypatch.setattr(st, "file_uploader", uploader)
     app = open_app()
-    button(app, "Start new simulation").click().run()
+    run = start_default(app)
     button(app, "Save as baseline").click().run()
-    history = tuple(app.session_state.te_history)
     baseline = app.session_state.te_baseline
-    name = app.session_state.te_experiment_name
     button(app, "Open experiment").click().run()
-    assert not app.exception
-    assert any("valid Unicode text" in item.value for item in app.error)
-    assert tuple(app.session_state.te_history) == history
-    assert app.session_state.te_baseline == baseline
-    assert app.session_state.te_experiment_name == name
-
-
-def test_bulk_preferences_leave_money_and_submitted_settings_unchanged():
-    app = open_app()
-    app.number_input(key="te_count").set_value(3).run()
-    app.number_input(key="te_household_money_1").set_value(2.0).run()
-    app.number_input(key="te_household_consumption_target_0").set_value(1.2).run()
-    app.number_input(key="te_household_consumption_priority_0").set_value(2.0).run()
-    button(app, "Start new simulation").click().run()
-    submitted = app.session_state.te_submitted
-    switch_view(app, "Set up")
-    button(app, "Copy preferences and target to all").click().run()
-    assert not app.exception
-    households = app.session_state.te_households
-    assert all(item["consumption_target"] == 1.2 for item in households)
-    assert all(item["consumption_priority"] == 2 for item in households)
-    assert households[1]["money"] == 2
-    assert app.session_state.te_submitted == submitted
-    assert submitted[0][1].consumption_target == .5
-    assert app.number_input(key="te_household_consumption_target_2").value == 1.2
-
-
-def test_cumulative_navigation_and_reset_keep_explicit_baseline():
-    app = open_app()
-    switch_view(app, "Results")
-    button(app, "Go to set up").click().run()
-    assert app.pills(key="te_view").value == "Set up"
-    app.number_input(key="te_household_consumption_target_0").set_value(1.0).run()
-    button(app, "Start new simulation").click().run()
-    button(app, "+10 periods").click().run()
-    app.pills(key="te_report_scope").set_value("Cumulative").run()
-    report = payload(app)["reporting"]
-    assert report["scope"] == "cumulative"
-    assert report["economy"]["needed_x"] == pytest.approx(16.5)
-    app.session_state.te_selected_firm = "firm_b"
-    switch_view(app, "Ask why")
-    app.selectbox(key="te_explanation_question_topic").set_value(
-        "How are target gaps counted?"
-    ).run()
-    assert any("Periods 1–11" in item.value for item in app.text)
-    app.selectbox(key="te_selected").set_value(3).run()
-    assert any("Periods 1–3" in item.value for item in app.text)
-    app.pills(key="te_report_scope").set_value("This period").run()
-    assert any("Period 3" in item.value for item in app.text)
-    app.pills(key="te_report_scope").set_value("Cumulative").run()
-    app.selectbox(key="te_selected").set_value(11).run()
-    switch_view(app, "Results")
-    assert app.pills(key="te_report_scope").value == "Cumulative"
-    assert payload(app)["selected_firm"] == "firm_b"
-    button(app, "Save as baseline").click().run()
-    baseline = app.session_state.te_baseline
-    comparison = payload(app)["comparison"]
-    switch_view(app, "Ask why")
-    app.selectbox(key="te_explanation_question_topic").set_value(
-        "How should I read the baseline comparison?"
-    ).run()
-    assert any(comparison["note"] in item.value for item in app.text)
-    button(app, "Next period →").click().run()
-    assert any("Both experiments need Period 12" in item.value for item in app.text)
+    assert not app.exception and app.error
+    assert app.session_state.te_run is run
+    assert app.session_state.te_baseline is baseline
     button(app, "Reset to default").click().run()
     assert not app.exception
-    assert not app.session_state.te_history
-    assert app.session_state.te_baseline == baseline
-    assert app.number_input(key="te_household_consumption_target_0").value == .5
+    assert app.session_state.te_run is None
+    assert app.session_state.te_draft == Settings()
+    assert app.session_state.te_baseline is baseline
+    assert app.pills(key="te_view").value == "Set up"
+
+
+def test_a_previous_model_session_starts_fresh_with_an_explanation():
+    app = AppTest.from_file(APP, default_timeout=45)
+    app.session_state.te_model_id = "old-one-period-model"
+    app.session_state.te_history = ["old results"]
+    app.session_state.te_name = "Old experiment"
+    app.run()
+    assert not app.exception
+    assert app.session_state.te_run is None
+    assert app.session_state.te_name == "My experiment"
+    assert any("previous" in item.value for item in app.success)
+
+
+def test_saved_experiment_reopens_draft_run_baseline_and_report_selection(monkeypatch):
+    import streamlit as st
+
+    from econ_agent_sim.experiments import dumps_experiment
+
+    upload = [None]
+
+    def uploader(*args, **kwargs):
+        st.session_state[kwargs["key"]] = upload[0]
+        return upload[0]
+
+    monkeypatch.setattr(st, "file_uploader", uploader)
+    app = open_app()
+    start_default(app)
+    button(app, "+10 periods").click().run()
+    app.pills(key="te_scope_picker").set_value("Cumulative").run()
+    button(app, "Save as baseline").click().run()
+    switch_view(app, "Set up")
+    app.number_input(key="te_input_initial_capital").set_value(2.).run()
+    app.text_input(key="te_name_input").set_value("Saved experiment").run()
+    saved = dumps_experiment(app.session_state)
+    button(app, "Reset to default").click().run()
+    upload[0] = BytesIO(saved.encode())
+    app.run()
+    button(app, "Open experiment").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state.te_name == "Saved experiment"
+    assert app.session_state.te_draft.initial_capital == 2.
+    assert app.session_state.te_run.settings.initial_capital == 1.
+    assert app.session_state.te_visible_periods == 11
+    assert app.session_state.te_baseline.visible_periods == 11
+    assert app.session_state.te_selected_period == 11
+    switch_view(app, "Results")
+    assert app.pills(key="te_scope_picker").value == "Cumulative"
+    assert any("Draft changed" in item.value for item in app.info)
+    assert any(item.value == "Periods 1–11" for item in app.subheader)

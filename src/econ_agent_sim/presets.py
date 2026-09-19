@@ -1,8 +1,9 @@
-"""A small set of editable starting points for one supported economic model."""
+"""Tested starting points for the single forward-looking monetary economy."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from econ_agent_sim.engine import default_firms, default_households
+from econ_agent_sim.domain import Settings
+from econ_agent_sim.monetary_growth import steady_state
 
 
 @dataclass(frozen=True)
@@ -15,51 +16,49 @@ class Preset:
 PRESETS = {
     preset.key: preset for preset in (
         Preset(
-            "everyday", "Everyday economy",
-            "Two equal households and two equal firms. Explore work, consumption, "
-            "money and investment with a target of 0.50 X per household.",
+            "growing", "Growing economy",
+            "Start with one unit of capital per firm and an equal split of money "
+            "between households and firms. Watch saving and investment change capacity.",
         ),
         Preset(
-            "fixed_capacity", "Fixed productive capacity",
-            "Turn off investment, capital wear and consumption targets. "
-            "Explore how preferences and money shape outcomes with unchanged capital.",
+            "capital_abundant", "Capital abundant",
+            "Start with 100 units of capital per firm. Explore why firms can stop "
+            "investing while existing capital wears down.",
         ),
         Preset(
-            "capital_wears_out", "Capital wears out",
-            "Turn off investment and consumption targets; keep capital wear at 10%. "
-            "What happens to production and prices as productive capacity shrinks?",
+            "capital_scarce", "Firms short of capital",
+            "Start with 0.1 units of capital per firm. Explore the balance between "
+            "consumption today and building productive capacity.",
         ),
         Preset(
-            "meeting_a_target", "Meeting a consumption target",
-            "Each household aims for 1.00 X per period. Explore how a target gap "
-            "changes the trade-off between consumption, money and leisure.",
+            "tight_cash", "Tight opening cash",
+            "Firms begin with 4.44 units of capital each and just 5% of all money. "
+            "Explore how funding wages can require a pause in dividends.",
         ),
         Preset(
-            "firms_look_ahead", "Firms look ahead",
-            "Both firms compare expected capital returns with required return and wear. "
-            "Firm A is less productive: explore why one holds back while the other invests.",
+            "stationary", "Stationary economy",
+            "Begin at the model's steady state: investment replaces worn capital "
+            "and the same choices repeat each period.",
         ),
     )
 }
 
 
-def build_preset(key: str) -> tuple[list[dict], list[dict]]:
-    """Return fresh default-sized settings; applying them is an explicit UI action."""
+def build_preset(key: str) -> Settings:
+    """Return fresh settings; selecting a title alone does not alter a draft."""
     if key not in PRESETS:
         raise ValueError("Choose a supported starting experiment.")
-    households = default_households()
-    firms = default_firms()
-    if key in {"fixed_capacity", "capital_wears_out"}:
-        for household in households:
-            household["consumption_target"] = 0.0
-        for firm in firms:
-            firm["reinvestment_rate"] = 0.0
-            firm["depreciation_rate"] = .1 if key == "capital_wears_out" else 0.0
-    elif key == "meeting_a_target":
-        for household in households:
-            household["consumption_target"] = 1.0
-    elif key == "firms_look_ahead":
-        for firm in firms:
-            firm["investment_policy"] = "user_cost"
-        firms[0]["productivity"] = .5
-    return households, firms
+    settings = Settings()
+    if key == "capital_abundant":
+        return replace(settings, initial_capital=100.)
+    if key == "capital_scarce":
+        return replace(settings, initial_capital=.1)
+    if key == "tight_cash":
+        return replace(settings, initial_capital=4.44, initial_firm_cash_share=.05)
+    if key == "stationary":
+        target = steady_state(settings.to_parameters())
+        return replace(
+            settings, initial_capital=target.capital,
+            initial_firm_cash_share=2 * target.firm_cash,
+        )
+    return settings

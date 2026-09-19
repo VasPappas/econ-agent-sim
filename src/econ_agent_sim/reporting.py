@@ -1,374 +1,200 @@
-"""Canonical two-firm statements, allocations and full-precision evidence.
+"""Dated book accounts for the current symmetric monetary economy.
 
-The report has plural ``firms`` and ``households`` plus consolidated ``economy``
-accounts. Monetary flows retain their original period prices; physical sales
-shares divide summed quantities. Prices and funding conditions describe the
-selected closing period, even in a cumulative report.
+The solver's records are per household / per firm. Reports make the two copies
+explicit and consolidate only once. Capital is valued at the goods replacement
+price; its revaluation is separate from operating profit and never creates cash.
 """
 
-from collections.abc import Sequence
-from dataclasses import asdict
-from math import fsum
+import csv
+import io
+from math import fsum, isclose
 
-from econ_agent_sim.engine import TOLERANCE, EconomyPeriod
+from econ_agent_sim.domain import MODEL_ID
+from econ_agent_sim.engine import Run
 
 _FIRM_FLOWS = (
-    "production_value", "gross_operating_surplus", "net_operating_profit",
-    "investment_quantity", "investment_value", "depreciation_quantity",
-    "depreciation_value", "holding_gain",
-)
-_FIRM_STOCKS = (
-    "capital", "capital_value", "capital_price", "equity",
-    "retained_earnings", "revaluation_reserve",
+    "produced_x", "sold_x", "work_used", "sales_received", "wages_paid",
+    "dividends_paid", "production_value", "investment_quantity", "investment_value",
+    "depreciation_quantity", "depreciation_value", "net_operating_profit", "holding_gain",
 )
 
 
-def _coverage(consumption, target):
-    consumed = tuple(consumption)
-    needed = target * len(consumed)
-    met = fsum(min(value, target) for value in consumed)
-    shortfall = fsum(max(target - value, 0.0) for value in consumed)
-    below = sum(
-        target - value > TOLERANCE * max(target, abs(value))
-        for value in consumed
+def _selected(run, period_number, cumulative):
+    if not isinstance(run, Run) or not run.solution.converged:
+        raise ValueError("Reports need a successfully solved current-model run.")
+    if type(period_number) is not int or not 1 <= period_number <= len(run.periods):
+        raise ValueError("Choose a completed positive whole period for this run.")
+    if type(cumulative) is not bool:
+        raise ValueError("Cumulative must be true or false.")
+    return run.periods[:period_number] if cumulative else run.periods[period_number - 1:period_number]
+
+
+def _firm_period(run, period):
+    previous_price = (
+        run.periods[period.number - 2].goods_price
+        if period.number > 1 else period.goods_price
     )
+    price = period.goods_price
+    wear = run.settings.depreciation * period.capital
+    wages = period.money_wage * period.labor
     return {
-        "needed_x": needed,
-        "needs_met_x": met,
-        "shortfall_x": shortfall,
-        "target_coverage": met / needed if needed else None,
-        "below_target_periods": below,
+        "opening_money": period.firm_cash,
+        "closing_money": period.next_firm_cash,
+        "capital_open": period.capital,
+        "capital_close": period.next_capital,
+        "capital_price_open": previous_price,
+        "capital_price_close": price,
+        "capital_value_open": previous_price * period.capital,
+        "capital_value_close": price * period.next_capital,
+        "equity_open": period.firm_cash + previous_price * period.capital,
+        "equity_close": period.next_firm_cash + price * period.next_capital,
+        "produced_x": period.output,
+        "sold_x": period.consumption,
+        "work_used": period.labor,
+        "sales_received": price * period.consumption,
+        "wages_paid": wages,
+        "dividends_paid": period.distribution,
+        "production_value": price * period.output,
+        "investment_quantity": period.investment,
+        "investment_value": price * period.investment,
+        "depreciation_quantity": wear,
+        "depreciation_value": price * wear,
+        "net_operating_profit": fsum((price * period.output, -wages, -price * wear)),
+        "holding_gain": (price - previous_price) * period.capital,
     }
 
 
-
-def _close(left: float, right: float, scale: float = 0.0) -> bool:
-    return abs(left - right) <= TOLERANCE * max(abs(left), abs(right), abs(scale))
-
-
-def _selected_periods(periods, cumulative):
-    history = (periods,) if isinstance(periods, EconomyPeriod) else tuple(periods)
-    if not history:
-        raise ValueError("A report needs at least one completed period.")
-    if not all(isinstance(period, EconomyPeriod) for period in history):
-        raise ValueError("Use completed Tiny Economy periods for this report.")
-    selected = history if cumulative else history[-1:]
-    last = selected[-1]
-    households = {entry.id: entry for entry in last.households}
-    firms = {entry.id: entry for entry in last.firms}
-    for index, period in enumerate(selected):
-        if (
-            {entry.id: entry for entry in period.households} != households
-            or {entry.id: entry for entry in period.firms} != firms
-            or period.ownership != last.ownership
-        ):
-            raise ValueError("A cumulative report needs unchanged settings and ownership.")
-        if index:
-            previous = selected[index - 1]
-            if (
-                period.number != previous.number + 1
-                or period.opening_cash != previous.closing_cash
-                or any(
-                    period.firm_accounts[key].capital_open
-                    != previous.firm_accounts[key].capital_close
-                    or period.firm_accounts[key].equity_open
-                    != previous.firm_accounts[key].equity_close
-                    for key in firms
-                )
-            ):
-                raise ValueError("A cumulative report needs consecutive linked periods.")
-    return selected
+def _close(left, right):
+    return isclose(left, right, rel_tol=1e-8, abs_tol=1e-10)
 
 
-def build_report(
-    periods: EconomyPeriod | Sequence[EconomyPeriod], cumulative: bool = False
-) -> dict:
-    """Build detached statements for a snapshot or history through a chosen date."""
-    selected = _selected_periods(periods, cumulative)
+def build_report(run: Run, period_number: int, cumulative: bool = False) -> dict:
+    """Report dated flows, first opening stocks and selected closing stocks.
+
+    Prices/wages are always those of ``period_number``. In cumulative view,
+    money flows retain their original prices; work and leisure are averages.
+    Solver shadow values are not used to value book equity.
+    """
+    selected = _selected(run, period_number, cumulative)
     first, last = selected[0], selected[-1]
     count = len(selected)
-    allocation_maps = [
-        {(item.household_id, item.firm_id): item for item in period.allocations}
-        for period in selected
-    ]
-
-    def household_flow(field, identity):
-        return fsum(getattr(period, field)[identity] for period in selected)
-
-    def firm_flow(field, identity):
-        return fsum(getattr(period.firm_accounts[identity], field) for period in selected)
-
-    def allocation_flow(field, household_id, firm_id):
-        return fsum(
-            getattr(entries[household_id, firm_id], field)
-            for entries in allocation_maps
-        )
-
-    household_reports = []
-    for household in last.households:
-        identity = household.id
-        relationships = []
-        for firm in last.firms:
-            opening = allocation_maps[0][identity, firm.id]
-            closing = allocation_maps[-1][identity, firm.id]
-            relationships.append({
-                "entity_id": firm.id, "name": firm.name,
-                "work": allocation_flow("work", identity, firm.id),
-                "wages_received": allocation_flow("wages", identity, firm.id),
-                "dividends_received": allocation_flow("dividends", identity, firm.id),
-                "purchases_paid": allocation_flow("purchases", identity, firm.id),
-                "consumed_x": allocation_flow("consumption", identity, firm.id),
-                "ownership": closing.ownership_share,
-                "ownership_value_open": opening.ownership_value_open,
-                "ownership_value_close": closing.ownership_value_close,
-            })
-        ownership_open = fsum(item["ownership_value_open"] for item in relationships)
-        ownership_close = fsum(item["ownership_value_close"] for item in relationships)
-        total_work = household_flow("work", identity)
-        report = {
-            "name": household.name, "entity_id": identity,
-            "opening_money": first.opening_cash[identity],
-            "closing_money": last.closing_cash[identity],
-            "wages_received": household_flow("wages", identity),
-            "dividends_received": household_flow("dividends", identity),
-            "purchases_paid": household_flow("purchases", identity),
-            "net_cash_change": last.closing_cash[identity] - first.opening_cash[identity],
-            "consumed_x": household_flow("consumption", identity),
-            "consumed": household_flow("consumption", identity),
-            "total_work": total_work,
-            "average_work": total_work / count,
-            "average_leisure": household_flow("leisure", identity) / count,
-            # The same fixed share belongs to this household in EACH firm.
-            "ownership": relationships[0]["ownership"],
-            "ownership_value_open": ownership_open,
-            "ownership_value_close": ownership_close,
-            "assets_open": first.opening_cash[identity] + ownership_open,
-            "assets_close": last.closing_cash[identity] + ownership_close,
-            "parameters": {
-                "scores": household.scores, "weights": household.weights,
-                "alpha": household.alpha,
-                "consumption_target": household.consumption_target,
-            },
-            "firms": relationships,
-        }
-        report["income_received"] = report["wages_received"] + report["dividends_received"]
-        report.update(_coverage(
-            (period.consumption[identity] for period in selected),
-            household.consumption_target,
-        ))
-        household_reports.append(report)
-
-    firms = []
-    for specification in last.firms:
-        identity = specification.id
-        opening = first.firm_accounts[identity]
-        closing = last.firm_accounts[identity]
-        report = {
-            "name": specification.name, "entity_id": identity,
-            "productivity": specification.productivity, "theta": specification.theta,
-            "produced_x": firm_flow("output", identity),
-            "sold_x": firm_flow("sales_quantity", identity),
-            "work_used": firm_flow("work", identity),
-            "total_work": firm_flow("work", identity),
-            "opening_money": first.opening_cash[identity],
-            "closing_money": last.closing_cash[identity],
-            "sales_received": firm_flow("sales_received", identity),
-            "wages_paid": firm_flow("wage_bill", identity),
-            "dividends_paid": firm_flow("dividends_paid", identity),
-            "net_cash_change": last.closing_cash[identity] - first.opening_cash[identity],
-            "contributed_equity": closing.contributed_equity,
-            "protected_operating_float": specification.money,
-            "operating_cash": closing.operating_cash,
-            "next_dividend_budget": closing.next_dividend_budget,
-            "funding_binding": closing.funding_binding,
-            "funding_period": last.number,
-            "parameters": asdict(specification),
-        }
-        decision = last.solution.get("investment_decisions", {}).get(identity)
-        report["investment_decision"] = {
-            **dict(decision), "period": last.number, "scope": "selected_period",
-            "replacement_quantity": closing.depreciation_quantity,
-        } if decision is not None else None
-        for field in _FIRM_STOCKS:
-            report[f"{field}_open"] = getattr(opening, f"{field}_open")
-            report[f"{field}_close"] = getattr(closing, f"{field}_close")
-        for field in _FIRM_FLOWS:
-            report[field] = firm_flow(field, identity)
-        report["cash_operating_surplus"] = report["sales_received"] - report["wages_paid"]
-        report["investment_output_share"] = report["investment_quantity"] / report["produced_x"]
-        report["assets_open"] = report["equity_open"]
-        report["assets_close"] = report["equity_close"]
-        report["allocations"] = []
-        for household in household_reports:
-            relationship = next(item for item in household["firms"] if item["entity_id"] == identity)
-            report["allocations"].append({
-                "household_id": household["entity_id"], "name": household["name"],
-                "work": relationship["work"],
-                "wages_paid": relationship["wages_received"],
-                "dividends_paid": relationship["dividends_received"],
-                "sold_x": relationship["consumed_x"],
-                "sales_received": relationship["purchases_paid"],
-                "ownership": relationship["ownership"],
-                "ownership_value_open": relationship["ownership_value_open"],
-                "ownership_value_close": relationship["ownership_value_close"],
-            })
-        firms.append(report)
-
-    def total(field):
-        return fsum(entry[field] for entry in firms)
-
-    for report in firms:
-        report["sales_share"] = report["sold_x"] / total("sold_x")
-        report["production_share"] = report["produced_x"] / total("produced_x")
-        report["revenue_share"] = report["sales_received"] / total("sales_received")
-
-    economy = {
-        "opening_money": fsum(first.opening_cash.values()),
-        "closing_money": fsum(last.closing_cash.values()),
-        "produced_x": total("produced_x"),
-        "consumed_x": fsum(entry["consumed_x"] for entry in household_reports),
-        "sales_received": total("sales_received"),
-        "output_value": total("production_value"),
-        "wages": total("wages_paid"), "dividends": total("dividends_paid"),
-        "net_income": total("wages_paid") + total("net_operating_profit"),
-        "household_cash_saving": fsum(entry["net_cash_change"] for entry in household_reports),
-        "firm_net_saving": total("net_operating_profit") - total("dividends_paid"),
-        "total_work": total("work_used"),
-        "average_work": fsum(entry["average_work"] for entry in household_reports) / len(household_reports),
-        "average_leisure": fsum(entry["average_leisure"] for entry in household_reports) / len(household_reports),
-        "household_count": len(household_reports), "firm_count": len(firms),
+    firm_periods = [_firm_period(run, row) for row in selected]
+    opening, closing = firm_periods[0], firm_periods[-1]
+    firm = {field: fsum(row[field] for row in firm_periods) for field in _FIRM_FLOWS}
+    for stem in ("capital", "capital_price", "capital_value", "equity"):
+        firm[f"{stem}_open"] = opening[f"{stem}_open"]
+        firm[f"{stem}_close"] = closing[f"{stem}_close"]
+    firm.update(
+        opening_money=first.firm_cash,
+        closing_money=last.next_firm_cash,
+        net_cash_change=last.next_firm_cash - first.firm_cash,
+        assets_open=opening["equity_open"], assets_close=closing["equity_close"],
+        sales_share=.5, production_share=.5,
+        average_work=firm["work_used"] / count,
+        zero_investment_periods=sum(row.investment == 0 for row in selected),
+        zero_dividend_periods=sum(row.distribution == 0 for row in selected),
+        funding_period=last.number,
+        opening_funding_slack=fsum((last.firm_cash, -last.distribution,
+                                   -last.money_wage * last.labor)),
+    )
+    firm["cash_operating_surplus"] = firm["sales_received"] - firm["wages_paid"]
+    firms = [dict(firm, entity_id=f"firm_{letter.lower()}", name=f"Firm {letter}")
+             for letter in ("A", "B")]
+    household = {
+        "opening_money": first.household_cash,
+        "closing_money": last.next_household_cash,
+        "net_cash_change": last.next_household_cash - first.household_cash,
+        "wages_received": firm["wages_paid"],
+        "dividends_received": firm["dividends_paid"],
+        "purchases_paid": firm["sales_received"],
+        "consumed_x": fsum(row.consumption for row in selected),
+        "total_work": firm["work_used"],
+        "average_work": firm["work_used"] / count,
+        "average_leisure": fsum(1 - row.labor for row in selected) / count,
+        "ownership": .5,
+        # Each household owns half of BOTH identical firms.
+        "ownership_value_open": firm["equity_open"],
+        "ownership_value_close": firm["equity_close"],
+        "assets_open": first.household_cash + firm["equity_open"],
+        "assets_close": last.next_household_cash + firm["equity_close"],
     }
-    for field in (*_FIRM_FLOWS, "capital_open", "capital_close", "capital_value_open", "capital_value_close"):
-        economy[field] = total(field)
+    household["income_received"] = household["wages_received"] + household["dividends_received"]
+    households = [dict(household, entity_id=f"household_{number}", name=f"Household {number}")
+                  for number in (1, 2)]
+    economy = {field: 2 * firm[field] for field in _FIRM_FLOWS}
+    for field in ("capital_open", "capital_close", "capital_value_open", "capital_value_close"):
+        economy[field] = 2 * firm[field]
+    economy.update(
+        opening_money=2 * (first.household_cash + first.firm_cash),
+        closing_money=2 * (last.next_household_cash + last.next_firm_cash),
+        consumed_x=2 * household["consumed_x"],
+        total_work=2 * household["total_work"],
+        average_work=household["average_work"], average_leisure=household["average_leisure"],
+        household_cash_open=2 * first.household_cash,
+        household_cash_close=2 * last.next_household_cash,
+        firm_cash_open=2 * first.firm_cash,
+        firm_cash_close=2 * last.next_firm_cash,
+        household_cash_saving=2 * household["net_cash_change"],
+        firm_net_saving=2 * (firm["net_operating_profit"] - firm["dividends_paid"]),
+        household_count=2, firm_count=2,
+    )
+    economy["net_income"] = economy["wages_paid"] + economy["net_operating_profit"]
     economy["assets_open"] = economy["opening_money"] + economy["capital_value_open"]
     economy["assets_close"] = economy["closing_money"] + economy["capital_value_close"]
-    for field in ("needed_x", "needs_met_x", "shortfall_x"):
-        economy[field] = fsum(household[field] for household in household_reports)
-    economy["target_coverage"] = (
-        economy["needs_met_x"] / economy["needed_x"] if economy["needed_x"] else None
-    )
-    economy["household_periods_below_target"] = sum(
-        household["below_target_periods"] for household in household_reports
-    )
-    economy["households_below_target"] = sum(
-        household["below_target_periods"] > 0 for household in household_reports
-    )
-    checks = _report_checks(selected, household_reports, firms, economy)
-    transfers = [asdict(item) for period in selected for item in period.transfers]
-    events = [asdict(item) for period in selected for item in period.events]
-    rows = _account_rows(selected)
-    rows.extend({"record_type": "transfer", **entry} for entry in transfers)
-    rows.extend({"record_type": "event", **entry} for entry in events)
-    return {
-        "model": "tiny_economy", "scope": "cumulative" if cumulative else "period",
-        "label": f"Periods {first.number}–{last.number}" if count > 1 else f"Period {last.number}",
-        "period_count": count, "through_period": last.number,
-        "price": last.price, "wage": last.wage, "real_wage": last.wage / last.price,
-        "price_wage_period": last.number, "households": household_reports,
-        "firms": firms, "economy": economy, "checks": checks,
-        "transfers": transfers, "events": events, "rows": rows,
-        "policies": {
-            "consumption_target": "Below the target, additional consumption becomes more valuable. A target changes preferences, not resources; zero turns off this extra incentive.",
-            "target_coverage": "Target gaps sum separately for each household and period. Extra consumption cannot offset a gap. Zero-target coverage is not applicable; below-target counts ignore numerical dust.",
-            "markets": "Both firms take the same goods price and wage. Each funds its own payroll before receiving current sales.",
-            "matching": "Work and purchases are allocated proportionally across equal-wage firms selling the same good.",
-            "investment": "Firms retain their own output as capital for next period. The percentage policy invests a fixed surplus share. The user-cost policy chooses within that share's budget, comparing expected marginal returns with required return plus wear at unchanged prices, wage and payroll cash.",
-            "dividend": "Each firm separately pays previous-period positive net operating profit, limited to cash above its initial operating float; past retained losses are not a payout gate.",
-            "valuation": "Capital uses the current X replacement price; initial capital uses the first solved price. Holding gains remain separate from operating profit.",
-            "ownership": "Equal fixed shares in each firm's equity; ownership is not spendable cash. Consolidated assets eliminate both ownership claims.",
-            "sales_share": "Share of sales means physical X sold to households, divided by all household X sales in this report range; it is not share of production.",
-            "cumulative": "Flows sum at each period's original price. Stocks use first opening and selected closing. Prices, funding conditions and investment decisions describe the selected period; forecasts are not summed. Household work and leisure are period averages.",
-        },
-    }
-
-
-def _report_checks(periods, households, firms, economy):
     checks = {
-        "periods": all(all(period.checks.values()) for period in periods),
-        "money": _close(economy["opening_money"], economy["closing_money"]),
+        "money": _close(economy["opening_money"], 1.) and _close(economy["closing_money"], 1.),
         "goods": _close(economy["produced_x"], economy["consumed_x"] + economy["investment_quantity"]),
-        "capital": _close(economy["capital_open"] + economy["investment_quantity"], economy["capital_close"] + economy["depreciation_quantity"]),
+        "capital": _close(firm["capital_open"] + firm["investment_quantity"],
+                          firm["capital_close"] + firm["depreciation_quantity"]),
+        "household_cash": _close(household["opening_money"] + household["income_received"],
+                                 household["closing_money"] + household["purchases_paid"]),
+        "firm_cash": _close(firm["opening_money"] + firm["sales_received"],
+                            firm["closing_money"] + firm["wages_paid"] + firm["dividends_paid"]),
+        "capital_value": _close(firm["capital_value_open"] + firm["investment_value"] + firm["holding_gain"],
+                                firm["capital_value_close"] + firm["depreciation_value"]),
+        "equity": _close(firm["equity_open"] + firm["net_operating_profit"] + firm["holding_gain"],
+                         firm["equity_close"] + firm["dividends_paid"]),
         "income": _close(economy["production_value"], economy["net_income"] + economy["depreciation_value"]),
-        "saving": _close(economy["household_cash_saving"] + economy["firm_net_saving"], economy["investment_value"] - economy["depreciation_value"], economy["production_value"]),
-        "household_cash": all(_close(h["opening_money"] + h["income_received"], h["closing_money"] + h["purchases_paid"]) for h in households),
-        "firm_cash": all(_close(f["opening_money"] + f["sales_received"], f["closing_money"] + f["wages_paid"] + f["dividends_paid"]) for f in firms),
-        "capital_value": all(_close(f["capital_value_open"] + f["investment_value"] + f["holding_gain"], f["capital_value_close"] + f["depreciation_value"], f["capital_value_open"]) for f in firms),
-        "equity": all(_close(f["equity_open"] + f["net_operating_profit"] + f["holding_gain"], f["equity_close"] + f["dividends_paid"], f["equity_open"]) for f in firms),
-        "equity_components": all(_close(f["contributed_equity"] + f["retained_earnings_close"] + f["revaluation_reserve_close"], f["equity_close"], f["contributed_equity"]) for f in firms),
-        "ownership": _close(fsum(h["ownership_value_close"] for h in households), fsum(f["equity_close"] for f in firms)),
+        "saving": _close(economy["household_cash_saving"] + economy["firm_net_saving"],
+                         economy["investment_value"] - economy["depreciation_value"]),
+        "ownership": _close(fsum(h["ownership_value_close"] for h in households),
+                            fsum(f["equity_close"] for f in firms)),
+        "consolidation": _close(fsum(h["assets_close"] for h in households), economy["assets_close"]),
     }
-    household_fields = ("wages_received", "dividends_received", "purchases_paid", "consumed_x", "ownership_value_open", "ownership_value_close")
-    firm_fields = ("wages_paid", "dividends_paid", "sales_received", "sold_x")
-    checks["allocations"] = all(
-        _close(h[field], fsum(entry[field] for entry in h["firms"]))
-        for h in households for field in household_fields
-    ) and all(
-        _close(f[field], fsum(entry[field] for entry in f["allocations"]))
-        for f in firms for field in firm_fields
-    ) and all(
-        _close(h["total_work"], fsum(entry["work"] for entry in h["firms"]))
-        for h in households
-    ) and all(
-        _close(f["work_used"], fsum(entry["work"] for entry in f["allocations"]))
-        for f in firms
-    )
-    return checks
+    report = {
+        "model": MODEL_ID, "scope": "cumulative" if cumulative else "period",
+        "label": f"Periods 1–{last.number}" if cumulative and count > 1 else f"Period {last.number}",
+        "period_count": count, "through_period": last.number,
+        "price": last.goods_price, "wage": last.money_wage,
+        "real_wage": last.money_wage / last.goods_price,
+        "price_wage_period": last.number,
+        "households": households, "firms": firms, "economy": economy, "checks": checks,
+    }
+    report["rows"] = _account_rows(report)
+    return report
 
 
-def _account_rows(periods):
-    """Export period stocks and flows without revaluing cumulative evidence."""
-    rows = []
-    for period in periods:
-        common = {
-            "record_type": "account", "period": period.number,
-            "price": period.price, "wage": period.wage,
-            "money_unit": "Money", "goods_unit": "X units",
-            "capital_unit": "capital units", "labor_unit": "work periods",
-        }
-        for household in period.households:
-            relationships = [item for item in period.allocations if item.household_id == household.id]
-            ownership_open = fsum(item.ownership_value_open for item in relationships)
-            ownership_close = fsum(item.ownership_value_close for item in relationships)
-            rows.append({
-                **common, "account_type": "household", "entity": household.name,
-                "entity_id": household.id, "opening_money": period.opening_cash[household.id],
-                "closing_money": period.closing_cash[household.id],
-                "wages_received": period.wages[household.id],
-                "dividends_received": period.dividends[household.id],
-                "purchases_paid": period.purchases[household.id],
-                "consumed_x": period.consumption[household.id],
-                "consumption_target": household.consumption_target,
-                **_coverage((period.consumption[household.id],), household.consumption_target),
-                "work_fraction": period.work[household.id],
-                "leisure_fraction": period.leisure[household.id],
-                "ownership_value_open": ownership_open,
-                "ownership_value_close": ownership_close,
-                "assets_open": period.opening_cash[household.id] + ownership_open,
-                "assets_close": period.closing_cash[household.id] + ownership_close,
-                **{f"{key}_priority": value for key, value in household.scores.items()},
-                **{f"{key}_weight": value for key, value in household.weights.items()},
-            })
-        for firm in period.firms:
-            account = period.firm_accounts[firm.id]
-            rows.append({
-                **common, **asdict(account), "account_type": "firm", "entity": firm.name,
-                "entity_id": firm.id, "opening_money": account.opening_cash,
-                "closing_money": account.closing_cash, "produced_x": account.output,
-                "sold_x": account.sales_quantity, "work_used": account.work,
-                "wages_paid": account.wage_bill, "protected_operating_float": firm.money,
-                "productivity": firm.productivity, "theta": firm.theta,
-                "reinvestment_rate": firm.reinvestment_rate,
-                "depreciation_rate": firm.depreciation_rate,
-                "investment_policy": firm.investment_policy,
-                "required_return": firm.required_return,
-                **{
-                    f"investment_decision_{key}": value
-                    for key, value in period.solution.get(
-                        "investment_decisions", {}
-                    ).get(firm.id, {}).items()
-                },
-            })
-        rows.extend({
-            **common, "record_type": "allocation", **asdict(item)
-        } for item in period.allocations)
-    return rows
+def _account_rows(report):
+    common = {
+        "model": report["model"], "period": report["through_period"],
+        "scope": report["scope"], "price": report["price"], "wage": report["wage"],
+        "money_unit": "Money", "goods_unit": "X", "work_unit": "household-periods",
+    }
+    return [
+        *[{**common, "account_type": "household", **entry} for entry in report["households"]],
+        *[{**common, "account_type": "firm", **entry} for entry in report["firms"]],
+        {**common, "account_type": "economy", "entity_id": "economy", "name": "Economy",
+         **report["economy"]},
+    ]
+
+
+def export_csv(run: Run, period_count: int) -> str:
+    """Export every visible period, with float round-trip precision and units."""
+    _selected(run, period_count, False)
+    rows = [entry for number in range(1, period_count + 1)
+            for entry in build_report(run, number)["rows"]]
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=list(dict.fromkeys(key for row in rows for key in row)))
+    writer.writeheader()
+    writer.writerows(rows)
+    return output.getvalue()

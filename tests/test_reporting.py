@@ -1,33 +1,23 @@
-"""Money, physical flow and identity contracts for two-firm statements."""
+"""Independent cash, goods, ownership and dated-price accounting contracts."""
 
 import csv
 import io
 import json
 from dataclasses import replace
+from itertools import pairwise
 from math import fsum
 
 import pytest
 
 from econ_agent_sim.comparison import compare_runs
-from econ_agent_sim.engine import (
-    Firm,
-    Household,
-    advance_period,
-    default_firms,
-    default_households,
-)
-from econ_agent_sim.reporting import _coverage, build_report
+from econ_agent_sim.domain import Settings
+from econ_agent_sim.engine import Run, simulate
+from econ_agent_sim.reporting import build_report, export_csv
 
 
-def run(count=1, *, firms=None, households=None):
-    firms = firms or tuple(Firm(**entry) for entry in default_firms())
-    households = households or tuple(Household(**entry) for entry in default_households())
-    periods = []
-    for _ in range(count):
-        periods.append(advance_period(
-            households, firms, periods[-1] if periods else None
-        ))
-    return tuple(periods)
+@pytest.fixture(scope="module")
+def runs():
+    return {capital: simulate(Settings(initial_capital=capital)) for capital in (1., .1, 100.)}
 
 
 def assert_accounts(report):
@@ -37,318 +27,189 @@ def assert_accounts(report):
         assert firm["opening_money"] + firm["sales_received"] == pytest.approx(
             firm["closing_money"] + firm["wages_paid"] + firm["dividends_paid"]
         )
-        assert firm["equity_open"] + firm["net_operating_profit"] + firm["holding_gain"] == pytest.approx(
-            firm["equity_close"] + firm["dividends_paid"]
+        assert firm["capital_close"] - firm["capital_open"] == pytest.approx(
+            firm["investment_quantity"] - firm["depreciation_quantity"], abs=1e-9
         )
-        assert firm["capital_value_open"] + firm["investment_value"] + firm["holding_gain"] == pytest.approx(
-            firm["capital_value_close"] + firm["depreciation_value"]
+        assert firm["equity_close"] - firm["equity_open"] == pytest.approx(
+            firm["net_operating_profit"] - firm["dividends_paid"] + firm["holding_gain"],
+            abs=1e-9,
         )
-        assert firm["contributed_equity"] + firm["retained_earnings_close"] + firm["revaluation_reserve_close"] == pytest.approx(firm["equity_close"])
-        for field in ("wages_paid", "dividends_paid", "sold_x", "sales_received"):
-            assert fsum(item[field] for item in firm["allocations"]) == pytest.approx(firm[field])
+        assert firm["capital_value_close"] - firm["capital_value_open"] == pytest.approx(
+            firm["investment_value"] - firm["depreciation_value"] + firm["holding_gain"],
+            abs=1e-9,
+        )
+        assert firm["equity_close"] == pytest.approx(
+            firm["closing_money"] + firm["capital_value_close"]
+        )
     for household in report["households"]:
-        assert household["opening_money"] + household["wages_received"] + household["dividends_received"] == pytest.approx(
+        assert household["opening_money"] + household["income_received"] == pytest.approx(
             household["closing_money"] + household["purchases_paid"]
         )
-        for field in ("wages_received", "dividends_received", "purchases_paid", "consumed_x", "ownership_value_open", "ownership_value_close"):
-            assert fsum(item[field] for item in household["firms"]) == pytest.approx(household[field])
-    assert economy["assets_close"] == pytest.approx(economy["closing_money"] + economy["capital_value_close"])
-    assert fsum(h["ownership_value_close"] for h in report["households"]) == pytest.approx(
-        fsum(f["equity_close"] for f in report["firms"])
+        assert household["average_work"] + household["average_leisure"] == pytest.approx(1)
+        assert household["ownership_value_close"] == pytest.approx(
+            fsum(.5 * f["equity_close"] for f in report["firms"])
+        )
+    assert economy["opening_money"] == pytest.approx(1)
+    assert economy["closing_money"] == pytest.approx(1)
+    assert economy["produced_x"] == pytest.approx(
+        economy["consumed_x"] + economy["investment_quantity"]
     )
-    assert economy["produced_x"] == pytest.approx(economy["consumed_x"] + economy["investment_quantity"])
-    assert economy["production_value"] == pytest.approx(economy["net_income"] + economy["depreciation_value"])
+    assert economy["assets_close"] == pytest.approx(
+        fsum(h["assets_close"] for h in report["households"])
+    )
+    assert economy["production_value"] == pytest.approx(
+        economy["net_income"] + economy["depreciation_value"]
+    )
     assert economy["household_cash_saving"] + economy["firm_net_saving"] == pytest.approx(
-        economy["investment_value"] - economy["depreciation_value"]
+        economy["investment_value"] - economy["depreciation_value"], abs=1e-9
     )
 
 
-def test_default_statements_preserve_resource_neutral_baseline_and_both_ownership_claims():
-    first = run()[0]
-    report = build_report(first)
-    assert "firm" not in report
-    assert report["price"] == pytest.approx(1.0365231137)
-    assert report["wage"] == pytest.approx(13 / 11)
-    assert report["economy"]["closing_money"] == pytest.approx(3)
-    assert report["economy"]["capital_open"] == 1
-    assert [item["sales_share"] for item in report["firms"]] == pytest.approx([0.5, 0.5])
-    assert [item["work_used"] for item in report["firms"]] == pytest.approx([5 / 13, 5 / 13])
-    assert all(len(h["firms"]) == 2 for h in report["households"])
-    assert all(h["ownership"] == 0.5 for h in report["households"])
-    assert_accounts(report)
+@pytest.mark.parametrize("capital", (1., .1, 100.))
+@pytest.mark.parametrize("period,cumulative", ((1, False), (4, False), (25, False), (25, True), (100, True)))
+def test_cash_goods_and_book_equity_reconcile_interior_and_boundaries(runs, capital, period, cumulative):
+    assert_accounts(build_report(runs[capital], period, cumulative))
 
 
-def test_distinct_firm_sales_and_output_shares_are_not_confused():
-    firms = (
-        Firm("firm_a", "Firm A", money=1, reinvestment_rate=0.8),
-        Firm("firm_b", "Firm B", money=1, reinvestment_rate=0.2),
-    )
-    report = build_report(run(firms=firms))
-    assert [f["production_share"] for f in report["firms"]] == pytest.approx([0.5, 0.5])
-    assert [f["sales_share"] for f in report["firms"]] == pytest.approx([0.4, 0.6])
-    assert all(not f["funding_binding"] for f in report["firms"])
-    assert_accounts(report)
-
-
-def test_cumulative_accounts_keep_original_prices_and_ratio_of_summed_sales():
-    firms = (
-        Firm("firm_a", "Firm A", money=1, reinvestment_rate=0.8),
-        Firm("firm_b", "Firm B", money=1, reinvestment_rate=0.2),
-    )
-    periods = run(8, firms=firms)
-    report = build_report(periods, cumulative=True)
-    assert_accounts(report)
-    assert report["price"] == periods[-1].price
-    assert report["price_wage_period"] == report["through_period"] == 8
-    assert report["economy"]["capital_open"] == periods[0].capital_open
-    assert report["economy"]["capital_close"] == periods[-1].capital_close
-    assert report["economy"]["production_value"] == fsum(p.production_value for p in periods)
-    assert report["economy"]["production_value"] != pytest.approx(
-        report["economy"]["produced_x"] * periods[-1].price
-    )
-    first_firm = report["firms"][0]
-    physical_share = fsum(p.firm_accounts["firm_a"].sales_quantity for p in periods) / fsum(
-        a.sales_quantity for p in periods for a in p.firm_accounts.values()
-    )
-    assert first_firm["sales_share"] == physical_share
-    assert first_firm["sales_share"] != pytest.approx(
-        fsum(p.firm_accounts["firm_a"].sales_share for p in periods) / len(periods)
-    )
-    assert first_firm["revenue_share"] != pytest.approx(first_firm["sales_share"])
-    assert first_firm["next_dividend_budget"] == periods[-1].firm_accounts["firm_a"].next_dividend_budget
-    assert first_firm["funding_period"] == 8
-    assert report["households"][0]["average_work"] == pytest.approx(
-        fsum(p.work["household_1"] for p in periods) / 8
-    )
-
-
-def test_reporting_preserves_separate_loss_and_dividend_eligibility():
-    periods = run(2, firms=(
-        Firm("firm_a", "Firm A", capital=100, depreciation_rate=0.9),
-        Firm("firm_b", "Firm B"),
-    ))
-    first, second = (build_report(period) for period in periods)
-    assert first["firms"][0]["net_operating_profit"] < -9
-    assert first["firms"][1]["net_operating_profit"] > 0
-    assert second["firms"][0]["dividends_paid"] == 0
-    assert second["firms"][1]["dividends_paid"] > 0
-    assert_accounts(build_report(periods, cumulative=True))
-
-
-def test_report_is_detached_serializable_and_exports_all_firms_and_allocations():
-    periods = run(2)
-    report = build_report(periods, cumulative=True)
-    json.dumps(report, allow_nan=False)
-    report["firms"][0]["parameters"]["capital"] = 99
-    report["households"][0]["parameters"]["scores"]["consumption"] = 99
-    fresh = build_report(periods, cumulative=True)
-    assert fresh["firms"][0]["parameters"]["capital"] == 0.5
-    assert fresh["households"][0]["parameters"]["scores"]["consumption"] == 1
-    rows = fresh["rows"]
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=list(dict.fromkeys(key for row in rows for key in row)))
-    writer.writeheader()
-    writer.writerows(rows)
-    exported = list(csv.DictReader(io.StringIO(output.getvalue())))
-    assert {row["record_type"] for row in exported} == {"account", "allocation", "event", "transfer"}
-    accounts = [row for row in exported if row["account_type"] == "firm"]
-    assert len(accounts) == 4
-    assert {row["entity_id"] for row in accounts} == {"firm_a", "firm_b"}
-    assert float(accounts[0]["production_value"]) == periods[0].firm_accounts["firm_a"].production_value
-    assert len([row for row in exported if row["record_type"] == "allocation"]) == 8
-    assert all(row["pair_id"] for row in exported if row["record_type"] == "transfer")
-
-
-def test_cumulative_report_rejects_gaps_duplicates_changed_settings_and_wrong_engine():
-    first, second, third = run(3)
-    changed = run(firms=(replace(first.firms[0], productivity=3), first.firms[1]))[0]
-    for history in ((), (first, third), (first, first), (first, changed), (object(),)):
-        with pytest.raises(ValueError):
-            build_report(history, cumulative=True)
-    assert build_report((first, second, third)) == build_report(third)
-
-
-def test_comparison_matches_stable_firm_identity_and_uses_percentage_points():
-    baseline = run(3)
-    firms = (baseline[0].firms[1], replace(baseline[0].firms[0], productivity=2.4))
-    current = run(3, firms=firms)
-    comparison = compare_runs(current, baseline, selected_period=3, cumulative=True)
-    assert comparison["available"] and len(comparison["metrics"]) == 7
-    assert len(comparison["firms"]) == 2
-    changes = comparison["settings_changes"]
-    assert len(changes) == 1
-    assert changes[0]["entity_id"] == "firm_a" and changes[0]["label"] == "Productivity"
-    baseline_reports = {f["entity_id"]: f for f in build_report(baseline, True)["firms"]}
-    current_reports = {f["entity_id"]: f for f in build_report(current, True)["firms"]}
-    for firm in comparison["firms"]:
-        assert len(firm["metrics"]) == 4
-        share = next(metric for metric in firm["metrics"] if metric["key"] == "sales_share")
-        identity = firm["entity_id"]
-        assert share["change_unit"] == "pp"
-        assert share["baseline"] == 100 * baseline_reports[identity]["sales_share"]
-        assert share["current"] == 100 * current_reports[identity]["sales_share"]
-
-
-def test_comparison_does_not_extend_short_runs_or_accept_wrong_dates_or_engines():
-    history = run(3)
-    comparison = compare_runs(history, history[:1], selected_period=3)
-    assert not comparison["available"] and comparison["comparable_through"] == 1
-    assert comparison["metrics"] == comparison["firms"] == []
-    assert len(history) == 3
-    for kwargs in (
-        {"selected_period": 0}, {"selected_period": True},
-        {"selected_period": 1, "current_periods": (object(),)},
-        {"selected_period": 1, "current_periods": history[1:]},
-    ):
-        arguments = {"current_periods": history, "baseline_periods": history, **kwargs}
-        with pytest.raises(ValueError):
-            compare_runs(**arguments)
-
-
-def test_comparison_does_not_match_renamed_ids_by_position_or_label():
-    baseline = run()
-    current = run(firms=(replace(baseline[0].firms[0], id="different_firm"), baseline[0].firms[1]))
-    comparison = compare_runs(current, baseline, selected_period=1)
-    assert comparison["available"]
-    assert not comparison["firms"][0]["available"]
-    assert comparison["firms"][0]["metrics"] == []
-    assert comparison["firms"][1]["available"]
-
-
-def test_coverage_cannot_offset_a_shortfall_with_a_later_surplus():
-    covered = _coverage((0.2, 0.8), 0.5)
-    assert covered["needed_x"] == 1
-    assert covered["needs_met_x"] == pytest.approx(0.7)
-    assert covered["shortfall_x"] == pytest.approx(0.3)
-    assert covered["target_coverage"] == pytest.approx(0.7)
-    assert covered["below_target_periods"] == 1
-    assert _coverage((0.5 - 1e-12,), 0.5)["below_target_periods"] == 0
-    assert _coverage((0.5 - 1e-12,), 0.5)["shortfall_x"] > 0
-
-
-def test_report_covers_households_separately_and_keeps_actual_consumption():
-    households = (
-        Household("household_1", "Household 1", consumption_target=0.1),
-        Household("household_2", "Household 2", consumption_target=2),
-    )
-    period = run(households=households)[0]
-    report = build_report(period)
-    assert report["model"] == "tiny_economy"
-    assert all(report["checks"].values())
-    first, second = report["households"]
-    assert first["consumed_x"] > first["needed_x"]
-    assert second["consumed_x"] < second["needed_x"]
-    assert first["shortfall_x"] == 0
-    assert second["shortfall_x"] == pytest.approx(2 - second["consumed_x"])
-    assert first["parameters"]["consumption_target"] == 0.1
-    economy = report["economy"]
-    assert economy["consumed_x"] == fsum(period.consumption.values())
-    assert economy["needed_x"] == 2.1
-    assert economy["shortfall_x"] == second["shortfall_x"]
-    assert economy["shortfall_x"] > max(economy["needed_x"] - economy["consumed_x"], 0)
-    assert economy["needs_met_x"] + economy["shortfall_x"] == pytest.approx(2.1)
-    assert economy["households_below_target"] == 1
-    assert economy["household_periods_below_target"] == 1
-
-
-def test_cumulative_reports_preserve_original_prices_and_sum_period_shortfalls():
-    households = tuple(
-        replace(Household(**row), consumption_target=1)
-        for row in default_households()
-    )
-    periods = run(15, households=households)
-    report = build_report(periods, cumulative=True)
-    assert all(report["checks"].values())
-    assert report["economy"]["needed_x"] == 30
-    assert report["economy"]["production_value"] == fsum(p.production_value for p in periods)
-    assert report["economy"]["production_value"] != pytest.approx(
-        report["economy"]["produced_x"] * periods[-1].price
-    )
+def test_per_entity_and_aggregate_quantities_are_not_confused(runs):
+    run = runs[1.]
+    row = run.periods[2]
+    report = build_report(run, 3)
+    assert len(report["households"]) == len(report["firms"]) == 2
+    assert report["economy"]["consumed_x"] == 2 * row.consumption
+    assert report["economy"]["capital_close"] == 2 * row.next_capital
+    assert report["economy"]["assets_close"] == pytest.approx(1 + 2 * row.goods_price * row.next_capital)
     for household in report["households"]:
-        consumption = [period.consumption[household["entity_id"]] for period in periods]
-        assert min(consumption) < 1 < max(consumption)
-        assert household["consumed_x"] == fsum(consumption)
-        assert household["needed_x"] == 15
-        assert household["shortfall_x"] == fsum(max(1 - value, 0) for value in consumption)
-        assert household["shortfall_x"] > max(15 - fsum(consumption), 0)
-        assert household["needs_met_x"] + household["shortfall_x"] == pytest.approx(15)
-    assert report["economy"]["household_periods_below_target"] == sum(
-        entry["below_target_periods"] for entry in report["households"]
+        assert household["consumed_x"] == row.consumption
+        assert household["dividends_received"] == row.distribution
+        assert household["ownership"] == .5
+    for firm in report["firms"]:
+        assert firm["capital_close"] == row.next_capital
+        assert firm["produced_x"] == row.output
+
+
+def test_holding_gain_uses_opening_capital_and_previous_price(runs):
+    run = runs[1.]
+    previous, row = run.periods[:2]
+    first = build_report(run, 1)["firms"][0]
+    current = build_report(run, 2)["firms"][0]
+    assert first["holding_gain"] == 0
+    assert first["capital_value_open"] == previous.goods_price * previous.capital
+    assert current["capital_value_open"] == first["capital_value_close"]
+    assert current["equity_open"] == first["equity_close"]
+    expected = (row.goods_price - previous.goods_price) * row.capital
+    assert expected != pytest.approx(0, abs=1e-6)
+    assert current["holding_gain"] == expected
+    assert current["net_operating_profit"] == pytest.approx(
+        row.goods_price * (row.output - run.settings.depreciation * row.capital)
+        - row.money_wage * row.labor
     )
-    assert build_report(periods) == build_report(periods[-1])
 
 
-def test_zero_target_disables_coverage():
-    households = tuple(
-        replace(Household(**row), consumption_target=0)
-        for row in default_households()
-    )
-    report = build_report(run(3, households=households), cumulative=True)
-    for entry in (*report["households"], report["economy"]):
-        assert entry["needed_x"] == entry["needs_met_x"] == entry["shortfall_x"] == 0
-        assert entry["target_coverage"] is None
-    assert report["economy"]["households_below_target"] == 0
-    assert report["economy"]["household_periods_below_target"] == 0
+def test_cumulative_flows_keep_dated_prices_and_stocks_are_not_added(runs):
+    run = runs[1.]
+    rows = run.periods[:12]
+    report = build_report(run, 12, cumulative=True)
+    firm = report["firms"][0]
+    assert firm["sales_received"] == fsum(r.goods_price * r.consumption for r in rows)
+    assert firm["sales_received"] != pytest.approx(rows[-1].goods_price * fsum(r.consumption for r in rows))
+    assert firm["investment_value"] == fsum(r.goods_price * r.investment for r in rows)
+    assert firm["holding_gain"] == pytest.approx(fsum(
+        (new.goods_price - old.goods_price) * new.capital
+        for old, new in pairwise(rows)
+    ))
+    assert firm["capital_open"] == rows[0].capital
+    assert firm["capital_close"] == rows[-1].next_capital
+    assert firm["opening_money"] == rows[0].firm_cash
+    assert firm["closing_money"] == rows[-1].next_firm_cash
+    assert report["price"] == rows[-1].goods_price
+    assert report["real_wage"] == rows[-1].money_wage / rows[-1].goods_price
+    assert report["households"][0]["average_work"] == fsum(r.labor for r in rows) / 12
 
 
-def test_full_precision_export_includes_target_coverage_and_is_detached():
-    periods = run(2)
-    report = build_report(periods, cumulative=True)
+def test_report_never_substitutes_shadow_values_for_book_equity(runs):
+    run = runs[.1]
+    row = run.periods[0]
+    assert row.cash_shadow_value > 1
+    modified = replace(row, capital_shadow_value=99999, cash_shadow_value=12345)
+    changed = Run(run.settings, replace(run.solution, periods=(modified, *run.periods[1:])))
+    assert build_report(changed, 1) == build_report(run, 1)
+
+
+def test_zero_choices_are_visible_without_inventing_profit_payout_rule(runs):
+    low = build_report(runs[.1], 1)["firms"][0]
+    high = build_report(runs[100.], 1)["firms"][0]
+    assert low["dividends_paid"] == 0
+    assert low["zero_dividend_periods"] == 1
+    assert high["investment_quantity"] == 0
+    assert high["zero_investment_periods"] == 1
+    assert high["dividends_paid"] > 0
+    assert high["net_operating_profit"] < 0
+
+
+def test_reports_are_detached_serializable_and_one_period_cumulative_matches(runs):
+    run = runs[1.]
+    report = build_report(run, 1)
     json.dumps(report, allow_nan=False)
-    rows = [row for row in report["rows"] if row.get("account_type") == "household"]
-    assert len(rows) == 4
-    for row in rows:
-        period = periods[row["period"] - 1]
-        assert row["consumption_target"] == row["needed_x"] == 0.5
-        assert row["consumed_x"] == period.consumption[row["entity_id"]]
-        assert row["needs_met_x"] + row["shortfall_x"] == pytest.approx(0.5)
-    report["households"][0]["parameters"]["consumption_target"] = 99
-    assert build_report(periods)["households"][0]["parameters"]["consumption_target"] == 0.5
+    assert report["economy"] == build_report(run, 1, True)["economy"]
+    report["firms"][0]["closing_money"] = 999
+    assert build_report(run, 1)["firms"][0]["closing_money"] == run.periods[0].next_firm_cash
 
 
-def test_reports_reject_different_engines_changed_targets_and_unlinked_histories():
-    first, second, third = run(3)
-    changed = replace(second, households=(
-        replace(second.households[0], consumption_target=0.8), second.households[1],
-    ))
-    for history in ((), (object(),), (first, third), (first, first), (first, changed)):
-        with pytest.raises(ValueError):
-            build_report(history, cumulative=True)
+def test_csv_contains_only_visible_periods_and_round_trips_float_precision(runs):
+    run = runs[1.]
+    rows = list(csv.DictReader(io.StringIO(export_csv(run, 7))))
+    assert len(rows) == 7 * 5
+    assert {int(row["period"]) for row in rows} == set(range(1, 8))
+    assert {row["entity_id"] for row in rows} == {
+        "household_1", "household_2", "firm_a", "firm_b", "economy",
+    }
+    firm_rows = [r for r in rows if r["entity_id"] == "firm_a"]
+    assert float(firm_rows[0]["production_value"]) == run.periods[0].goods_price * run.periods[0].output
+    assert float(firm_rows[-1]["capital_close"]) == run.periods[6].next_capital
+    assert all(row["scope"] == "period" for row in rows)
+    assert all(row["money_unit"] == "Money" for row in rows)
 
 
-def test_comparison_exposes_changed_targets_and_compares_actual_shortfalls():
-    baseline = run(3)
-    households = tuple(replace(entry, consumption_target=1) for entry in baseline[0].households)
-    current = run(3, households=households, firms=tuple(reversed(baseline[0].firms)))
-    comparison = compare_runs(current, baseline, selected_period=3, cumulative=True)
-    assert comparison["available"]
-    assert len(comparison["metrics"]) == 7
-    assert [change["label"] for change in comparison["settings_changes"]] == [
-        "Consumption target", "Consumption target",
-    ]
-    assert all(change["baseline"] == 0.5 and change["current"] == 1
-               for change in comparison["settings_changes"])
-    metric = next(item for item in comparison["metrics"] if item["key"] == "shortfall")
-    assert metric["current"] == build_report(current, True)["economy"]["shortfall_x"]
-    assert metric["baseline"] == build_report(baseline, True)["economy"]["shortfall_x"]
-    assert metric["change"] == metric["current"] - metric["baseline"]
-    assert comparison["firms"][0]["entity_id"] == "firm_b"
-    assert all(firm["available"] for firm in comparison["firms"])
-    assert "Each run uses its own consumption targets" in comparison["note"]
-
-
-def test_unavailable_comparison_retains_target_changes_and_does_not_extend_runs():
-    baseline = run()
-    current = run(2, households=tuple(
-        replace(entry, consumption_target=0) for entry in baseline[0].households
-    ))
-    comparison = compare_runs(current, baseline, selected_period=2)
-    assert not comparison["available"]
-    assert comparison["comparable_through"] == 1
-    assert comparison["metrics"] == []
-    assert len(comparison["settings_changes"]) == 2
-    assert len(current) == 2 and len(baseline) == 1
-    with pytest.raises(ValueError, match="Tiny Economy"):
-        compare_runs((object(),), baseline, selected_period=1)
+@pytest.mark.parametrize("period", (0, -1, 101, 1.5, True))
+def test_reporting_rejects_invalid_dates(runs, period):
     with pytest.raises(ValueError):
-        compare_runs(current, baseline, selected_period=True)
+        build_report(runs[1.], period)
+    with pytest.raises(ValueError):
+        export_csv(runs[1.], period)
+
+
+def test_reporting_requires_verified_current_run_and_boolean_scope(runs):
+    with pytest.raises(ValueError):
+        build_report(object(), 1)
+    run = runs[1.]
+    with pytest.raises(ValueError):
+        build_report(Run(run.settings, replace(run.solution, converged=False)), 1)
+    with pytest.raises(ValueError):
+        build_report(run, 1, "cumulative")
+
+
+def test_comparison_uses_same_period_and_records_actual_setting_change(runs):
+    comparison = compare_runs(runs[.1], runs[1.], selected_period=4, cumulative=True)
+    assert comparison["available"]
+    assert comparison["label"] == "Periods 1–4"
+    assert comparison["settings_changes"] == [{
+        "key": "initial_capital", "label": "Starting capital per firm", "baseline": 1., "current": .1,
+    }]
+    for item in comparison["metrics"]:
+        assert item["change"] == item["current"] - item["baseline"]
+    consumption = next(item for item in comparison["metrics"] if item["key"] == "consumed_x")
+    assert consumption["current"] == 2 * fsum(r.consumption for r in runs[.1].periods[:4])
+    price = next(item for item in comparison["metrics"] if item["key"] == "price")
+    assert price["current"] == runs[.1].periods[3].goods_price
+    assert price["baseline"] == runs[1.].periods[3].goods_price
+
+
+def test_comparison_does_not_extend_a_shorter_available_path(runs):
+    run = runs[1.]
+    short = Run(run.settings, replace(run.solution, periods=run.periods[:2]))
+    with pytest.raises(ValueError):
+        compare_runs(run, short, selected_period=3)
+    same = compare_runs(run, run, selected_period=2)
+    assert all(item["change"] == 0 for item in same["metrics"])
+    assert same["settings_changes"] == []

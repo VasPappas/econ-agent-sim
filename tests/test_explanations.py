@@ -1,72 +1,86 @@
-"""Built-in explanations retain the actual scope and model assumptions."""
-from dataclasses import replace
+"""Explanations disclose the actual dynamic model and selected results."""
 
-from econ_agent_sim.engine import (
-    Firm,
-    Household,
-    advance_period,
-    default_firms,
-    default_households,
-)
-from econ_agent_sim.explanations import built_in_explanations
-from econ_agent_sim.reporting import build_report
+import pytest
+
+from econ_agent_sim.domain import Settings
+from econ_agent_sim.engine import simulate
+from econ_agent_sim.explanations import MODEL_PASSPORT, QUESTIONS, amount, explain
 
 
-def test_explanations_distinguish_targets_from_guarantees_and_shortfall_debt():
-    households = tuple(Household(**item) for item in default_households())
-    firms = tuple(Firm(**item) for item in default_firms())
-    first = advance_period(households, firms)
-    second = advance_period(households, firms, first)
-    report = build_report((first, second), cumulative=True)
-    answers = built_in_explanations(second, report)
-    assert "not a guaranteed minimum" in answers["How does my consumption target work?"]
-    assert "not a debt" in answers["How are target gaps counted?"]
-    assert "Periods 1–2" in answers["How are target gaps counted?"]
-    assert "0.50 X" in answers["Why did setting a target change nothing?"]
-    assert "After Period 2" in answers["Who receives each firm's dividends?"]
-    selection = answers["Can there be more than one clearing price?"]
-    assert "previous period's price" in selection
-    assert "does not establish uniqueness" in selection
+@pytest.fixture(scope="module")
+def run():
+    return simulate(Settings())
 
 
-def test_model_passport_states_economic_assumptions_and_no_version_chapters():
-    households = tuple(Household(**item) for item in default_households())
-    firms = tuple(Firm(**item) for item in default_firms())
-    period = advance_period(households, firms)
-    answers = built_in_explanations(period, build_report(period))
-    passport = answers["What does this model assume?"]
-    assert "current period" in passport
-    assert "do not forecast" in passport
-    assert "before current sales" in passport
-    assert "textbook" in passport and "custom" in passport
-    assert all("Economy 1." not in answer for answer in answers.values())
+def test_all_questions_answer_selected_period_and_cumulative_scope(run):
+    assert len(QUESTIONS) == len(set(QUESTIONS))
+    for cumulative in (False, True):
+        for question in QUESTIONS:
+            answer = explain(question, run, 3, cumulative)
+            assert isinstance(answer, str) and len(answer) > 50
+    answer = explain("How should I read cumulative results?", run, 3, True)
+    assert "Periods 1–3" in answer
+    assert "original period price" in answer
+    assert "stocks are never summed" in answer
+    investment = explain("How do firms choose investment?", run, 3, True)
+    assert "Period 3" in investment
+    assert amount(run.periods[2].investment) in investment
 
 
-def test_forward_looking_explanations_use_selected_decision_in_cumulative_report():
-    households = tuple(Household(**item) for item in default_households())
-    firms = tuple(
-        replace(Firm(**item), investment_policy="user_cost")
-        for item in default_firms()
-    )
-    first = advance_period(households, firms)
-    second = advance_period(households, firms, first)
-    report = build_report((first, second), cumulative=True)
-    answers = built_in_explanations(second, report)
-    policy = answers["How do the investment policies differ?"]
-    assert "maximum investment budget" in policy
-    assert "not paid interest" in policy
-    assert "current-period choices" in policy
-    decision_answer = answers["Why did firms choose this investment?"]
-    assert "Period 2" in decision_answer
-    assert "Forecasts are not summed" in decision_answer
-    assert "not a mandatory minimum" in decision_answer
-    for firm in report["firms"]:
-        decision = firm["investment_decision"]
-        source = second.solution["investment_decisions"][firm["entity_id"]]
-        assert decision["period"] == 2
-        assert decision["scope"] == "selected_period"
-        assert decision["investment_quantity"] == source["investment_quantity"]
-        assert decision["investment_budget_quantity"] == source["investment_budget_quantity"]
-        assert decision["replacement_quantity"] == second.firm_accounts[firm["entity_id"]].depreciation_quantity
-        decision["investment_quantity"] = -1
-        assert source["investment_quantity"] >= 0
+def test_passport_discloses_forward_plans_restrictions_and_unsupported_regime(run):
+    assert explain("What does this model assume?", run, 1) == MODEL_PASSPORT
+    for phrase in ("infinite horizon", "perfect-foresight", "unspent opening cash",
+                   "textbook", "before sales", "not a simulation of learning"):
+        assert phrase in MODEL_PASSPORT
+    assert "do not forecast" not in MODEL_PASSPORT
+    assert "calibrated forecast" in MODEL_PASSPORT
+
+
+def test_explanations_match_dated_book_accounting_and_no_double_counting(run):
+    answer = explain("Why are profit, cash and capital value different?", run, 2)
+    assert "previous period’s price" in answer
+    assert "holding gain or loss, never cash" in answer
+    assert "profit minus dividends plus holding gains" in answer
+    ownership = explain("Who owns the firms?", run, 2)
+    assert "50% of each firm" in ownership
+    assert "eliminating the duplicate ownership claims" in ownership
+    assert "not a traded share price" in ownership
+
+
+def test_payment_explanation_uses_actual_selected_period_amounts(run):
+    row = run.periods[3]
+    answer = explain("How do payments stay funded?", run, 4, True)
+    for value in (row.firm_cash, row.distribution, row.money_wage * row.labor,
+                  row.goods_price * row.consumption):
+        assert amount(value) in answer
+    assert "Period 4" in answer
+    assert "Total cash remains 1 Money" in answer
+
+
+def test_no_unsupported_claim_of_adjustment_or_self_regulation(run):
+    answer = explain("Does this show a self-regulating economy?", run, 1)
+    assert "not proof" in answer
+    assert "trial and error" in answer
+    failure = explain("Why can a set of settings be unsupported?", run, 1)
+    assert "explicitly unsupported" in failure
+    assert "Numerical convergence can also fail" in failure
+    assert "economic collapse" in failure
+
+
+def test_boundary_description_does_not_make_dividends_a_profit_cap(run):
+    answer = explain("Why can investment or dividends be zero?", run, 1)
+    assert "need not equal current or previous accounting profit" in answer
+    assert "cannot sell their installed capital" in answer
+
+
+def test_explanations_reject_unknown_question_and_invalid_date(run):
+    with pytest.raises(ValueError):
+        explain("Invent a new forecast", run, 1)
+    with pytest.raises(ValueError):
+        explain(QUESTIONS[0], run, 101)
+
+
+def test_amount_keeps_true_zeros_distinct_from_small_nonzero_values():
+    assert amount(0) == "0.0000"
+    assert amount(1e-9) == "1.000e-09"
+    assert amount(-1e-8) == "-1.000e-08"

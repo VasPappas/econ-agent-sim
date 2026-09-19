@@ -1,8 +1,10 @@
 # Step 1 — A minimal economic reference
 
 Status: implemented verification reference, following the review of release `55dfe72`.
-This document specifies a verification reference. It does not change the running
-app, its saved experiments, or the economic rules described in `model.md`.
+This document specifies the frictionless verification reference. The current
+application uses the [constrained monetary model](monetary_boundaries.md)
+described in [model.md](model.md), with explicit differences in ownership,
+funding and investment constraints.
 
 ## Purpose and choice
 
@@ -19,10 +21,10 @@ condition below. This extension is part of the specification, not a claim that
 the cited implementation already includes it.
 
 The real allocation reference establishes a common objective for saving and
-investment. It does not yet explain money demand, funded payments or price
-discovery. Those require further assumptions and separate validation. The
-existing monetary app remains our experimental economy while that design is
-resolved.
+investment. It does not explain money demand, funded payments or price
+discovery. The [monetary foundation](monetary_foundation.md) adds the money
+preferences, asset budgets and funded payments used by the application.
+Price discovery remains outside both models: both assume perfect foresight.
 
 ## Minimal environment
 
@@ -40,10 +42,10 @@ resolved.
 Two identical household records and two identical producer records can represent
 this symmetric allocation: multiply per-household quantities by two for economy
 totals. They do not introduce heterogeneity or strategic competition. No second
-app or historical engine is proposed; future numerical work should extend the
-existing isolated `textbook_growth.py` reference, consistently with ADR 0001.
-This symmetric construction is not an aggregation result for the app's
-heterogeneous households and firms.
+app or historical engine is retained. The isolated `textbook_growth.py`
+reference remains a verification tool, consistently with ADR 0001.
+The application also uses symmetric households and firms; neither construction
+is an aggregation result for heterogeneous agents.
 
 ## Three structural inputs and one initial condition
 
@@ -86,8 +88,8 @@ carries forward. Gross investment is `i_t = k_(t+1) - (1-delta)k_t`.
 
 The textbook reference permits disinvestment: surviving capital can be converted
 back into the common good. Adding `i_t >= 0` would introduce irreversibility and
-change the feasible set and optimality conditions. The current app already has
-that restriction; it must be tested as an explicit extension, not silently
+change the feasible set and optimality conditions. The current application has
+that restriction and checks its boundary conditions explicitly; it is not
 assumed equivalent to this reference.
 
 For an interior solution, independent checks are:
@@ -123,36 +125,36 @@ capital. The gross return on saving is `1-delta+v_(t+1)`.
 
 The current app has **firms owning capital**, households owning fixed equity
 shares, and firms paying funded dividends. Those accounts are not interchangeable
-with household-owned capital and rental payments. This document does not
-authorize changing the app's ownership or relabeling dividends as rents.
+with household-owned capital and rental payments. This reference preserves
+that distinction; app dividends must not be relabeled as capital rents.
 
 The [monetary foundation](monetary_foundation.md) now specifies household asset
 budgets, owner valuation and investment/liquidity/payout decisions under the
-actual ownership arrangement. Its money-in-utility extension has a
-[first-regime implementation](monetary_transitions.md). Merely adding a
-discount-factor control to the present household problem would not complete
-that integration.
+actual ownership arrangement. Its money-in-utility extension has an independent
+[interior benchmark](monetary_transitions.md) and the
+[constrained implementation](monetary_boundaries.md) used by the application.
+The application solves household and firm decisions jointly under those budgets.
 
 ## What stays outside this reference
 
-| Current mechanism | Treatment here and reason |
+| Mechanism or extension | Treatment here and reason |
 | --- | --- |
 | Money balances and nominal prices | Absent from the real reference; require an explicit monetary model and asset budget |
-| Household consumption targets | Zero; the shortfall penalty is a separate preference extension |
-| Household and firm heterogeneity | Symmetry first; vary one difference only after the common benchmark is understood |
-| Percentage investment and user-cost hurdle | Existing experimental policies; neither independently determines investment in the reference |
-| Cash-funded payroll and investment budget cap | Financing frictions requiring explicit treatment in the monetary design |
-| Original cash as protected dividend reserve | A project policy; opening resources and a permanent payout rule must be distinguished |
-| Previous-price equilibrium selection | Not a price-adjustment mechanism; future monetary multiplicity requires its own analysis |
+| Household and firm heterogeneity | Both the reference and current app use symmetry; heterogeneous ownership requires its own valuation treatment |
+| Cash-funded payroll and dividends | Absent here; explicit financing constraints in the monetary model |
+| Irreversible investment | Absent here; the current app restricts firms to investing nonnegative amounts of their own output |
+| Money services and owner distributions | Require the monetary preferences and corporate ownership budgets specified separately |
+| Equilibrium selection across monetary regimes | Global uniqueness and multiplicity remain unresolved; this reference supplies no selection rule |
 | Inventories, rationing and adaptive prices | Later market-adjustment design, with a declared event order and trading rules |
 
-In particular, do not remove the app's investment cap as a cosmetic
-simplification: it affects sale proceeds, liquidity and market clearing. Revisit
-it jointly with funding and payouts. Exogenous shocks remain postponed.
+The application has no independent investment-share cap, hurdle rate,
+consumption target or permanent initial-cash reserve. Saving, investment and
+funded distributions follow the joint monetary problem. Exogenous shocks
+remain postponed.
 
 ## Analytical checks and implementation status
 
-At an interior stationary allocation let `x=k/l`. The proposed equations imply:
+At an interior stationary allocation let `x=k/l`. The reference equations imply:
 
 ```text
 r_star = 1/beta - 1
@@ -187,7 +189,7 @@ special case in `textbook_growth.py`. Its optimal investment share is
 the separate analytical calculation. Fixed labor must be imposed explicitly in
 that comparison; setting `chi=0` in a log-leisure solver is not a silent shortcut.
 
-For the proposed endogenous-labor extension, full depreciation also has an exact
+For the implemented endogenous-labor extension, full depreciation also has an exact
 special case, derived from the stated objective and constraints:
 
 ```text
@@ -200,9 +202,10 @@ This supplies an additional independent check used by the implemented labor solv
 
 Now implemented: partial-depreciation transition paths and endogenous labor in
 the isolated reference. See [the numerical method and acceptance checks](growth_transition.md).
-The [monetary household/firm foundation](monetary_foundation.md) also has a
-[transition solver for its first supported regime](monetary_transitions.md),
-separate from this frictionless reference and the live app.
+The [monetary household/firm foundation](monetary_foundation.md) also has an
+[interior transition benchmark](monetary_transitions.md) and the
+[constrained transition solver](monetary_boundaries.md) used by the application.
+Both remain distinct from this frictionless reference.
 
 Before relying on an extended numerical solver, verify resource feasibility,
 labor optimality, Euler residuals along transitions, the stationary allocation,
@@ -211,8 +214,8 @@ domain and horizon/continuation treatment. Report numerical limitations openly.
 The reference is an allocation benchmark; decentralized price discovery and
 self-regulation still require a specified adjustment process.
 
-Step 1 delivers this economic specification and its analytical checks. Step 2
-resolves the monetary ownership, saving, funding and payout structure before any
-replacement of the app's behavioral rules. Subsequent implementation should
-reproduce the reference in an explicitly defined frictionless limit and explain
-the effects of each added friction.
+Step 1 delivers this economic specification and its analytical checks. The
+monetary foundation and constrained solver supply the application's ownership,
+saving, funding and payout structure. Comparisons with the real reference must
+remove monetary and investment restrictions explicitly and explain each
+mapping; reducing the money preference to zero alone is not a frictionless limit.

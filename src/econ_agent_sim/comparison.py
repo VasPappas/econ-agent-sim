@@ -1,152 +1,62 @@
-"""Compare two-firm experiments at a shared date without extending either run."""
+"""Compare solved current-model experiments at a common visible date."""
 
-from math import isclose
+from dataclasses import asdict
 
-from econ_agent_sim.engine import EconomyPeriod
+from econ_agent_sim.domain import MODEL_ID
 from econ_agent_sim.reporting import build_report
 
-
-def _settings_changes(current, baseline):
-    changes = []
-
-    def add(identity, entity, label, old, new, unit=""):
-        same = old == new if isinstance(old, str) or isinstance(new, str) else isclose(
-            old, new, rel_tol=1e-12, abs_tol=0.0
-        )
-        if not same:
-            changes.append({
-                "entity_id": identity, "entity": entity, "label": label,
-                "baseline": old, "current": new, "unit": unit,
-            })
-
-    add("economy", "Economy", "Households", len(baseline.households), len(current.households))
-    for kind, old_entries, new_entries in (
-        ("firm", baseline.firms, current.firms),
-        ("household", baseline.households, current.households),
-    ):
-        old_by_id = {entry.id: entry for entry in old_entries}
-        new_by_id = {entry.id: entry for entry in new_entries}
-        for identity in dict.fromkeys((*old_by_id, *new_by_id)):
-            old, new = old_by_id.get(identity), new_by_id.get(identity)
-            name = (new or old).name
-            if kind == "firm":
-                for field, label, unit, factor in (
-                    ("money", "Operating money", "M", 1),
-                    ("capital", "Starting capital", "capital units", 1),
-                    ("productivity", "Productivity", "", 1),
-                    ("reinvestment_rate", "Reinvest surplus", "%", 100),
-                    ("depreciation_rate", "Capital wear", "%", 100),
-                ):
-                    add(identity, name, label,
-                        getattr(old, field) * factor if old else "—",
-                        getattr(new, field) * factor if new else "—", unit)
-            else:
-                add(identity, name, "Consumption target",
-                    old.consumption_target if old else "—",
-                    new.consumption_target if new else "—", "X / period")
-                add(identity, name, "Starting money", old.money if old else "—",
-                    new.money if new else "—", "M")
-                for key, label in (
-                    ("consumption", "Consume preference"),
-                    ("money", "Money preference"),
-                    ("leisure", "Leisure preference"),
-                ):
-                    add(identity, name, label, old.weights[key] * 100 if old else "—",
-                        new.weights[key] * 100 if new else "—", "%")
-    return changes
-
-
-def _metric(key, label, unit, current, baseline, *, change_unit=None):
-    return {
-        "key": key, "label": label, "unit": unit,
-        "baseline": baseline, "current": current, "change": current - baseline,
-        "change_unit": change_unit or unit,
-    }
+_SETTING_LABELS = {
+    "beta": "Patience", "depreciation": "Capital wear", "leisure_weight": "Leisure weight",
+    "money_weight": "Money weight", "initial_capital": "Starting capital per firm",
+    "initial_firm_cash_share": "Firms’ initial share of money",
+}
 
 
 def compare_runs(
-    current_periods, baseline_periods, *, selected_period: int,
-    cumulative: bool = False, current_name: str = "Current", baseline_name: str = "Baseline",
+    current, baseline, *, selected_period: int, cumulative: bool = False,
+    current_name: str = "Current", baseline_name: str = "Baseline",
 ) -> dict:
-    """Compare original-price flows, closing stocks and selected-period rates.
+    """Compare matching dates without solving or extending either experiment.
 
-    Stable firm IDs, not labels or array positions, match firm accounts. A short
-    history returns an unavailable comparison; no solve or mutation occurs here.
+    The UI must restrict the selected date to both experiments' *visible* dates.
+    This function never reads a later date to fill an earlier comparison.
     """
-    if type(selected_period) is not int or selected_period < 1:
-        raise ValueError("Choose a positive whole period for comparison.")
-    current_periods, baseline_periods = tuple(current_periods), tuple(baseline_periods)
-    for history in (current_periods, baseline_periods):
-        if any(not isinstance(period, EconomyPeriod) for period in history):
-            raise ValueError("Compare experiments using the current Tiny Economy engine.")
-        if any(period.number != index for index, period in enumerate(history, 1)):
-            raise ValueError("A comparison needs consecutive histories beginning at Period 1.")
-    comparable = min(len(current_periods), len(baseline_periods))
-    result = {
-        "model": "tiny_economy", "available": False, "through_period": selected_period,
-        "comparable_through": comparable, "scope": "cumulative" if cumulative else "period",
-        "label": f"Periods 1–{selected_period}" if cumulative and selected_period > 1 else f"Period {selected_period}",
-        "current_name": current_name, "baseline_name": baseline_name,
-        "metrics": [], "firms": [], "settings_changes": [],
-    }
-    if current_periods and baseline_periods:
-        result["settings_changes"] = _settings_changes(current_periods[0], baseline_periods[0])
-    if selected_period > comparable:
-        shared = (
-            f"They currently share Periods 1–{comparable}." if comparable > 1
-            else "They currently share Period 1." if comparable == 1
-            else "Start both simulations first."
-        )
-        result["note"] = f"Both experiments need Period {selected_period} to compare it. {shared}"
-        return result
-
-    current = build_report(current_periods[:selected_period], cumulative)
-    baseline = build_report(baseline_periods[:selected_period], cumulative)
-    for key, label, unit, section, field, factor in (
-        ("shortfall", "Target gap", "X", "economy", "shortfall_x", 1),
-        ("consumption", "Consumed X", "X", "economy", "consumed_x", 1),
-        ("capital", "Closing capital", "capital units", "economy", "capital_close", 1),
-        ("work", "Average work", "%", "economy", "average_work", 100),
-        ("price", "X price", "M / X", None, "price", 1),
-        ("real_wage", "Wage buys", "X / work unit", None, "real_wage", 1),
-        ("profit", "Net firm profit", "M", "economy", "net_operating_profit", 1),
+    new = build_report(current, selected_period, cumulative)
+    old = build_report(baseline, selected_period, cumulative)
+    metrics = []
+    for key, label, unit, section, factor in (
+        ("consumed_x", "Consumption", "X", "economy", 1),
+        ("investment_quantity", "Investment", "X", "economy", 1),
+        ("capital_close", "Closing capital", "capital units", "economy", 1),
+        ("average_work", "Average work", "%", "economy", 100),
+        ("net_operating_profit", "Operating profit", "Money", "economy", 1),
+        ("dividends_paid", "Dividends", "Money", "economy", 1),
+        ("price", "Goods price", "Money / X", None, 1),
+        ("real_wage", "Wage purchasing power", "X / work unit", None, 1),
     ):
-        new = (current[section] if section else current)[field] * factor
-        old = (baseline[section] if section else baseline)[field] * factor
-        result["metrics"].append(_metric(
-            key, label, unit, new, old, change_unit="pp" if key == "work" else unit
-        ))
-    baseline_firms = {entry["entity_id"]: entry for entry in baseline["firms"]}
-    for firm in current["firms"]:
-        old = baseline_firms.get(firm["entity_id"])
-        comparison = {
-            "entity_id": firm["entity_id"], "name": firm["name"],
-            "available": old is not None, "metrics": [],
-        }
-        if old is None:
-            comparison["note"] = "This firm has no matching identity in the baseline."
-        else:
-            for key, label, unit, field, factor in (
-                ("production", "Produced X", "X", "produced_x", 1),
-                ("sales_share", "Share of sales", "%", "sales_share", 100),
-                ("profit", "Net profit", "M", "net_operating_profit", 1),
-                ("capital", "Closing capital", "capital units", "capital_close", 1),
-            ):
-                comparison["metrics"].append(_metric(
-                    key, label, unit, firm[field] * factor, old[field] * factor,
-                    change_unit="pp" if key == "sales_share" else unit,
-                ))
-        result["firms"].append(comparison)
-    result.update(
-        available=True,
-        note=(
-            "Production, consumption and profit cover this report range. Capital is the closing stock; "
-            "work is the household average. Sales shares use total physical X sold over the range. "
-            f"Price and wage purchasing power are from Period {selected_period}. "
-            "Monetary flows keep each period’s original prices. Differences show current minus baseline. "
-            "Target gaps sum individual period gaps without offsetting extra consumption. "
-            "Each run uses its own consumption targets; changed targets are listed with "
-            "the changed settings. A changed target is not a common welfare benchmark."
+        left = (new[section] if section else new)[key] * factor
+        right = (old[section] if section else old)[key] * factor
+        metrics.append({
+            "key": key, "label": label, "unit": unit,
+            "current": left, "baseline": right, "change": left - right,
+            "change_unit": "percentage points" if key == "average_work" else unit,
+        })
+    new_settings, old_settings = asdict(current.settings), asdict(baseline.settings)
+    return {
+        "model": MODEL_ID, "available": True, "through_period": selected_period,
+        "scope": new["scope"], "label": new["label"],
+        "current_name": current_name, "baseline_name": baseline_name,
+        "metrics": metrics,
+        "settings_changes": [
+            {"key": key, "label": _SETTING_LABELS[key], "baseline": old_settings[key],
+             "current": value}
+            for key, value in new_settings.items() if value != old_settings[key]
+        ],
+        "note": (
+            "Differences are current minus baseline at the same date. Flows keep "
+            "their original prices, capital is the closing stock, and work is a "
+            "household average. Price and wage purchasing power are selected-period "
+            "rates. Changed preferences mean consumption alone is not a common "
+            "welfare measure."
         ),
-    )
-    return result
+    }

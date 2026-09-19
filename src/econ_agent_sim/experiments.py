@@ -1,38 +1,28 @@
-"""Versioned portable workspaces for the current Tiny Economy model.
+"""Portable workspaces with strict schemas and complete monetary-plan replay.
 
-The editable draft and submitted run are separate. Opening replays the exact
-supported engine and checks complete immutable snapshots before exposing any
-replacement state. Fingerprints detect changed results; they are not signatures.
+Editable inputs, the submitted plan and the baseline have separate lifetimes.
+Every saved period is checked against a freshly certified plan before import
+replaces state. Earlier economic models are deliberately not reinterpreted.
 """
 
 from __future__ import annotations
 
 import json
-import re
-from collections.abc import Mapping
-from dataclasses import asdict, dataclass, fields, is_dataclass
-from hashlib import sha256
-from math import isfinite
+from collections.abc import Mapping, MutableMapping
+from dataclasses import asdict, dataclass, fields
+from math import isclose, isfinite
+from typing import Any
 
-from econ_agent_sim.engine import (
-    EconomyPeriod,
-    Firm,
-    Household,
-    advance_period,
-)
+from econ_agent_sim.domain import ENGINE_VERSION, MAX_PERIODS, MODEL_ID, Settings
+from econ_agent_sim.engine import Run, simulate
+from econ_agent_sim.monetary_growth import Period
 
 FORMAT = "tiny-economy-experiment"
-FORMAT_VERSION = 5
-MODEL = "tiny_economy"
-# Bump whenever solving, settlement or accounting changes saved snapshots.
-ENGINE_VERSION = "tiny-economy-3.0.0"
-LEGACY_FORMAT_VERSION = 4
-LEGACY_ENGINE_VERSION = "tiny-economy-2.0.0"
-_NEW_FIRM_FIELDS = {"investment_policy", "required_return"}
+FORMAT_VERSION = 6
 MAX_FILE_BYTES = 256 * 1024
-MAX_PERIODS = 100
-MAX_HOUSEHOLDS = 20
 MAX_NAME_LENGTH = 80
+REPLAY_REL_TOLERANCE = 1e-9
+REPLAY_ABS_TOLERANCE = 1e-11
 
 
 class ExperimentError(ValueError):
@@ -40,101 +30,85 @@ class ExperimentError(ValueError):
 
 
 class RetiredExperimentError(ExperimentError):
-    """A historical file must not be reinterpreted with changed economic rules."""
+    """A historical file belongs to a different economic model."""
+
+
+def validate_experiment_name(value: object) -> str:
+    if (
+        not isinstance(value, str) or not value.strip() or len(value) > MAX_NAME_LENGTH
+        or any(ord(char) < 32 or ord(char) == 127 for char in value)
+        or any(0xD800 <= ord(char) <= 0xDFFF for char in value)
+    ):
+        raise ExperimentError(
+            f"Experiment name needs 1–{MAX_NAME_LENGTH} valid text characters "
+            "without control characters."
+        )
+    return value
+
+
+def _count(value: object, *, minimum: int, maximum: int, label: str) -> int:
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise ExperimentError(f"{label} must be a whole number from {minimum} to {maximum}.")
+    return value
+
+
+def _run_valid(run: Run) -> None:
+    if type(run) is not Run or type(run.settings) is not Settings:
+        raise ExperimentError("Use a completed plan from the current economy.")
+    if not run.solution.converged or len(run.periods) != MAX_PERIODS:
+        raise ExperimentError(f"A saved run needs a certified {MAX_PERIODS}-period plan.")
+
+
+@dataclass(frozen=True)
+class Baseline:
+    run: Run
+    visible_periods: int
+    name: str
+
+    def __post_init__(self) -> None:
+        _run_valid(self.run)
+        validate_experiment_name(self.name)
+        _count(self.visible_periods, minimum=1, maximum=MAX_PERIODS, label="Visible periods")
 
 
 @dataclass(frozen=True)
 class Experiment:
     name: str
-    draft_households: tuple[Household, ...]
-    draft_firms: tuple[Firm, ...]
-    periods: tuple[EconomyPeriod, ...] = ()
+    draft: Settings
+    run: Run | None = None
+    visible_periods: int = 0
     selected_period: int = 1
-    report_scope: str = "This period"
-    selected_firm: str = "firm_a"
+    scope: str = "This period"
+    view: str = "Set up"
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "draft_households", tuple(self.draft_households))
-        object.__setattr__(self, "draft_firms", tuple(self.draft_firms))
-        object.__setattr__(self, "periods", tuple(self.periods))
         validate_experiment_name(self.name)
-        _settings(self.draft_households, self.draft_firms)
-        if len(self.periods) > MAX_PERIODS:
-            raise ExperimentError(f"An experiment supports up to {MAX_PERIODS} periods.")
-        firms = self.draft_firms
-        if self.periods:
-            first = self.periods[0]
-            if not isinstance(first, EconomyPeriod):
-                raise ExperimentError("Use completed Tiny Economy periods.")
-            _settings(first.households, first.firms)
-            firms = first.firms
-            for number, period in enumerate(self.periods, 1):
-                if not isinstance(period, EconomyPeriod) or (
-                    period.number != number
-                    or period.households != first.households
-                    or period.firms != first.firms
-                ):
-                    raise ExperimentError(
-                        "Completed periods must start at 1 and use unchanged settings."
-                    )
-        if (
-            type(self.selected_period) is not int
-            or not 1 <= self.selected_period <= max(1, len(self.periods))
-        ):
-            raise ExperimentError("Choose a completed period in this experiment.")
-        if self.report_scope not in ("This period", "Cumulative"):
-            raise ExperimentError("Choose This period or Cumulative for the report.")
-        if self.selected_firm not in tuple(firm.id for firm in firms):
-            raise ExperimentError("Choose a firm in this experiment.")
+        if type(self.draft) is not Settings:
+            raise ExperimentError("Use the current economy's draft settings.")
+        if self.run is not None:
+            _run_valid(self.run)
+        _validate_navigation(
+            self.visible_periods, self.selected_period, self.scope, self.view,
+            has_run=self.run is not None,
+        )
 
 
 @dataclass(frozen=True)
 class ExperimentFile:
     current: Experiment
-    baseline: Experiment | None = None
+    baseline: Baseline | None = None
 
 
-def _name(value: object, label: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value.strip()
-        or len(value) > MAX_NAME_LENGTH
-        or any(ord(character) < 32 or ord(character) == 127 for character in value)
-    ):
-        raise ExperimentError(
-            f"{label} needs 1–{MAX_NAME_LENGTH} characters without control characters."
-        )
-    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
-        raise ExperimentError(f"{label} must contain valid Unicode text.")
-    return value
-
-
-def validate_experiment_name(value: object) -> str:
-    """Validate editable labels before publishing them to the workspace."""
-    return _name(value, "Experiment name")
-
-
-def _entity_name(value: object, label: str) -> str:
-    name = _name(value, label)
-    if name.lstrip().startswith(("=", "+", "-", "@")):
-        raise ExperimentError(f"{label} cannot start with a spreadsheet formula.")
-    return name
-
-
-def _entity_id(value: object) -> str:
-    if not isinstance(value, str) or re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", value) is None:
-        raise ExperimentError("Entity IDs need letters, numbers, underscores or hyphens.")
-    return value
-
-
-def _number(value: object, label: str, minimum: float, maximum: float) -> float:
-    if (
-        type(value) not in (int, float)
-        or not isfinite(value)
-        or not minimum <= value <= maximum
-    ):
-        raise ExperimentError(f"{label} must be between {minimum:g} and {maximum:g}.")
-    return float(value)
+def _validate_navigation(visible, selected, scope, view, *, has_run):
+    _count(
+        visible, minimum=1 if has_run else 0, maximum=MAX_PERIODS if has_run else 0,
+        label="Visible periods",
+    )
+    _count(selected, minimum=1, maximum=max(1, visible), label="Selected period")
+    if scope not in ("This period", "Cumulative"):
+        raise ExperimentError("Choose This period or Cumulative for the report.")
+    if view not in ("Set up", "Results", "Ask why"):
+        raise ExperimentError("Choose a recognized workspace view.")
 
 
 def _object(value: object, keys: set[str], label: str) -> dict:
@@ -143,157 +117,77 @@ def _object(value: object, keys: set[str], label: str) -> dict:
     return value
 
 
-def _investment_policy(value: object) -> str:
-    if not isinstance(value, str) or value not in ("percentage", "user_cost"):
-        raise ExperimentError("Choose percentage or user_cost for the investment policy.")
-    return value
-
-
-def _parse_settings(
-    value: object, *, legacy: bool = False,
-) -> tuple[tuple[Household, ...], tuple[Firm, ...]]:
-    settings = _object(value, {"households", "firms"}, "settings")
-    items = settings["households"]
-    if not isinstance(items, list) or not 2 <= len(items) <= MAX_HOUSEHOLDS:
-        raise ExperimentError(f"Use between 2 and {MAX_HOUSEHOLDS} households.")
-    household_fields = {field.name for field in fields(Household)}
-    households = []
-    for item in items:
-        item = _object(item, household_fields, "household")
-        households.append(Household(
-            id=_entity_id(item["id"]),
-            name=_entity_name(item["name"], "Household name"),
-            money=_number(item["money"], "Household money", 0, 1_000_000),
-            consumption_target=_number(
-                item["consumption_target"], "Consumption target", 0, 100,
-            ),
-            **{
-                field: _number(item[field], "Preference score", .01, 100)
-                for field in household_fields - {"id", "name", "money", "consumption_target"}
-            },
-        ))
-    items = settings["firms"]
-    if not isinstance(items, list) or len(items) != 2:
-        raise ExperimentError("This economy needs exactly two firms.")
-    firms = []
-    firm_fields = {field.name for field in fields(Firm)}
-    if legacy:
-        firm_fields -= _NEW_FIRM_FIELDS
-    for item in items:
-        item = _object(item, firm_fields, "firm")
-        firms.append(Firm(
-            id=_entity_id(item["id"]),
-            name=_entity_name(item["name"], "Firm name"),
-            money=_number(item["money"], "Operating money", .01, 1_000_000),
-            capital=_number(item["capital"], "Starting capital", .1, 1_000_000),
-            productivity=_number(item["productivity"], "Productivity", .1, 100),
-            theta=_number(item["theta"], "Labor exponent", .5, .5),
-            reinvestment_rate=_number(item["reinvestment_rate"], "Reinvestment", 0, .9),
-            depreciation_rate=_number(item["depreciation_rate"], "Capital wear", 0, .9),
-            investment_policy="percentage" if legacy else _investment_policy(
-                item["investment_policy"],
-            ),
-            required_return=.05 if legacy else _number(
-                item["required_return"], "Required return", 0, 1,
-            ),
-        ))
-    ids = [entity.id for entity in (*households, *firms)]
-    if len(set(ids)) != len(ids):
-        raise ExperimentError("Households and firms need unique IDs.")
-    # Zero aggregate household cash is a savable draft, though it cannot run.
-    return tuple(households), tuple(firms)
-
-
-def _settings(households: tuple[Household, ...], firms: tuple[Firm, ...]) -> dict:
-    if any(not isinstance(item, Household) for item in households) or any(
-        not isinstance(item, Firm) for item in firms
-    ):
-        raise ExperimentError("Use household and firm settings for this economy.")
-    validated_households, validated_firms = _parse_settings({
-        "households": [asdict(item) for item in households],
-        "firms": [asdict(item) for item in firms],
-    })
-    return {
-        "households": [asdict(item) for item in validated_households],
-        "firms": [asdict(item) for item in validated_firms],
-    }
-
-
-def _plain(value: object, *, legacy: bool = False) -> object:
-    """Canonicalize every snapshot field, including frozen nested mappings."""
-    if is_dataclass(value):
-        return {
-            field.name: _plain(getattr(value, field.name), legacy=legacy)
-            for field in fields(value)
-            if not (legacy and isinstance(value, Firm) and field.name in _NEW_FIRM_FIELDS)
-        }
-    if isinstance(value, Mapping):
-        return {key: _plain(item, legacy=legacy) for key, item in value.items()}
-    if isinstance(value, (tuple, list)):
-        return [_plain(item, legacy=legacy) for item in value]
-    if type(value) in (int, float):
-        return float(value)
-    return value
-
-
-def _digest(period: EconomyPeriod, *, legacy: bool = False) -> str:
-    if legacy and any(
-        firm.investment_policy != "percentage" or firm.required_return != .05
-        for firm in period.firms
-    ):
-        raise ExperimentError("Only migrated percentage settings have legacy period checks.")
-    canonical = json.dumps(
-        _plain(period, legacy=legacy), sort_keys=True, ensure_ascii=False,
-        allow_nan=False, separators=(",", ":"),
-    ).encode("utf-8")
-    return sha256(canonical).hexdigest()
-
-
-def _experiment_payload(experiment: Experiment) -> dict:
-    if not isinstance(experiment, Experiment):
-        raise ExperimentError("Choose an experiment to save.")
-    run = None
-    if experiment.periods:
-        first = experiment.periods[0]
-        run = {
-            **_settings(first.households, first.firms),
-            "period_digests": [_digest(period) for period in experiment.periods],
-        }
-    return {
-        "name": experiment.name,
-        "draft": _settings(experiment.draft_households, experiment.draft_firms),
-        "run": run,
-        "view": {
-            "selected_period": experiment.selected_period,
-            "report_scope": experiment.report_scope,
-            "selected_firm": experiment.selected_firm,
-        },
-    }
-
-
-def dump_experiment(current: Experiment, *, baseline: Experiment | None = None) -> bytes:
-    """Save both firms, every completed period, draft edits and a frozen baseline."""
+def _settings(value: object) -> Settings:
+    value = _object(value, {field.name for field in fields(Settings)}, "settings")
     try:
-        if baseline is not None and (
-            not isinstance(baseline, Experiment) or not baseline.periods
-        ):
-            raise ExperimentError("A baseline needs at least one completed period.")
+        return Settings(**value)
+    except (ValueError, TypeError, ArithmeticError) as error:
+        raise ExperimentError(f"The saved settings are invalid: {error}") from error
+
+
+def _snapshot(value: object, number: int) -> dict:
+    value = _object(value, {field.name for field in fields(Period)}, "period")
+    if type(value["number"]) is not int or value["number"] != number:
+        raise ExperimentError("Saved periods must be numbered consecutively from 1.")
+    for key, item in value.items():
+        if key == "number" or (key == "next_capital_shadow_value" and item is None):
+            continue
+        if type(item) not in (int, float) or not isfinite(item):
+            raise ExperimentError("Saved period quantities must be finite numbers.")
+    return value
+
+
+def _run_payload(run: Run | None) -> dict | None:
+    if run is None:
+        return None
+    _run_valid(run)
+    return {
+        "settings": asdict(run.settings),
+        "periods": [_snapshot(asdict(row), i) for i, row in enumerate(run.periods, 1)],
+    }
+
+
+def dump_experiment(current: Experiment, *, baseline: Baseline | None = None) -> bytes:
+    """Save complete plans, including periods not yet revealed in the interface."""
+    try:
+        if type(current) is not Experiment:
+            raise ExperimentError("Choose a current experiment to save.")
+        if baseline is not None and type(baseline) is not Baseline:
+            raise ExperimentError("Choose a saved comparison baseline.")
         payload = {
             "format": FORMAT, "format_version": FORMAT_VERSION,
-            "model": MODEL, "engine_version": ENGINE_VERSION,
-            "current": _experiment_payload(current),
-            "baseline": _experiment_payload(baseline) if baseline is not None else None,
+            "model": MODEL_ID, "engine_version": ENGINE_VERSION,
+            "current": {
+                "name": current.name, "draft": asdict(current.draft),
+                "run": _run_payload(current.run),
+                "visible_periods": current.visible_periods,
+                "selected_period": current.selected_period,
+                "scope": current.scope, "view": current.view,
+            },
+            "baseline": None if baseline is None else {
+                "name": baseline.name, "run": _run_payload(baseline.run),
+                "visible_periods": baseline.visible_periods,
+            },
         }
         encoded = json.dumps(
-            payload, ensure_ascii=False, allow_nan=False, indent=2,
+            payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"),
         ).encode("utf-8")
+    except ExperimentError:
+        raise
     except (TypeError, ValueError, ArithmeticError) as error:
-        if isinstance(error, ExperimentError):
-            raise
         raise ExperimentError("These settings or results could not be saved.") from error
     if len(encoded) > MAX_FILE_BYTES:
-        raise ExperimentError("This experiment exceeds the supported file size.")
+        raise ExperimentError("This experiment exceeds the supported 256 KiB file size.")
     return encoded
+
+
+def dumps_experiment(state: Mapping[str, Any]) -> str:
+    current = Experiment(
+        state["te_name"], state["te_draft"], state["te_run"],
+        state["te_visible_periods"], state["te_selected_period"],
+        state["te_scope"], state["te_view"],
+    )
+    return dump_experiment(current, baseline=state["te_baseline"]).decode("utf-8")
 
 
 def _unique_keys(pairs: list[tuple[str, object]]) -> dict:
@@ -309,45 +203,45 @@ def _reject_constant(value: str) -> None:
     raise ExperimentError("Experiment numbers must be finite.")
 
 
-def _restore(payload: object, *, legacy: bool = False) -> Experiment:
-    payload = _object(payload, {"name", "draft", "run", "view"}, "experiment")
-    name = validate_experiment_name(payload["name"])
-    households_draft, firms_draft = _parse_settings(payload["draft"], legacy=legacy)
-    view = _object(
-        payload["view"], {"selected_period", "report_scope", "selected_firm"}, "view",
-    )
-    periods = []
-    if payload["run"] is not None:
-        run = _object(payload["run"], {"households", "firms", "period_digests"}, "run")
-        households, firms = _parse_settings({
-            "households": run["households"], "firms": run["firms"],
-        }, legacy=legacy)
-        digests = run["period_digests"]
-        if not isinstance(digests, list) or not 1 <= len(digests) <= MAX_PERIODS:
-            raise ExperimentError(f"A saved run needs 1–{MAX_PERIODS} completed periods.")
-        if any(
-            not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None
-            for digest in digests
-        ):
-            raise ExperimentError("The saved period checks are invalid.")
-        previous = None
-        for expected in digests:
-            previous = advance_period(households, firms, previous)
-            if _digest(previous, legacy=legacy) != expected:
-                raise ExperimentError(
-                    "The saved accounts could not be reproduced exactly. The file "
-                    "may have changed, or this runtime differs from the one that "
-                    "saved it. Your current experiment has not been replaced."
+def _parse_run(value: object) -> tuple[Settings, list[dict]] | None:
+    if value is None:
+        return None
+    value = _object(value, {"settings", "periods"}, "run")
+    settings = _settings(value["settings"])
+    periods = value["periods"]
+    if not isinstance(periods, list) or len(periods) != MAX_PERIODS:
+        raise ExperimentError(f"A saved run needs the complete {MAX_PERIODS}-period plan.")
+    return settings, [_snapshot(row, i) for i, row in enumerate(periods, 1)]
+
+
+def _replay(parsed: tuple[Settings, list[dict]] | None) -> Run | None:
+    if parsed is None:
+        return None
+    settings, saved = parsed
+    run = simulate(settings)
+    _run_valid(run)
+    for actual, expected in zip(run.periods, saved, strict=True):
+        for key, value in asdict(actual).items():
+            old = expected[key]
+            equal = (
+                old is None if value is None else
+                old is not None and isclose(
+                    value, old, rel_tol=REPLAY_REL_TOLERANCE,
+                    abs_tol=REPLAY_ABS_TOLERANCE,
                 )
-            periods.append(previous)
-    return Experiment(
-        name, households_draft, firms_draft, tuple(periods),
-        view["selected_period"], view["report_scope"], view["selected_firm"],
-    )
+            )
+            if not equal:
+                raise ExperimentError(
+                    "The saved plan could not be reproduced within numerical tolerance. "
+                    "The file may have changed or this runtime gives different results. "
+                    "Your current experiment has not been replaced."
+                )
+    # Saved numbers never become the running economy; use the new certified solve.
+    return run
 
 
 def load_experiment(data: bytes | str) -> ExperimentFile:
-    """Reproduce the whole workspace before returning any replacement state."""
+    """Validate the entire schema, then replay both plans before returning state."""
     if not isinstance(data, (bytes, str)) or len(data) > MAX_FILE_BYTES:
         raise ExperimentError("Choose an experiment JSON file smaller than 256 KiB.")
     try:
@@ -358,16 +252,15 @@ def load_experiment(data: bytes | str) -> ExperimentFile:
             encoded, object_pairs_hook=_unique_keys, parse_constant=_reject_constant,
         )
         if (
-            isinstance(payload, dict)
-            and payload.get("format") == FORMAT
+            isinstance(payload, dict) and payload.get("format") == FORMAT
             and type(payload.get("format_version")) is int
-            and 1 <= payload["format_version"] < LEGACY_FORMAT_VERSION
+            and 1 <= payload["format_version"] < FORMAT_VERSION
         ):
             raise RetiredExperimentError(
-                "This file was saved by a retired model. Its results cannot be "
-                "reopened in the current Tiny Economy because the economic rules "
-                "have changed. Start a new experiment and enter the settings you "
-                "want to explore. Your current experiment has not been replaced."
+                "This file belongs to an earlier Tiny Economy model. Its settings and "
+                "results cannot be reopened under the new forward-looking economic "
+                "rules. Keep the original file for reference and start a new experiment. "
+                "Your current experiment has not been replaced."
             )
         payload = _object(payload, {
             "format", "format_version", "model", "engine_version", "current", "baseline",
@@ -375,29 +268,67 @@ def load_experiment(data: bytes | str) -> ExperimentFile:
         if payload["format"] != FORMAT:
             raise ExperimentError("This is not a Tiny Economy experiment file.")
         version = payload["format_version"]
-        if type(version) is not int or version not in (LEGACY_FORMAT_VERSION, FORMAT_VERSION):
+        if type(version) is not int or version != FORMAT_VERSION:
             raise ExperimentError("This experiment file version is not supported.")
-        if payload["model"] != MODEL:
-            raise ExperimentError("This experiment belongs to a different economy.")
-        legacy = version == LEGACY_FORMAT_VERSION
-        expected_engine = LEGACY_ENGINE_VERSION if legacy else ENGINE_VERSION
-        if payload["engine_version"] != expected_engine:
-            raise ExperimentError(
-                "This experiment uses a different engine version. Its saved "
-                "accounts cannot be safely reopened by this version of the app."
-            )
-        current = _restore(payload["current"], legacy=legacy)
-        baseline = (
-            _restore(payload["baseline"], legacy=legacy)
-            if payload["baseline"] is not None else None
+        if payload["model"] != MODEL_ID:
+            raise ExperimentError("This experiment belongs to a different economic model.")
+        if payload["engine_version"] != ENGINE_VERSION:
+            raise ExperimentError("This experiment uses a different engine version.")
+        current = _object(payload["current"], {
+            "name", "draft", "run", "visible_periods", "selected_period", "scope", "view",
+        }, "experiment")
+        name = validate_experiment_name(current["name"])
+        draft = _settings(current["draft"])
+        parsed_run = _parse_run(current["run"])
+        _validate_navigation(
+            current["visible_periods"], current["selected_period"],
+            current["scope"], current["view"], has_run=parsed_run is not None,
         )
-        if baseline is not None and not baseline.periods:
-            raise ExperimentError("A baseline needs at least one completed period.")
-        return ExperimentFile(current=current, baseline=baseline)
+        baseline = payload["baseline"]
+        parsed_baseline = None
+        if baseline is not None:
+            baseline = _object(baseline, {"name", "run", "visible_periods"}, "baseline")
+            validate_experiment_name(baseline["name"])
+            parsed_baseline = _parse_run(baseline["run"])
+            if parsed_baseline is None:
+                raise ExperimentError("A baseline needs a completed plan.")
+            _count(
+                baseline["visible_periods"], minimum=1, maximum=MAX_PERIODS,
+                label="Baseline visible periods",
+            )
+        run = _replay(parsed_run)
+        baseline_run = _replay(parsed_baseline)
+        return ExperimentFile(
+            current=Experiment(
+                name, draft, run, current["visible_periods"], current["selected_period"],
+                current["scope"], current["view"],
+            ),
+            baseline=None if baseline is None else Baseline(
+                baseline_run, baseline["visible_periods"], baseline["name"],
+            ),
+        )
     except ExperimentError:
         raise
-    except (ValueError, TypeError, ArithmeticError, RecursionError, AssertionError) as error:
+    except (ValueError, TypeError, ArithmeticError, RecursionError) as error:
         raise ExperimentError(
             "This file could not be reopened as a valid experiment. "
             "Your current experiment has not been replaced."
         ) from error
+
+
+def restore_experiment(state: MutableMapping[str, Any], data: bytes | str) -> bool:
+    """Commit a checked import atomically; preserve active state on failure."""
+    try:
+        bundle = load_experiment(data)
+    except ExperimentError as error:
+        state["te_error"] = f"Could not reopen this experiment: {error}"
+        return False
+    current = bundle.current
+    state.update({
+        "te_model_id": MODEL_ID, "te_name": current.name, "te_draft": current.draft,
+        "te_run": current.run, "te_visible_periods": current.visible_periods,
+        "te_selected_period": current.selected_period, "te_scope": current.scope,
+        "te_view": current.view, "te_baseline": bundle.baseline, "te_error": None,
+        "te_notice": "Experiment reopened. Your setup, results and baseline are restored.",
+    })
+    return True
