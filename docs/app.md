@@ -1,64 +1,55 @@
 # Using Tiny Economy
 
-The root URL opens one workspace with **Set up**, **Results** and **Ask why**.
-There is no version catalogue or chapter sidebar.
+Use the root [Streamlit app](https://econ-agent-sim.streamlit.app/). The three
+views are **Set up**, **Results** and **Ask why**.
 
-## Set up
+## Start an experiment
 
-Use **Starting experiments** to choose and explicitly apply a preset. It replaces
-the editable draft, not completed results or a saved baseline. All presets use
-the same two-firm model; they do not reproduce the retired two-good economies.
+Set up offers six controls: future importance, capital wear, leisure preference,
+money preference, capital per firm, and the share of money held by firms.
+Two identical households and two identical firms are fixed. Percentages are
+shown for patience, wear and the initial cash split.
 
-Households have starting money, three relative priority scores and a soft
-consumption target. Equal scores mean equal utility weights, not equal realized
-spending or time. Increasing one score raises its relative weight; normalization
-is automatic. The target is an amount of X per period, not a guaranteed minimum.
-The explicit copy action copies Household 1's priorities and target to the other
-households, leaving their starting money alone.
+Choose a starting experiment and press **Use this setup** to populate the draft.
+The growing, capital-abundant, capital-scarce, tight-cash and stationary presets
+illustrate different paths of the same model. Selecting a title alone changes
+nothing. **Start new simulation** validates a complete plan and reveals period 1.
+An unsupported or failed solve keeps the existing run and baseline intact.
 
-Firms have starting cash, capital, productivity, investment policy and capital
-wear. Their cash funds wages independently. The setup shows starting totals and
-keeps optional detail in disclosures.
+Draft edits survive navigation and do not change completed results. Start again
+to apply edits. An existing run continues with its submitted settings.
 
-For each firm choose **Percentage policy** or **Forward-looking · user cost**.
-Forward-looking mode shows a required return and a maximum surplus investment
-budget. The firm may invest less than that budget or nothing. Required return
-is an assumed opportunity cost per period, not interest paid on money. The
-**Firms look ahead** preset demonstrates different firm decisions.
+## Explore results
 
-Run starts a new history from the draft. Returning to setup keeps the draft;
-changing it does not change completed results.
+**Next period** and **+10 periods** reveal more of one accepted plan, up to 100
+periods. They do not revise prior choices. The solver checks a longer
+continuation beyond the displayed window; there is no forced sale of ending capital.
 
-## Results and Ask why
+Select a completed period and choose **This period** or **Cumulative**. Production,
+consumption and investment cover that range; capital and cash are closing stocks.
+Cumulative money flows retain their original prices. Work and leisure percentages
+are averages. Prices and wages are labeled with the selected period.
 
-Advance one or ten periods using the submitted setup. Select a completed period
-and report range. Cumulative means flows summed at their historical period prices,
-opening stocks from the beginning and closing stocks from the selected period.
-Price and wage remain selected-period rates.
+Household and firm tables show physical activity, cash and ownership accounts.
+Expand the account bridges for wages, dividends, sales, investment, wear, profit
+and capital revaluation. Trends show production, capital, prices and work through
+the selected period. CSV export contains all revealed periods at full precision.
+**Ask why** gives deterministic explanations grounded in the same run and accounts.
 
-Compact summaries come first. Open statements, transactions and technical checks
-when needed. Firms are selectable; households show their submitted priorities.
-Consolidated accounts eliminate household claims on firm equity.
+## Save, open and compare
 
-For forward-looking firms, **Firm accounts → Why this investment?** compares
-expected marginal return with required return plus wear, and shows investment,
-budget and replacement needs. In cumulative view, this explanation is explicitly
-for the selected period.
+The **Save, open and compare experiments** panel can:
 
-Ask why offers built-in explanations of the selected period and report range.
-Choose a question to explore the results, accounting rules or model assumptions.
-When a baseline is saved, a comparison explanation is also available.
+- Download the draft, current run and optional baseline as JSON.
+- Open a compatible file after independent replay and validation.
+- Save the current run as an independent baseline, or copy its setup into the draft.
+- Compare the same completed period or cumulative range in both runs.
+- Reset to the default draft while retaining a saved baseline.
 
-## Experiment controls
+Experiments exist only in the current session until downloaded. Current files use
+format 6, model `tiny-economy-monetary-1`, engine `tiny-economy-4.0.0`. Files from
+the previous model are incompatible and leave the workspace unchanged. Restart
+with the six current settings; older outcomes are not automatically converted.
 
-- Save the current run as a baseline, then edit a copy for a comparison.
-- Download the current experiment and optional baseline as JSON.
-- Open a supported file; replay and validation finish before state is replaced.
-- Reset explicitly to the default draft and remove the current history. A saved
-  baseline remains available; use Clear baseline to remove it. Downloaded files are untouched.
-
-There is no account database. Download before leaving if you want to preserve an
-experiment. New files use format 5, model tiny_economy and engine
-tiny-economy-3.0.0. Released format-4 / engine-2.0.0 percentage experiments migrate
-after replay verifies their original results. Earlier formats remain incompatible;
-old models are available through Git history, not active pages.
+The model's assumptions and unsupported cash-retention regime are explained in
+**How this economy works** and the [model guide](model.md).

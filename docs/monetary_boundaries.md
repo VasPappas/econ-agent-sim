@@ -1,12 +1,13 @@
 # Monetary transitions with investment and distribution boundaries
 
-This reference extends the [positive-distribution monetary regime](monetary_transitions.md)
+The application's solver extends the [positive-distribution monetary regime](monetary_transitions.md)
 to dates with zero investment or zero owner distributions. It implements a
 specified subset of the [monetary foundation](monetary_foundation.md), not a
 general equilibrium solver for every possible cash-retention regime. The
-application engine remains separate.
+application engine calls `solve_constrained_transition` and accepts only
+verified paths. The earlier interior solver remains an independent benchmark.
 
-## Using the reference
+## Using the solver directly
 
 ```python
 from econ_agent_sim.monetary_growth import Parameters, solve_constrained_transition
@@ -28,6 +29,13 @@ produce a first date with both zero investment and zero distributions. These
 are numerical regression examples, not a classification of all admissible
 initial conditions. The original `solve_transition` remains the strictly
 interior benchmark.
+
+The application exposes four structural inputs and two initial conditions,
+with fixed symmetry and total money. It solves 100 displayable periods once
+before starting an experiment, then reveals that verified path through its
+period controls. Unsupported regimes or failed numerical checks do not replace
+an existing run. Parameter bounds limit the interactive inputs; they do not
+guarantee that every allowed combination is solvable in this regime.
 
 Numerical defaults remain `horizon=64`, `max_horizon=2048`,
 `max_iterations=80`, `tolerance=1e-10`, and
@@ -224,12 +232,14 @@ an independent exact proof of it.
 
 ## Remaining limits
 
-The reference does not yet search regimes with positive unspent opening firm
+The solver does not yet search regimes with positive unspent opening firm
 cash, asymmetric agents, borrowing, owner cash injections, zero productive
 initial states, shocks or adaptive expectations. Perfect foresight and
 stationary-tail continuation remain explicit assumptions. The earlier
-interior solver remains available as an independent regression benchmark;
-the constrained reference is not itself a Streamlit deployment.
+interior solver remains available as an independent regression benchmark.
+The Streamlit application uses the constrained solver with these same limits;
+integration does not establish global existence or uniqueness or implement a
+decentralized price-adjustment process.
 
 Run `pytest -q tests/test_monetary_boundaries.py tests/test_monetary_numerics.py`
 and `python docs/monetary_transition_check.py` to reproduce the checks. The

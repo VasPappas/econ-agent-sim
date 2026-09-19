@@ -1,299 +1,274 @@
-"""Portable current experiments preserve drafts, histories and exact accounts."""
+"""Whole-plan replay, strict file validation and atomic workspace restoration."""
 
 import json
-from dataclasses import replace
-from math import sqrt
+from dataclasses import asdict, fields
 from pathlib import Path
 
 import pytest
 
-from econ_agent_sim.engine import (
-    Firm,
-    Household,
-    advance_period,
-    default_firms,
-    default_households,
-)
+from econ_agent_sim import experiments, workspace
+from econ_agent_sim.domain import ENGINE_VERSION, MAX_PERIODS, MODEL_ID, Settings
+from econ_agent_sim.engine import SimulationError, simulate
 from econ_agent_sim.experiments import (
+    FORMAT,
+    FORMAT_VERSION,
     MAX_FILE_BYTES,
+    Baseline,
     Experiment,
     ExperimentError,
     RetiredExperimentError,
-    _digest,
     dump_experiment,
+    dumps_experiment,
     load_experiment,
+    restore_experiment,
 )
+from econ_agent_sim.monetary_growth import Period
 
 
-def experiment(count=3, *, firms=None):
-    households = tuple(
-        Household(**{**item, "consumption_target": 1.2345678912345})
-        for item in default_households()
-    )
-    if firms is None:
-        firms = tuple(Firm(**item) for item in default_firms())
-    history = []
-    for _ in range(count):
-        history.append(advance_period(
-            households, firms, history[-1] if history else None,
-        ))
-    return Experiment("My experiment", households, firms, tuple(history))
+@pytest.fixture(scope="module")
+def run():
+    return simulate(Settings())
 
 
-def test_roundtrip_preserves_dirty_draft_baseline_and_continuation():
-    baseline = experiment()
-    current = replace(
-        baseline, name="Different target",
-        draft_households=(replace(baseline.draft_households[0], consumption_target=0),
-                          baseline.draft_households[1]),
-        selected_period=2, report_scope="Cumulative", selected_firm="firm_b",
-    )
-    encoded = dump_experiment(current, baseline=baseline)
-    payload = json.loads(encoded)
-    assert (payload["model"], payload["engine_version"], payload["format_version"]) == (
-        "tiny_economy", "tiny-economy-3.0.0", 5,
-    )
-    reopened = load_experiment(encoded)
-    assert reopened.current == current
-    assert reopened.baseline == baseline
-    assert dump_experiment(reopened.current, baseline=reopened.baseline) == encoded
-    restored_last = reopened.current.periods[-1]
-    assert advance_period(
-        restored_last.households, restored_last.firms, restored_last,
-    ) == advance_period(
-        baseline.periods[-1].households, baseline.periods[-1].firms,
-        baseline.periods[-1],
-    )
+@pytest.fixture
+def draft_payload():
+    return json.loads(dump_experiment(Experiment("My experiment", Settings())))
 
 
-def test_supported_unicode_names_roundtrip_in_literal_and_escaped_json():
-    draft = experiment(0)
-    households = tuple(
-        replace(item, name=f"Οικογένεια {index} · 家庭 · 👩🏽‍🔬")
-        for index, item in enumerate(draft.draft_households, 1)
-    )
-    firms = tuple(
-        replace(item, name=f"مؤسسة {index} · Cafe\u0301")
-        for index, item in enumerate(draft.draft_firms, 1)
-    )
-    current = replace(
-        draft, name="Οικονομία · 経済 · 🌍", draft_households=households,
-        draft_firms=firms, periods=(advance_period(households, firms),),
-    )
-    encoded = dump_experiment(current, baseline=current)
-    for data in (encoded, json.dumps(json.loads(encoded))):
-        reopened = load_experiment(data)
-        assert reopened.current == current
-        assert reopened.baseline == current
-
-
-@pytest.mark.parametrize("policies", [
-    ("user_cost", "user_cost"), ("user_cost", "percentage"),
-])
-def test_investment_policies_roundtrip_dirty_draft_baseline_and_continuation(policies):
-    firms = tuple(
-        replace(Firm(**item), investment_policy=policy, required_return=.08)
-        for item, policy in zip(default_firms(), policies, strict=True)
-    )
-    submitted = experiment(2, firms=firms)
-    current = replace(
-        submitted,
-        draft_firms=(
-            replace(firms[0], investment_policy="percentage", required_return=.21),
-            replace(firms[1], investment_policy="user_cost", reinvestment_rate=.7),
-        ),
-    )
-    baseline = experiment(1)
-    encoded = dump_experiment(current, baseline=baseline)
-    restored = load_experiment(encoded)
-    assert restored.current == current
-    assert restored.baseline == baseline
-    assert dump_experiment(restored.current, baseline=restored.baseline) == encoded
-    previous = restored.current.periods[-1]
-    assert advance_period(previous.households, previous.firms, previous) == advance_period(
-        submitted.periods[-1].households, firms, submitted.periods[-1],
-    )
-
-
-@pytest.mark.parametrize("field,value", [
-    ("investment_policy", None), ("investment_policy", True),
-    ("investment_policy", "unknown"), ("investment_policy", []),
-    ("required_return", -.01), ("required_return", 1.01),
-    ("required_return", float("nan")), ("required_return", float("inf")),
-    ("required_return", True), ("required_return", ".05"),
-])
-def test_invalid_policy_settings_are_rejected(field, value):
-    payload = json.loads(dump_experiment(experiment(0)))
-    payload["current"]["draft"]["firms"][0][field] = value
-    with pytest.raises(ExperimentError):
-        load_experiment(json.dumps(payload))
-
-
-@pytest.mark.parametrize("field", ["investment_policy", "required_return"])
-def test_current_format_requires_explicit_policy_settings(field):
-    payload = json.loads(dump_experiment(experiment(0)))
-    del payload["current"]["draft"]["firms"][0][field]
-    with pytest.raises(ExperimentError, match="firm fields"):
-        load_experiment(json.dumps(payload))
-
-
-@pytest.mark.parametrize("field,value", [
-    ("investment_policy", "user_cost"), ("required_return", .15),
-])
-def test_changed_submitted_policy_cannot_reuse_original_period_checks(field, value):
-    payload = json.loads(dump_experiment(experiment(1)))
-    payload["current"]["run"]["firms"][0][field] = value
-    with pytest.raises(ExperimentError, match="reproduced"):
-        load_experiment(json.dumps(payload))
-
-
-@pytest.mark.parametrize("codepoint", [0xD800, 0xDFFF, 0xDABC])
-def test_experiment_construction_rejects_non_unicode_scalar_names(codepoint):
-    with pytest.raises(ExperimentError, match="valid Unicode text"):
-        replace(experiment(0), name=f"broken{chr(codepoint)}name")
-
-
-@pytest.mark.parametrize("target", [-1, 101, float("nan"), True, "0.5"])
-def test_invalid_target_is_not_interpreted_as_a_preference_score(target):
-    payload = json.loads(dump_experiment(experiment(0)))
-    payload["current"]["draft"]["households"][0]["consumption_target"] = target
-    with pytest.raises(ExperimentError):
-        load_experiment(json.dumps(payload))
-
-
-def test_changed_run_or_corrupted_baseline_cannot_be_replayed():
-    current = experiment(1)
-    payload = json.loads(dump_experiment(current, baseline=current))
-    payload["current"]["run"]["households"][0]["consumption_target"] = 5
-    with pytest.raises(ExperimentError, match="reproduced"):
-        load_experiment(json.dumps(payload))
-    payload = json.loads(dump_experiment(current, baseline=current))
-    payload["baseline"]["run"]["period_digests"][0] = "0" * 64
-    with pytest.raises(ExperimentError, match="reproduced"):
-        load_experiment(json.dumps(payload))
-
-
-@pytest.mark.parametrize("version", [1, 2, 3])
-def test_retired_files_are_rejected_before_replay_without_dead_links(version):
-    payload = json.loads(dump_experiment(experiment(0)))
-    payload["format_version"] = version
-    payload["engine_version"] = "retired-engine"
-    with pytest.raises(RetiredExperimentError, match="retired model") as captured:
-        load_experiment(json.dumps(payload))
-    assert "Start a new experiment" in str(captured.value)
-    assert "Your current experiment has not been replaced" in str(captured.value)
-
-
-def test_reject_duplicate_keys_nonfinite_unknown_fields_and_oversize_input():
-    encoded = dump_experiment(experiment(0)).decode()
-    for malformed in (
-        encoded.replace('"format_version": 5', '"format_version": 5, "format_version": 5'),
-        encoded.replace('"consumption_target": 1.2345678912345', '"consumption_target": NaN'),
-        encoded.replace('"selected_period": 1', '"selected_period": 1, "extra": 2'),
-        " " * (MAX_FILE_BYTES + 1),
-    ):
-        with pytest.raises(ExperimentError):
-            load_experiment(malformed)
-
-
-def test_zero_cash_draft_can_be_saved_without_claiming_a_valid_run():
-    draft = experiment(0)
-    draft = replace(draft, draft_households=tuple(
-        replace(household, money=0) for household in draft.draft_households
+@pytest.fixture
+def payload(run):
+    return json.loads(dump_experiment(
+        Experiment("Active", Settings(beta=.9), run, 11, 3, "Cumulative", "Ask why"),
+        baseline=Baseline(run, 7, "Baseline"),
     ))
-    restored = load_experiment(dump_experiment(draft)).current
-    assert restored == draft
-    assert not restored.periods
 
 
-def test_unsupported_engine_cannot_silently_recalculate_saved_results():
-    payload = json.loads(dump_experiment(experiment(0)))
-    payload["engine_version"] = "future-rules"
-    with pytest.raises(ExperimentError, match="different engine version"):
-        load_experiment(json.dumps(payload))
+def test_roundtrip_preserves_active_draft_baseline_and_navigation(payload, run):
+    encoded = json.dumps(payload).encode()
+    restored = load_experiment(encoded)
+    assert restored.current.draft == Settings(beta=.9)
+    assert restored.current.run == run
+    assert restored.current.run.settings == Settings()
+    assert restored.current.visible_periods == 11
+    assert restored.current.selected_period == 3
+    assert restored.current.scope == "Cumulative" and restored.current.view == "Ask why"
+    assert restored.baseline == Baseline(run, 7, "Baseline")
+    assert len(payload["current"]["run"]["periods"]) == MAX_PERIODS
+    assert payload["format_version"] == FORMAT_VERSION == 6
+    assert payload["engine_version"] == ENGINE_VERSION
+    assert payload["model"] == MODEL_ID
 
 
-@pytest.mark.parametrize("version,engine", [
-    (4, "tiny-economy-3.0.0"), (5, "tiny-economy-2.0.0"),
-])
-def test_engine_identity_must_match_its_exact_supported_format(version, engine):
-    payload = json.loads(dump_experiment(experiment(0)))
-    payload.update(format_version=version, engine_version=engine)
-    with pytest.raises(ExperimentError, match="different engine version"):
-        load_experiment(json.dumps(payload))
+def test_draft_only_roundtrip_does_not_solve(monkeypatch, draft_payload):
+    def unexpected(_):
+        pytest.fail("A draft-only file must not be simulated.")
+
+    monkeypatch.setattr(experiments, "simulate", unexpected)
+    restored = load_experiment(json.dumps(draft_payload))
+    assert restored.current == Experiment("My experiment", Settings())
+    assert restored.baseline is None
 
 
-@pytest.mark.parametrize("part", ["current", "baseline"])
-@pytest.mark.parametrize("settings", ["draft", "run"])
+def test_full_workspace_remains_within_file_limit(run):
+    current = Experiment("α" * 80, Settings(), run, 100, 100)
+    encoded = dump_experiment(current, baseline=Baseline(run, 100, "β" * 80))
+    assert len(encoded) < MAX_FILE_BYTES
+    assert load_experiment(encoded).current == current
+
+
+def test_session_roundtrip_with_different_editable_inputs(payload):
+    state = {"unrelated": "keep"}
+    workspace.initialize(state)
+    assert restore_experiment(state, json.dumps(payload))
+    assert state["unrelated"] == "keep"
+    assert state["te_view"] == "Ask why"
+    assert state["te_draft"].beta == .9 and state["te_run"].settings.beta == .95
+    saved = json.loads(dumps_experiment(state))
+    assert saved == payload
+    old_run = state["te_run"]
+    assert workspace.advance(state, 10)
+    assert state["te_visible_periods"] == 21 and state["te_run"] is old_run
+
+
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
+def test_earlier_economies_are_explicitly_rejected(version):
+    with pytest.raises(RetiredExperimentError, match="earlier Tiny Economy model"):
+        load_experiment(json.dumps({"format": FORMAT, "format_version": version}))
+
+
+def test_released_format5_fixture_is_rejected():
+    path = Path(__file__).parent / "fixtures" / "retired_format5_experiment.json"
+    with pytest.raises(RetiredExperimentError):
+        load_experiment(path.read_bytes())
+
+
 @pytest.mark.parametrize("field,value", [
-    ("investment_policy", "percentage"), ("required_return", .05),
+    ("format", "other"), ("format_version", True), ("format_version", 6.0),
+    ("format_version", 7), ("model", "tiny_economy"),
+    ("engine_version", "tiny-economy-3.0.0"),
 ])
-def test_legacy_files_reject_policy_fields_even_when_they_match_defaults(
-    part, settings, field, value,
-):
-    fixture = Path(__file__).parent / "fixtures/current_model_workspace.json"
-    payload = json.loads(fixture.read_bytes())
-    payload["baseline"] = json.loads(json.dumps(payload["current"]))
-    payload[part][settings]["firms"][0][field] = value
-    with pytest.raises(ExperimentError, match="firm fields"):
+def test_identity_version_and_engine_must_match(draft_payload, field, value):
+    draft_payload[field] = value
+    with pytest.raises(ExperimentError):
+        load_experiment(json.dumps(draft_payload))
+
+
+@pytest.mark.parametrize("field", [field.name for field in fields(Settings)])
+@pytest.mark.parametrize("value", [True, False, "0.95", None, float("inf"), float("nan")])
+def test_saved_inputs_are_finite_numbers_not_boolean_or_strings(draft_payload, field, value):
+    draft_payload["current"]["draft"][field] = value
+    with pytest.raises(ExperimentError):
+        load_experiment(json.dumps(draft_payload))
+
+
+@pytest.mark.parametrize("field,value", [
+    ("visible_periods", True), ("visible_periods", 1.0), ("visible_periods", 101),
+    ("visible_periods", 0), ("selected_period", True), ("selected_period", 0),
+    ("selected_period", 12), ("selected_period", 1.0),
+    ("scope", "All"), ("view", "Other"), ("name", ""),
+    ("name", "bad\nname"), ("name", "\ud800"), ("name", "x" * 81),
+])
+def test_invalid_navigation_and_names_are_rejected(payload, field, value):
+    payload["current"][field] = value
+    with pytest.raises(ExperimentError):
         load_experiment(json.dumps(payload))
 
 
-@pytest.mark.parametrize("part", ["current", "baseline"])
-def test_legacy_period_corruption_is_rejected_before_migration(part):
-    fixture = Path(__file__).parent / "fixtures/current_model_workspace.json"
-    payload = json.loads(fixture.read_bytes())
-    payload["baseline"] = json.loads(json.dumps(payload["current"]))
-    payload[part]["run"]["period_digests"][1] = "0" * 64
-    with pytest.raises(ExperimentError, match="reproduced"):
+@pytest.mark.parametrize("extra", [True, False])
+@pytest.mark.parametrize("section", ["root", "current", "draft", "run", "period", "baseline"])
+def test_unknown_and_missing_fields_are_rejected(payload, section, extra):
+    containers = {
+        "root": payload, "current": payload["current"],
+        "draft": payload["current"]["draft"], "run": payload["current"]["run"],
+        "period": payload["current"]["run"]["periods"][0], "baseline": payload["baseline"],
+    }
+    container = containers[section]
+    if extra:
+        container["unexpected"] = 1
+    else:
+        del container[next(iter(container))]
+    with pytest.raises(ExperimentError):
         load_experiment(json.dumps(payload))
 
 
-def test_frozen_current_file_and_continuation_preserve_the_published_contract():
-    fixture = Path(__file__).parent / "fixtures/current_model_workspace.json"
-    restored = load_experiment(fixture.read_bytes()).current
-    assert len(restored.periods) == 3
-    assert restored.selected_period == 2
-    assert restored.report_scope == "Cumulative"
-    assert restored.selected_firm == "firm_b"
-    assert restored.draft_households[0].consumption_target == 1.25
-    assert restored.periods[0].households[0].consumption_target == .5
-    assert all(
-        firm.investment_policy == "percentage" and firm.required_return == .05
-        for firm in (*restored.draft_firms, *restored.periods[0].firms)
-    )
-    # Independent symmetric-equilibrium benchmark: the target is slack.
-    first = restored.periods[0]
-    consumption = .8 * sqrt(10 / 13)
-    assert first.wage == pytest.approx(13 / 11)
-    assert first.price == pytest.approx((8 / 11) / consumption)
-    assert first.work["household_1"] == pytest.approx(5 / 13)
-    assert first.consumption["household_1"] == pytest.approx(consumption)
-    assert first.closing_cash["household_1"] == pytest.approx(8 / 11)
-    previous = restored.periods[-1]
-    future = advance_period(previous.households, previous.firms, previous)
-    assert _digest(future, legacy=True) == (
-        "31078a50cec4d819ae2a644f1f5704f2671551614256a74371c596e36f90d437"
-    )
-    encoded = dump_experiment(restored, baseline=restored)
-    migrated = json.loads(encoded)
-    assert migrated["format_version"] == 5
-    assert migrated["engine_version"] == "tiny-economy-3.0.0"
-    assert migrated["current"]["run"]["period_digests"] != json.loads(
-        fixture.read_bytes(),
-    )["current"]["run"]["period_digests"]
-    reopened = load_experiment(encoded)
-    assert reopened.current == reopened.baseline == restored
-    assert advance_period(
-        reopened.current.periods[-1].households,
-        reopened.current.periods[-1].firms,
-        reopened.current.periods[-1],
-    ) == future
+@pytest.mark.parametrize("data", [
+    b"", b"not json", b"null", b"[]", b"{", b"\xff", b"{}",
+    '["' + "x" * MAX_FILE_BYTES + '"]',
+    "[" * 1500 + "0" + "]" * 1500,
+    '{"format":"tiny-economy-experiment","format":"duplicate"}',
+    '{"number":NaN}', '{"number":Infinity}',
+])
+def test_malformed_oversized_or_nonfinite_files_are_rejected(data):
+    with pytest.raises(ExperimentError):
+        load_experiment(data)
 
 
-def test_legacy_hash_keeps_other_fields_named_like_the_new_policy_fields():
-    period = experiment(1).periods[0]
-    changed_check = replace(period, checks={**period.checks, "investment_policy": False})
-    changed_solution = replace(period, solution={**period.solution, "required_return": .9})
-    assert _digest(period, legacy=True) != _digest(changed_check, legacy=True)
-    assert _digest(period, legacy=True) != _digest(changed_solution, legacy=True)
+def test_utf8_byte_limit_applies_to_unicode_text():
+    data = '"' + "α" * (MAX_FILE_BYTES // 2) + '"'
+    assert len(data) < MAX_FILE_BYTES and len(data.encode()) > MAX_FILE_BYTES
+    with pytest.raises(ExperimentError, match="256 KiB"):
+        load_experiment(data)
+
+
+@pytest.mark.parametrize("count", [0, 1, 99, 101])
+def test_saved_run_requires_entire_plan(payload, count):
+    rows = payload["current"]["run"]["periods"]
+    payload["current"]["run"]["periods"] = (rows + [rows[-1]])[:count]
+    with pytest.raises(ExperimentError, match="complete 100-period plan"):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("value", [True, 1.0, 0, 2])
+def test_period_numbers_are_exact_consecutive_integers(payload, value):
+    payload["current"]["run"]["periods"][0]["number"] = value
+    with pytest.raises(ExperimentError, match="numbered consecutively"):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("field", [field.name for field in fields(Period) if field.name != "number"])
+def test_every_saved_quantity_is_checked_against_replay(payload, field):
+    payload["current"]["run"]["periods"][-1][field] += .001
+    with pytest.raises(ExperimentError, match="could not be reproduced"):
+        load_experiment(json.dumps(payload))
+
+
+@pytest.mark.parametrize("value", [True, False, None, "1", 1e309])
+def test_saved_period_values_reject_nonfinite_non_numeric_values(payload, value):
+    payload["current"]["run"]["periods"][0]["capital"] = value
+    with pytest.raises(ExperimentError):
+        load_experiment(json.dumps(payload))
+
+
+def test_small_rounding_difference_is_accepted_but_never_installed(payload, run):
+    saved = payload["current"]["run"]["periods"][-1]
+    saved["capital"] += 1e-12
+    restored = load_experiment(json.dumps(payload))
+    assert restored.current.run.periods == run.periods
+    assert restored.current.run.periods[-1].capital != saved["capital"]
+
+
+def test_mutated_active_settings_without_matching_plan_are_rejected(payload):
+    payload["current"]["run"]["settings"]["beta"] = .9
+    with pytest.raises(ExperimentError, match="could not be reproduced"):
+        load_experiment(json.dumps(payload))
+
+
+def test_entire_baseline_schema_is_validated_before_any_solve(payload, monkeypatch):
+    calls = []
+    monkeypatch.setattr(experiments, "simulate", lambda settings: calls.append(settings))
+    payload["baseline"]["run"]["periods"][-1]["capital"] = True
+    with pytest.raises(ExperimentError):
+        load_experiment(json.dumps(payload))
+    assert calls == []
+
+
+def test_bad_baseline_after_good_current_replay_cannot_partially_replace_state(payload, run):
+    state = {}
+    workspace.initialize(state)
+    state.update(
+        te_name="Existing", te_run=run, te_visible_periods=21, te_selected_period=8,
+        te_draft=Settings(beta=.8), te_scope="Cumulative", te_view="Ask why",
+        te_baseline=Baseline(run, 4, "Kept"),
+    )
+    snapshot = dict(state)
+    payload["baseline"]["run"]["periods"][-1]["firm_cash"] += .1
+    assert not restore_experiment(state, json.dumps(payload))
+    assert {key: value for key, value in state.items() if key != "te_error"} == {
+        key: value for key, value in snapshot.items() if key != "te_error"
+    }
+    assert "could not be reproduced" in state["te_error"]
+
+
+def test_replay_solver_failure_is_atomic(payload, monkeypatch):
+    state = {}
+    workspace.initialize(state)
+    state["te_name"] = "Do not replace"
+    snapshot = dict(state)
+
+    def fail(_):
+        raise SimulationError("This regime is not supported.")
+
+    monkeypatch.setattr(experiments, "simulate", fail)
+    assert not restore_experiment(state, json.dumps(payload))
+    assert {key: value for key, value in state.items() if key != "te_error"} == {
+        key: value for key, value in snapshot.items() if key != "te_error"
+    }
+
+
+@pytest.mark.parametrize("visible", [True, 0, 101, 1.0])
+def test_baseline_visible_count_is_strict(payload, visible):
+    payload["baseline"]["visible_periods"] = visible
+    with pytest.raises(ExperimentError):
+        load_experiment(json.dumps(payload))
+
+
+def test_baseline_requires_a_completed_run(payload):
+    payload["baseline"]["run"] = None
+    with pytest.raises(ExperimentError, match="completed plan"):
+        load_experiment(json.dumps(payload))
+
+
+def test_setting_snapshot_has_no_legacy_hidden_parameters(run):
+    payload = json.loads(dump_experiment(Experiment("Current", Settings(), run, 1)))
+    assert set(payload["current"]["run"]["settings"]) == set(asdict(Settings()))
+    assert len(payload["current"]["run"]["settings"]) == 6

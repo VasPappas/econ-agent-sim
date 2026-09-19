@@ -1,276 +1,190 @@
-"""Built-in explanations of the current economy and its accounts."""
+"""Deterministic explanations of the current forward-looking economy."""
+
+from econ_agent_sim.reporting import build_report
 
 MODEL_PASSPORT = (
-    "Households choose consumption, closing money and leisure for the current "
-    "period. They do not forecast or optimize lifetime utility. Relative "
-    "preference scores form Cobb–Douglas-style log utility, with a custom smooth "
-    "urgency term below an optional consumption target. Two price-taking firms "
-    "share one goods price and one wage. Markets clear each period; firm payroll "
-    "must be funded from cash before current sales. Firms either reinvest a "
-    "fixed share of output value minus wages, before wear, or choose investment "
-    "within that share's budget using a conditional user-cost rule. That rule "
-    "holds prices, wage and payroll cash unchanged when comparing expected "
-    "marginal returns with required return plus wear. This is not an optimized "
-    "lifetime investment plan. New capital works next period. Dividends pay "
-    "preceding-period positive net profit only when cash exceeds the firm's "
-    "initial operating float. Household ownership shares are equal and fixed. "
-    "Money and capital carry forward. There is no borrowing, money creation, "
-    "unemployment from rationing or unsold inventory. These textbook building "
-    "blocks and explicit custom rules make a teaching model, not a forecast."
+    "Two identical households and two identical price-taking firms share one good "
+    "and one wage. Households plan consumption, work and money saving over an "
+    "infinite horizon. Firms choose investment and owner distributions using their "
+    "owners’ valuation of future income. The model uses log consumption, log "
+    "leisure and log real money balances, with Cobb–Douglas production. These are "
+    "textbook ingredients with explicit financing restrictions: firms pay "
+    "dividends and wages before sales, invest their own output and cannot borrow "
+    "or resell capital. Total money is fixed at 1; each household owns half of "
+    "each firm. Capital and cash carry forward. Prices and choices form a "
+    "deterministic perfect-foresight equilibrium: everyone’s forecasts agree with "
+    "the solved path. This is not a simulation of learning or proof of "
+    "self-regulation. The solver supports zero investment and zero dividends, "
+    "but paths requiring firms to retain unspent opening cash are unsupported. "
+    "There are no banks, shocks, inventory, unemployment through rationing or "
+    "heterogeneity. This is an illustrative teaching model, not a calibrated forecast."
+)
+
+QUESTIONS = (
+    "What does this model assume?",
+    "How do households plan ahead?",
+    "How do firms choose investment?",
+    "Why can investment or dividends be zero?",
+    "How do payments stay funded?",
+    "What can a wage buy?",
+    "Why did capital change?",
+    "Who owns the firms?",
+    "Why are profit, cash and capital value different?",
+    "How should I read cumulative results?",
+    "Why are the households and firms identical?",
+    "Does this show a self-regulating economy?",
+    "What do the controls mean?",
+    "Why can a set of settings be unsupported?",
 )
 
 
 def amount(value: float, places: int = 4) -> str:
-    """Show meaningful small values without rounding them to a false zero."""
-    if value == 0:
-        return f"{0:.{places}f}"
-    if abs(value) < 10 ** -places or abs(value) >= 1e9:
+    """Keep small nonzero values distinguishable from an economic boundary."""
+    if value and (abs(value) < 10 ** -places or abs(value) >= 1e9):
         return f"{value:.3e}"
     return f"{value:,.{places}f}"
 
 
-def _market_explanations(period, report: dict) -> dict[str, str]:
-    scope = report["label"]
-    firms = report["firms"]
-    economy = report["economy"]
-    sales = "; ".join(
-        f"{firm['name']} produced {amount(firm['produced_x'])} X, sold "
-        f"{amount(firm['sold_x'])} X and supplied {firm['sales_share']:.1%} of sales"
-        for firm in firms
-    )
-    constrained = [
-        account.name for account in period.firm_accounts.values()
-        if account.funding_binding
-    ]
-    funding = (
-        f"In Period {period.number}, available cash limits hiring at "
-        f"{', '.join(constrained)}. "
-        if constrained else
-        f"In Period {period.number}, cash does not restrict either firm's desired hiring. "
-    )
-    dividends = "; ".join(
-        f"{account.name}: {amount(account.next_dividend_budget)} Money"
-        for account in period.firm_accounts.values()
-    )
-    capital = "; ".join(
-        f"{firm['name']}: {amount(firm['capital_open'])} opening capital + "
-        f"{amount(firm['investment_quantity'])} added − "
-        f"{amount(firm['depreciation_quantity'])} worn out = "
-        f"{amount(firm['capital_close'])} closing capital"
-        for firm in firms
-    )
-    return {
-        "Why do both firms pay the same wage?": (
-            f"In Period {period.number}, the common wage is {amount(period.wage)} "
-            f"Money per work unit and X costs {amount(period.price)} Money. "
-            "Both firms hire the same kind of labor and sell the same good. "
-            "Households have no preference for a particular employer or seller. "
-            "The model finds a wage and price that clear both markets together; "
-            "each firm takes them as given when choosing how much work to hire. "
-            "It does not model wage bargaining or rival firms setting prices. "
-            "A work unit is one household working for a full period."
-        ),
-        "Why does one firm sell more?": (
-            f"For {scope}: {sales}. Productivity, opening capital and available "
-            "payroll cash affect how much each firm produces. Its reinvestment "
-            "policy affects how much is left to sell. Households divide their "
-            "purchases in proportion to each firm's goods available for sale. "
-            "This is an allocation rule for identical goods, not brand loyalty. "
-            "A larger sales share alone does not establish better household welfare."
-        ),
-        "Why are production and sales shares different?": (
-            "Produced X includes goods the firm keeps as its own new capital. "
-            "Sold X includes only household purchases. Share of sales means "
-            "the firm's sold X divided by all firms' sold X. For example, equally "
-            "productive and capitalized firms satisfying the unconstrained hiring "
-            "condition can produce equal output but sell 40% and 60% of household "
-            "purchases when their fixed-percentage reinvestment policies are 80% and 20%. "
-            "In cumulative reports, shares divide summed physical sales; they "
-            "are not averages of period percentages or shares of cumulative Money receipts."
-        ),
-        "Why might a more productive firm not hire more?": (
-            funding + "Every firm must pay wages from its own cash after dividends, "
-            "before receiving this period's sales. It cannot borrow or use the "
-            "other firm's money. Productivity also changes the common market "
-            "price and households' work choices, so more productivity does not "
-            "guarantee more work or a higher nominal wage. A binding funding limit "
-            "can stop hiring while an extra unit of labor would still be profitable."
-        ),
-        "What can a wage buy?": (
-            f"In Period {period.number}, one work unit earns {amount(period.wage)} "
-            f"Money. At {amount(period.price)} Money per X, that buys "
-            f"{amount(period.wage / period.price)} X. A falling Money wage can "
-            "still buy more if the price of X falls faster. These are the selected "
-            "period's rates, even in cumulative view; prices and wages are never "
-            "added across periods. Household outcomes also depend on work, "
-            "leisure, ownership income and their own priorities."
-        ),
-        "Where does new capital come from?": (
-            f"In {scope}, firms produced {amount(economy['produced_x'])} X. "
-            f"Households consumed {amount(economy['consumed_x'])} X and firms "
-            f"installed {amount(economy['investment_quantity'])} X as capital. "
-            "Each firm retains some of its own output; it does not pay itself "
-            "or buy capital from the other firm. The percentage policy invests "
-            "a fixed share of output value minus wages, before capital wear. "
-            "The user-cost policy treats that share as an investment budget and "
-            "may invest less. Neither share is applied to all output or net profit. "
-            "New capital becomes productive next period."
-        ),
-        "Why did capital change?": (
-            f"For {scope}: {capital}. Capital grows when additions exceed wear. "
-            "Wear applies to each period's opening capital. Reinvestment and wear "
-            "percentages use different bases, so equal percentages do not keep "
-            "capital constant. More actual investment keeps more goods from "
-            "current consumption and does not guarantee higher long-run consumption. "
-            "Raising the user-cost budget can leave investment unchanged when "
-            "expected returns already limit the chosen amount."
-        ),
-        "Who receives each firm's dividends?": (
-            f"Each of the {len(period.households)} households owns an equal share "
-            "of each firm. Every firm decides its dividend separately: it is "
-            "limited to the preceding period's positive net profit and cash above "
-            "that firm's original operating float. A loss at one firm does not "
-            "block the other firm's eligible dividend. Past retained losses "
-            "remain recorded but do not veto a later funded profit dividend. "
-            f"After Period {period.number}, the next dividend budgets are "
-            f"{dividends}. These are future budgets, not cumulative payments. "
-            "First-period dividends are zero."
-        ),
-        "Why are profit, cash and capital value different?": (
-            "Cash sales minus wages is cash operating surplus. Profit also "
-            "includes the value of output retained as new capital and deducts "
-            "capital wear. These capital flows are not Money payments. Capital "
-            "is valued at the current price of X; a price change creates a "
-            "separate holding gain or loss, not operating profit or spendable "
-            "cash. Ownership values are claims on those same firm assets, so "
-            "the whole-economy accounts eliminate them rather than counting them twice."
-        ),
-        "How should I read cumulative results?": (
-            f"You are viewing {scope}. Cumulative production, consumption, wages, "
-            "profit and dividends add the actual flows from the included periods. "
-            "Money flows retain each period's original prices. Cash and capital "
-            "show the first opening and selected closing stocks. Firm work is "
-            "summed in work-periods; household work and leisure percentages are "
-            "averages. Price, wage, hiring limits and next dividend budgets refer "
-            "only to the selected period."
-        ),
-        "How do household priorities work?": (
-            "Consume, Keep money and Leisure are relative importance scores. "
-            "For example, 2 : 1 : 1 gives consumption twice the weight of either "
-            "other goal. Multiplying all three scores by the same number changes "
-            "nothing. They are not fixed spending or time percentages. Households "
-            "choose consumption, work and closing Money at the current price and "
-            "wage. A stronger consumption preference can also induce more work. "
-            "Scores stay fixed; a separate smooth term adds urgency only below "
-            "the consumption target. Ownership value is not spendable cash."
-        ),
-    }
-
-
-
-def built_in_explanations(period, report):
-    economy = report["economy"]
+def explain(question: str, run, period_number: int, cumulative: bool = False) -> str:
+    """Explain actual selected results without external services or invented data."""
+    if question not in QUESTIONS:
+        raise ValueError("Choose one of the built-in economic questions.")
+    report = build_report(run, period_number, cumulative)
+    economy, firm, household = report["economy"], report["firms"][0], report["households"][0]
+    row = run.periods[period_number - 1]
+    settings = run.settings
     answers = {
-        "How does my consumption target work?": (
-            "The target is an amount of X per household per period. Below it, "
-            "an extra unit of consumption becomes more valuable as the gap grows. "
-            "The household chooses work, consumption and closing money together; "
-            "money and leisure still matter. At or above the target, the extra "
-            "urgency disappears. A target of zero switches this feature off. "
-            "This is a flexible target, not a guaranteed minimum or Stone–Geary utility."
+        QUESTIONS[0]: MODEL_PASSPORT,
+        QUESTIONS[1]: (
+            "Each household balances consumption and leisure today against future "
+            "consumption, leisure and the services of its liquid money. A higher "
+            "patience factor gives future utility more weight. Money saving is "
+            "the change in household cash; it is not a loan to firms. Owners also "
+            "benefit from investment through their fixed ownership claims and "
+            "future payouts. "
+            f"In {report['label']}, each household consumes {amount(household['consumed_x'])} "
+            f"X and its cash changes by {amount(household['net_cash_change'])} Money."
         ),
-        "Why can a household fall below its target?": (
-            "A target changes preferences; it does not create goods or income. "
-            "Prices, wages, available capital, firm funding and the household's "
-            "priorities still determine consumption. A household may choose "
-            "some money and leisure while consuming below its target. "
-            "Accounting checks can all pass even when targets are not met."
+        QUESTIONS[2]: (
+            "A firm chooses how much of its output to retain as capital by comparing "
+            "the value of future owner distributions with resources forgone today. "
+            "It considers capital wear, future prices, wages and cash funding. "
+            "Both households agree on those valuations because they are identical. "
+            "There is no separate hurdle-rate control or fixed investment percentage. "
+            f"In Period {period_number}, each firm invests {amount(row.investment)} X; "
+            f"wear removes {amount(settings.depreciation * row.capital)} capital units. "
+            "Installed capital works from the next period."
         ),
-        "How are target gaps counted?": (
-            f"In {report['label']}, household targets add to "
-            f"{amount(economy['needed_x'])} X and target gaps add to "
-            f"{amount(economy['shortfall_x'])} X. Each household's target gap is "
-            "the positive gap between its target and actual consumption in that "
-            "period. Extra consumption by another household, or in a later "
-            "period, never cancels that gap. Cumulative target gaps are a record, "
-            "not a debt and not extra demand carried into the next period."
+        QUESTIONS[3]: (
+            "Investment cannot be negative: firms cannot sell their installed capital. "
+            "A firm may choose zero investment while existing capital wears down. "
+            "Dividends cannot be negative either, so a firm may suspend them while "
+            "using cash for wages. These are allowed choices, not automatic failures. "
+            f"In Period {period_number}, each firm’s investment is {amount(row.investment)} "
+            f"X and dividend is {amount(row.distribution)} Money. Dividends are owner "
+            "distributions and need not equal current or previous accounting profit."
+        ),
+        QUESTIONS[4]: (
+            "Each firm first pays dividends from opening cash, then pays wages, "
+            "then receives household purchases. Households receive dividends and "
+            "wages before buying goods. Each household works half its hours for "
+            "each firm, buys half its consumption from each, and receives half "
+            "each firm’s dividend. Every payment moves existing money; none creates "
+            "a loan or a new deposit. Total cash remains 1 Money. "
+            f"In Period {period_number}, each firm opens with {amount(row.firm_cash)}, "
+            f"pays {amount(row.distribution)} in dividends and "
+            f"{amount(row.money_wage * row.labor)} in wages, then receives "
+            f"{amount(row.goods_price * row.consumption)} from sales."
+        ),
+        QUESTIONS[5]: (
+            f"In Period {period_number}, one full household-period of work earns "
+            f"{amount(report['wage'])} Money. X costs {amount(report['price'])} Money, "
+            f"so that wage buys {amount(report['real_wage'])} X. Actual work is a "
+            "fraction of a full period. A nominal wage alone does not describe "
+            "purchasing power. Price and wage always describe the selected period, "
+            "including in cumulative view."
+        ),
+        QUESTIONS[6]: (
+            f"For each firm in {report['label']}: {amount(firm['capital_open'])} "
+            f"opening capital + {amount(firm['investment_quantity'])} investment − "
+            f"{amount(firm['depreciation_quantity'])} wear = "
+            f"{amount(firm['capital_close'])} closing capital. Wear applies to each "
+            "period’s opening stock. Retaining output as investment leaves less "
+            "for household consumption today. It transfers no money to another "
+            "firm and is distinct from purchasing an existing asset."
+        ),
+        QUESTIONS[7]: (
+            "Each household owns 50% of each firm, throughout the run. Because "
+            "there are two identical firms, one household’s combined ownership "
+            "claim equals one whole firm’s book equity. "
+            f"At the close of Period {period_number}, this is "
+            f"{amount(household['ownership_value_close'])} Money per household. "
+            "That claim cannot be spent, sold or borrowed against. Whole-economy "
+            "assets count cash and physical capital once, eliminating the duplicate "
+            "ownership claims. Book equity is not a traded share price or the "
+            "solver’s shadow valuation."
+        ),
+        QUESTIONS[8]: (
+            "Operating profit equals the current-price value of all output, "
+            "minus wages and capital wear. Output kept as investment is included "
+            "in that value but creates no sales receipt. Cash changes with sales, "
+            "wages and dividends. Capital is valued at the current goods price; "
+            "a price change produces a separate holding gain or loss, never cash "
+            "or operating profit. Each firm’s book equity changes by profit minus "
+            "dividends plus holding gains. "
+            f"For each firm in {report['label']}, profit is "
+            f"{amount(firm['net_operating_profit'])} and holding gain is "
+            f"{amount(firm['holding_gain'])} Money. Initial opening capital is "
+            "valued at the first solved price; later opening values use the "
+            "previous period’s price."
+        ),
+        QUESTIONS[9]: (
+            f"You are viewing {report['label']}. Production, consumption, investment, "
+            "wear, wages, dividends and profits add the actual flows in the selected "
+            "range. Each monetary flow keeps its original period price. Cash and "
+            "capital show the first opening and selected closing stock; stocks "
+            "are never summed. Household work and leisure are period averages. "
+            "Prices and wages belong to the selected closing period. Firm and "
+            "household cards are per entity; the economy totals include both. "
+            f"Economy consumption in this range is {amount(economy['consumed_x'])} X."
+        ),
+        QUESTIONS[10]: (
+            "This first dynamic model deliberately uses two identical households "
+            "and two identical firms. Each entity’s decisions are therefore the "
+            "same, while separate accounts show who pays and receives money. "
+            "There is one common goods price and wage, no brand preference or "
+            "bargaining, and equal fixed ownership. This symmetry also gives the "
+            "owners a common valuation of future payouts. It does not model "
+            "inequality, business rivalry or different household circumstances."
+        ),
+        QUESTIONS[11]: (
+            "It shows a competitive equilibrium under perfect foresight: choices "
+            "are jointly solved so markets clear and expected outcomes match "
+            "the resulting path. It does not show prices discovering equilibrium "
+            "through trial and error, firms learning, or an economy recovering "
+            "from unexpected shocks. Convergence on a displayed path is not proof "
+            "of stability under a decentralized adjustment process. Those "
+            "mechanisms require separate future modeling choices."
+        ),
+        QUESTIONS[12]: (
+            "Four structural parameters govern behavior: patience weights future "
+            "utility, depreciation removes a fraction of opening capital each "
+            "period, leisure weight measures its utility relative to consumption, "
+            "and money weight measures the service value of real cash balances. "
+            "The other two inputs set starting capital per firm and the firms’ "
+            "combined share of the fixed 1 Money stock. They are initial conditions, "
+            "not ongoing rules. Productivity is fixed at 1 and the production "
+            "capital exponent at 0.5. A period has no calibrated calendar length."
+        ),
+        QUESTIONS[13]: (
+            "The current solver checks equilibrium conditions along a long "
+            "transition and checks agreement after extending that horizon. It "
+            "supports zero investment and zero dividends, but currently requires "
+            "each firm’s opening cash to be fully used for dividends and payroll. "
+            "If the optimum requires retaining some opening cash, that regime is "
+            "explicitly unsupported. Numerical convergence can also fail. Neither "
+            "case is reported as an economic collapse or replaced by an invented "
+            "path. Change the settings to obtain a supported, verified experiment."
         ),
     }
-    market_answers = _market_explanations(period, report)
-    market_answers["How should I read cumulative results?"] += (
-        " Consumption targets and target gaps are counted separately for every "
-        "household and period. They are physical X quantities, not money flows."
-    )
-    answers.update(market_answers)
-    answers["How do the investment policies differ?"] = (
-        "Fixed percentage invests the chosen share of output value after wages, "
-        "before wear. Forward-looking user cost makes that share a maximum "
-        "investment budget. It compares the expected extra operating surplus "
-        "from one more capital unit with required return plus depreciation. "
-        "Expected prices, wage and payroll cash stay at current levels; future "
-        "hiring is chosen subject to that cash constraint. These conditional "
-        "expectations can be wrong when the next period's market clears. "
-        "Required return is an assumed opportunity cost, not paid interest. "
-        "Investment still uses the firm's own output, and there is no borrowing. "
-        "Several equally worthwhile investment amounts may exist; the model "
-        "selects among them to clear the current goods market. Households still "
-        "make current-period choices, so this is not a joint lifetime plan."
-    )
-    decisions = []
-    reasons = {
-        "returns_below_cost": "Expected returns do not justify adding capital.",
-        "budget_limited": "The investment budget limits the chosen addition.",
-        "interior": "Expected marginal return meets user cost at the chosen capital.",
-        "indifferent": (
-            "Several investment amounts earn the same forecast score; "
-            "this amount clears the goods market."
-        ),
-    }
-    for firm in report["firms"]:
-        decision = firm.get("investment_decision")
-        if decision is None:
-            continue
-        decisions.append(
-            f"{firm['name']}: invested {amount(decision['investment_quantity'])} X "
-            f"from a maximum budget of {amount(decision['investment_budget_quantity'])} X. "
-            f"Wear to replace was {amount(decision['replacement_quantity'])} X. "
-            "At the chosen closing capital, expected marginal return was "
-            f"{amount(100 * decision['expected_marginal_return'])}% and user cost "
-            f"was {amount(100 * decision['user_cost'])}% "
-            "(required return plus wear). "
-            + reasons.get(decision["reason"], "Investment follows the user-cost rule.")
-        )
-    if decisions:
-        answers["Why did firms choose this investment?"] = (
-            f"These decisions describe Period {period.number}, including in a "
-            "cumulative report. Forecasts are not summed across periods. "
-            + " ".join(decisions)
-            + " Forecasts hold prices, wage and payroll cash unchanged. "
-            "Replacement is a comparison with actual wear, not a mandatory "
-            "minimum: capital can shrink when investment is below wear."
-        )
-    answers["What does this model assume?"] = MODEL_PASSPORT
-    candidates = period.solution.get("candidate_count", 1)
-    reference = (
-        "the previous period's price" if period.number > 1
-        else "the clearing price for the same economy with consumption targets off"
-    )
-    answers["Can there be more than one clearing price?"] = (
-        f"For Period {period.number}, the search found {candidates} candidate "
-        "clearing price(s). Strongly different household preferences and targets "
-        "can allow several prices to satisfy the model's market conditions. "
-        f"The run selects the candidate closest in proportional terms to {reference}. "
-        "A numerical tie selects the lower price. This is an explicit selection "
-        "convention, not a proof of economic stability. The search samples a "
-        "range of prices and can miss additional roots; finding one candidate "
-        "does not establish uniqueness. With all targets off, the model uses "
-        "its analytical target-free solution."
-    )
-    answers["Why did setting a target change nothing?"] = (
-        "If the ordinary choice already reaches the target, no extra urgency "
-        "is needed and the result is unchanged. The default 0.50 X target is "
-        "below default first-period consumption. Try raising one target to "
-        "1.00 X and compare with a saved baseline. A target of zero reproduces "
-        "ordinary consumption–money–leisure preferences."
-    )
-    return answers
+    return answers[question]

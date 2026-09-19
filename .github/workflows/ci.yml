@@ -16,7 +16,6 @@ jobs:
       - run: python -c "import streamlit; import econ_agent_sim"
       - run: ruff check .
       - run: pytest -q
-      - run: node --test tests/test*component.cjs
       - name: Smoke-test Streamlit server
         run: |
           streamlit run app/streamlit_app.py \

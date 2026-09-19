@@ -1,136 +1,95 @@
-# Tiny Economy — model and accounting
+# The current Tiny Economy model
 
-## Scope and building blocks
+Model `tiny-economy-monetary-1`; engine `tiny-economy-4.0.0`.
+The app runs one symmetric, deterministic monetary growth model. Its full
+specification and numerical acceptance rules are in
+[monetary_foundation.md](monetary_foundation.md) and
+[monetary_boundaries.md](monetary_boundaries.md).
 
-A deterministic sequence of static market-clearing periods: households choose
-consumption, liquid money and leisure; exactly two price-taking firms hire labor
-and produce one homogeneous good X with their own capital. There is one wage w
-and one X price p. Households own equal, fixed shares in each firm.
+## People, firms and inputs
 
-Cobb–Douglas preferences and production are textbook building blocks. Direct
-utility from money, soft consumption targets, cash-funded payroll and fixed
-investment budgets/dividend rules are additional explicit teaching assumptions. This is
-not a calibrated forecasting model, strict Stone–Geary subsistence, strategic
-duopoly or a forward-looking growth equilibrium.
+There are two identical households and two identical price-taking firms.
+Each household owns half of each firm. Firms own productive capital. One good X
+serves consumption and investment; productivity and total money are normalized
+to one, and the capital exponent is fixed at 0.5. No population, interest-rate,
+investment-propensity or dividend-percentage control is required.
 
-## Household choice
+| Input | Default | App range | Meaning |
+| --- | ---: | ---: | --- |
+| `beta` | 0.95 | 0.50–0.99 | Weight on next period's utility |
+| `depreciation` | 0.10 | 0.01–1 | Capital wear per period |
+| `leisure_weight` | 1 | 0.05–10 | Leisure relative to consumption |
+| `money_weight` | 0.05 | 0.001–5 | Service value of real closing money |
+| `initial_capital` | 1 | 0.01–1000 | Capital per firm |
+| `initial_firm_cash_share` | 0.50 | 0.01–0.99 | Firms' fraction of the fixed money stock |
 
-Normalize positive priority scores into a+d+g=1. Work is l in [0,1); leisure is
-1-l. Each household solves:
+These are four structural parameters and two starting conditions. Ranges are
+interactive input limits, not a claim that every combination is solvable.
+Percentages in the UI are converted to fractions in the model and saved files.
+One period has no assigned calendar frequency; defaults are illustrative.
 
-```text
-max a ln(C) + d ln(M) + g ln(1-l) - phi(C,b)
-subject to p C + M = available_cash + w l
-C > 0, M > 0, 0 <= l < 1
+## Joint forward-looking choices
 
-phi(C,b) = C/b - 1 - ln(C/b)   if 0 < C < b
-           0                  if b=0 or C>=b
-```
+A household maximizes the discounted sum of
+`log(c) + leisure_weight*log(1-l) + money_weight*log(h_next/p)`.
+Its money budget is `h_next = h + W*l + dividends - p*c`.
+Work, spending and cash saving are chosen together. Ownership value is not
+spendable money, and households cannot lend to firms or trade their shares.
 
-b is its per-period consumption target. Penalty strength is fixed at 1. Below b,
-marginal utility of consumption is a/C + 1/C - 1/b; otherwise a/C. The penalty
-and its first derivative join continuously at b. Base priorities do not change.
-A shortfall is not debt and does not accumulate into subsequent preferences.
+A firm produces `Y=sqrt(K*L)`, retains `I` units as investment, and carries
+`K_next=(1-depreciation)*K+I` into the next period. Investment and dividends are
+nonnegative. It maximizes owner distributions using the same marginal-utility
+valuation of future money as its identical household owners. It faces
+`D+W*L <= F` before sales, and closes with `F_next=F-D-W*L+p*(Y-I)`.
+There is no prescribed investment share, payout ratio, protected original-cash
+reserve or separate user-cost interest rate.
 
-Available cash is carried money plus this period's dividends. Money is valued
-directly, not through forecasts of future purchases. At an interior optimum,
-MU_C=p MU_M and w MU_M=MU_leisure. At zero work the latter becomes an inequality.
-All bought X is consumed; there is no household goods storage.
+The implemented regime allows zero investment and zero dividends while verifying
+that opening funding binds optimally. Cases where positive unused opening cash
+would be optimal are rejected as unsupported. That message does not mean no
+equilibrium exists. Other numerical failures are also reported without a partial run.
 
-## Firm choice and policies
+## Timing and settlement
 
-For each firm independently:
+1. Firms enter with cash and capital, then pay funded dividends.
+2. Firms pay wages from remaining opening cash; households supply work.
+3. Firms produce; households purchase consumption goods; retained output becomes investment.
+4. Opening capital depreciates and new capital becomes available next period.
 
-```text
-Q = A sqrt(K L)
-w L <= post_dividend_cash
-Percentage policy: I = theta (p Q - w L) / p
-Forward-looking policy: choose 0 <= I <= theta (p Q - w L) / p
-sold_X = Q - I
-next_K = (1-delta) K + I
-```
+Every monetary transfer has a funded payer and recipient. Retaining output and
+wearing out capital are physical events, not cash payments. Total money remains
+one; total output equals consumption plus investment. There are no loans,
+money creation, inventories, capital resale, external finance or shocks.
 
-K is opening capital, A productivity, theta the reinvestment fraction and delta wear.
-At fixed prices firms maximize gross production surplus pQ-wL subject to funded
-payroll. An unconstrained firm hires until p Q/(2L)=w. Funding can bind sooner.
-The percentage policy reinvests a share of gross surplus, not total output or net profit.
-Forward-looking firms maximize a conditional neoclassical user-cost criterion
-for next capital. The same fraction becomes their maximum investment budget;
-expected capital returns, required return and wear determine how much they use.
-Prices, real wages and real payroll funds are forecast unchanged.
-See [the complete decision and assumptions](forward_investment.md).
-Investment retains the firm's own output: no self-sale or cash investment payment.
-New capital first produces and depreciates in the next period.
+## Accounts and values
 
-At the start of a period, each firm's dividend is:
-
-```text
-min(max(previous_net_profit, 0),
-    max(opening_cash - original_operating_float, 0))
-```
-
-The first period pays zero. The original float is a dividend protection rule,
-not a cash reset or outside injection. Historical retained losses do not veto a
-later positive, funded dividend. Household ownership shares remain fixed.
-
-## Clearing and settlement
-
-1. Carry money and capital from the previous immutable snapshot.
-2. Pay eligible dividends from each firm's own cash.
-3. Solve household choices, labor clearing and goods clearing jointly.
-4. Pay funded wages, record production and purchases, consume household X,
-   and record depreciation and own-output investment.
-5. Reconcile cash, physical flows and financial accounts before accepting the period.
-
-A household's work is allocated in proportion to firms' labor demand. Purchases
-are allocated in proportion to each firm's sold X. Labor-service and goods
-deliveries pair with reverse money transfers; dividends only transfer money.
-There is no cash pooling between firms, borrowing or money creation.
-
-Percentage-only runs with zero targets use the analytical active-set clearing
-path. Positive targets or forward-looking investment use bounded candidate
-detection, including genuine investment indifference intervals. More than one
-valid clearing outcome can exist:
-period 1 selects the candidate closest in log price to the otherwise identical
-target-free percentage-policy reference, later periods the closest to the previous price; lower
-price wins numerical ties. See [market_selection.md](market_selection.md) for
-reproduction and finite-scan limitations. This is not a simulated adjustment
-process, completeness guarantee or stability result.
-
-## Accounting
-
-Output value=pQ=cash sales+pI. Gross operating surplus=pQ-wL.
-Net operating profit=pQ-wL-p delta K. Positive cash surplus can coexist with
-negative profit when depreciation is large.
-
-Capital uses current replacement cost. Period-1 opening capital uses p1.
-In later periods holding gain=(p-p_previous) times opening K. It is separate from
-operating profit. Equity is cash plus capital value:
+Per-firm book equity is cash plus capital at the goods replacement price. This
+is not the solver's shadow value or a traded equity price. Period 1 opening
+capital uses period 1's price. Thereafter, opening capital is carried at the
+previous period's price and revalued separately:
 
 ```text
-closing_equity - opening_equity
-    = net_operating_profit - dividends_paid + holding_gain
+Operating profit = p*Y - W*L - depreciation*p*K
+Holding gain = (p - previous_p)*K
+Closing equity = opening equity + operating profit - dividends + holding gain
 ```
 
-Households show cash plus claims on both firms. Consolidation eliminates those
-claims against firm equity; never double-count them as extra economy assets.
-Retained earnings preserve all prior profits and losses.
+Cumulative flows keep their original dates and prices. Opening/closing stocks
+are not summed; work and leisure fractions are averaged. Household ownership
+claims equal firm equity and are eliminated in economy consolidation. Total
+book assets are total money plus capital replacement value, without double counting.
 
-Cumulative flows add their original-period nominal amounts. They are not
-revalued at the final price. Stocks use first opening and selected closing;
-prices/wages are selected-period rates. Work/leisure percentages average, while
-firm labor and physical production sum. Sales shares use total physical sold X.
-Target gaps sum max(target-consumption,0) for each household-period; excess in
-one household or period cannot offset another's gap. Coverage caps each
-consumption contribution at its own target. A zero target has no coverage rate.
+## Numerical and economic limits
 
-## Supported experiments and limits
+Start solves all 100 displayable periods with a checked continuation extending
+beyond them. It verifies equations, complementary inequalities, funded settlement,
+longer-horizon agreement and approach to the stationary continuation. Advance
+only reveals the immutable accepted plan. No ending liquidation is imposed at
+period 100. These are numerical acceptance checks, not an exact infinite-horizon
+error bound or a global uniqueness proof.
 
-The app supports 2–20 households, exactly two firms and up to 100 periods per
-portable experiment. Setup scores and policies have finite validated bounds.
-Presets turn off investment, depreciation and/or targets as specified; firms,
-wages and household optimization remain the same model. They are not substitutes
-for historical pure-exchange or one-firm formulations.
-
-There are no banks, debt, interest, government, taxes, shocks, entry, exit,
-bankruptcy, strategic price-setting or optimal lifetime investment decisions.
+Perfect foresight, symmetry, log preferences and market clearing are assumptions.
+Two firms do not introduce strategic competition. The model does not explain
+learning, uncertain expectations, decentralized price discovery, rationing or
+self-regulation. Inventories, financial intermediation, heterogeneity and shocks
+remain future design decisions; exogenous shocks stay postponed.

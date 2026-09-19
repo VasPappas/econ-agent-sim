@@ -1,15 +1,9 @@
-"""Tiny Economy: one auditable household-and-firm simulation."""
+"""Tiny Economy: one forward-looking monetary household-and-firm model."""
 
-from .domain import EconomyPeriod, Firm, Household
-from .engine import advance_period, default_firms, default_households
-from .reporting import build_report
+from .domain import ENGINE_VERSION, MAX_PERIODS, MODEL_ID, Settings
+from .engine import Run, SimulationError, simulate
 
 __all__ = [
-    "EconomyPeriod",
-    "Firm",
-    "Household",
-    "advance_period",
-    "build_report",
-    "default_firms",
-    "default_households",
+    "ENGINE_VERSION", "MAX_PERIODS", "MODEL_ID", "Run", "Settings",
+    "SimulationError", "simulate",
 ]

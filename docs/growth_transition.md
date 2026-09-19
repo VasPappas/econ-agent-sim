@@ -3,15 +3,18 @@
 The isolated reference in `src/econ_agent_sim/textbook_growth.py` now solves
 partial depreciation with endogenous work and leisure. It implements the real
 allocation problem specified in [Step 1](minimal_reference_economy.md). It is a
-verification tool for the project; the current monetary app is unchanged.
+verification tool for the project. The application uses the distinct
+[constrained monetary solver](monetary_boundaries.md), not this frictionless
+allocation reference.
 
 The named foundation is the
 [Cass–Koopmans allocation problem](https://python.quantecon.org/cass_koopmans_1.html),
 with the explicitly stated log-leisure extension. This implementation uses a
 boundary-value method rather than the cited lecture's shooting implementation.
-The separate [monetary specification](monetary_foundation.md) now has a
-[first-regime transition solver](monetary_transitions.md). Its constrained
-monetary equilibrium is not interchangeable with this frictionless reference.
+The [monetary specification](monetary_foundation.md) also has an independent
+[interior transition benchmark](monetary_transitions.md). The application's
+constrained monetary equilibrium is not interchangeable with this frictionless
+reference.
 
 ## Use
 

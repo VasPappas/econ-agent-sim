@@ -3,14 +3,16 @@
 This executable reference implements the model specified in
 [the monetary foundation](monetary_foundation.md) in one deliberately limited
 regime: every firm has a positive owner distribution and strictly interior
-investment in every period. It does not change the application engine or solve
-all possible constrained monetary equilibria.
+investment in every period. It is the independent interior benchmark for the
+application's constrained solver and does not solve all possible constrained
+monetary equilibria.
 
 The [constrained extension](monetary_boundaries.md) now handles zero investment
 and zero distributions when opening funding still binds optimally. The original
 `solve_transition` API documented here remains an interior regression benchmark;
-`solve_constrained_transition` is the separate numerical entry point for those
-boundaries, not another app or alternative economic model.
+`solve_constrained_transition` is the numerical entry point used by the
+application, including those boundaries. Both solve the same specified
+economic model within their supported regimes.
 
 There are two identical households and two identical capital-owning firms. Each
 household owns half of each firm. Production is `Y=K^alpha L^(1-alpha)` with
@@ -325,8 +327,10 @@ uniqueness for the entire monetary economy.
 
 Finally, perfect foresight remains an assumption. This is not a model of
 decentralized price discovery, learning or observed market self-regulation.
-Heterogeneity, finance, inventories and shocks are not introduced by this
-milestone. Application integration remains a separate step after verification.
+Heterogeneity, finance, inventories and shocks are not introduced by the
+application's integration of the constrained solver. Its controls and reports
+retain these assumptions and distinguish unsupported settings from an
+economic collapse.
 
 ## Reproduce the checks
 
