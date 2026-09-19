@@ -1,9 +1,11 @@
 # Step 2 — Saving, investment and funded owner payouts
 
 Status: economic specification, following [Step 1](minimal_reference_economy.md).
-The [first executable monetary regime](monetary_transitions.md) now implements
+The [first executable monetary regime](monetary_transitions.md) implements
 symmetric transitions with positive distributions and interior investment.
-Other constrained regimes remain unimplemented. The running model in `model.md`
+The [constrained extension](monetary_boundaries.md) also permits zero investment
+and distributions, with independently verified binding opening funding.
+Unspent-opening-cash regimes remain unimplemented. The running model in `model.md`
 is unchanged. This document specifies a joint replacement for its household saving,
 conditional investment and prescribed dividend rules; it is not a patch that
 removes individual safeguards from the existing solver.
@@ -305,15 +307,18 @@ Before changing the app:
   household optimality, firm complementarity, terminal treatment and every
   funded transaction in the positive-distribution/interior-investment regime.
   The stationary fixture, dated firm bound and independent tests provide
-  verification. It explicitly rejects unsupported investment/payout boundaries.
+  verification. The constrained extension now handles zero investment and
+  distributions by solving cash/capital values and complementary conditions
+  jointly, rejecting paths where unspent opening cash would instead be optimal.
 - Establish a supported initial-state domain and investigate multiple paths,
   corners, numerical convergence and continuation sensitivity. A stationary
   example does not resolve those transition questions.
 - Integrate the resulting single model only after those checks, with explicit
   saved-file/version handling. Its behavior differs from the present engine.
 
-Both real and first-regime monetary transition references are available
-separately from the application. The next economic implementation question is
-the unresolved payout/investment boundary regimes; integration also requires
-explicit model/version handling. Market adjustment and self-regulation remain
-a later architectural step; shocks remain postponed.
+Real, interior monetary and constrained monetary references are available
+separately from the application. The remaining economic implementation question
+is the unresolved unspent-opening-cash regime; integration also requires
+explicit model/version handling and a declared supported initial-state domain.
+Market adjustment and self-regulation remain a later architectural step;
+shocks remain postponed.

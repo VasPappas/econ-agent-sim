@@ -6,6 +6,12 @@ regime: every firm has a positive owner distribution and strictly interior
 investment in every period. It does not change the application engine or solve
 all possible constrained monetary equilibria.
 
+The [constrained extension](monetary_boundaries.md) now handles zero investment
+and zero distributions when opening funding still binds optimally. The original
+`solve_transition` API documented here remains an interior regression benchmark;
+`solve_constrained_transition` is the separate numerical entry point for those
+boundaries, not another app or alternative economic model.
+
 There are two identical households and two identical capital-owning firms. Each
 household owns half of each firm. Production is `Y=K^alpha L^(1-alpha)` with
 `alpha=0.5`; productivity and total money are normalized to one. Preferences are
@@ -296,7 +302,9 @@ An investment or distribution boundary means **this solver's regime is not
 supported for that candidate**. It does not establish nonexistence of a
 monetary equilibrium. A different solution may involve zero distributions,
 binding investment constraints, extra cash retention or different transition
-prices; those active-constraint cases need a separate constrained solver.
+prices. Zero-investment and zero-distribution cases are now handled by the
+constrained extension when its funding-multiplier checks pass; positive unspent
+opening cash still requires a further regime extension.
 Numerical budget or convergence failures likewise must not be interpreted as
 economic nonexistence.
 

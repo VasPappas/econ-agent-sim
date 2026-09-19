@@ -1,9 +1,10 @@
 """Isolated symmetric monetary transitions, not the running application.
 
-Only the positive-distribution/interior-investment regime is implemented. An
-auxiliary real allocation problem supplies its numerical equations, not a
-welfare interpretation. Every accepted path is checked against monetary budgets
-and optimality, including its computational tail. See docs/monetary_transitions.md.
+The original interior solver remains an independent benchmark. The constrained
+solver also supports zero investment and distributions, while checking that
+opening funding binds optimally. Every accepted path is checked against monetary
+budgets and optimality, including its computational tail. See the monetary
+transition and boundary documents; neither routine changes the running app.
 """
 
 from dataclasses import dataclass, fields
@@ -60,6 +61,9 @@ class Period:
     discount_factor: float
     funding_multiplier: float
     capital_shadow_value: float
+    cash_shadow_value: float = 1.
+    next_cash_shadow_value: float = 1.
+    next_capital_shadow_value: float | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +124,7 @@ def _lift(p, allocations, initial_firm_cash):
             x.investment, x.labor, price, wage, firm - wage * x.labor,
             household, firm, closing_household, spending, p.beta, 1 - p.beta,
             p.beta * price * (1 - p.depreciation + .5 * x.output / x.capital),
+            1., 1., price,
         )
         if not all(isfinite(getattr(row, f.name)) for f in fields(row)):
             raise ArithmeticError("Monetary quantities exceed numerical range.")
@@ -208,8 +213,9 @@ def firm_deviation_gap(
 ):
     """One-period supporting-plane gap, including inactive/corner deviations.
 
-    The next-period supporting price is row.goods_price. The path auditor checks
-    its agreement with the next row's capital shadow value. This function alone
+    The supplied dated cash/capital shadow values determine the supporting bound.
+    A missing next capital value preserves the original interior price convention.
+    The path auditor separately checks adjacent valuations. This function alone
     does not assert an arbitrary supplied row is an equilibrium.
     """
     if type(parameters) is not Parameters:
@@ -224,9 +230,10 @@ def firm_deviation_gap(
         raise ValueError("The proposed firm deviation is not feasible.")
     next_cash = slack + row.goods_price * (output - investment)
     next_capital = (1 - parameters.depreciation) * capital + investment
-    gap = fsum((distribution, parameters.beta * next_cash,
-                parameters.beta * row.goods_price * next_capital,
-                -firm_cash, -row.capital_shadow_value * capital))
+    next_value = _next_capital_value(row)
+    gap = fsum((distribution, row.discount_factor * row.next_cash_shadow_value * next_cash,
+                row.discount_factor * next_value * next_capital,
+                -row.cash_shadow_value * firm_cash, -row.capital_shadow_value * capital))
     if not isfinite(gap):
         raise ArithmeticError("The deviation bound exceeds numerical range.")
     return gap
@@ -237,9 +244,26 @@ def _relative(left, right):
     return abs(left - right) / scale if scale else 0.
 
 
+def _next_capital_value(row):
+    return (row.goods_price if row.next_capital_shadow_value is None
+            else row.next_capital_shadow_value)
+
+
 def _distance(left, right):
-    differences = [_relative(getattr(left, f.name), getattr(right, f.name))
-                   for f in fields(Period) if f.name != "number"]
+    differences = []
+    for field in fields(Period):
+        name = field.name
+        if name == "number":
+            continue
+        if name == "next_capital_shadow_value":
+            differences.append(_relative(_next_capital_value(left), _next_capital_value(right)))
+        elif name in ("investment", "distribution", "funding_multiplier"):
+            scale_name = {"investment": "output", "distribution": "firm_cash",
+                          "funding_multiplier": "cash_shadow_value"}[name]
+            scale = max(getattr(left, scale_name), getattr(right, scale_name))
+            differences.append(abs(getattr(left, name) - getattr(right, name)) / scale)
+        else:
+            differences.append(_relative(getattr(left, name), getattr(right, name)))
     differences.append(_relative(1 - left.labor, 1 - right.labor))
     return max(differences)
 
@@ -262,11 +286,22 @@ def _audit(p, rows, tolerance):
             row.next_capital, (1 - p.depreciation) * k + row.investment,
         ))
         record("household_labor", 1 - wage * (1 - labor) / (price * p.leisure_weight * c))
-        record("firm_labor", 1 - q * price * .5 * y / (labor * wage))
+        b, bn, an = row.cash_shadow_value, row.next_cash_shadow_value, _next_capital_value(row)
+        record("firm_labor", 1 - q * bn * price * .5 * y / (labor * b * wage))
         slack = fsum((row.firm_cash, -row.distribution, -payroll))
         record("opening_funding", slack / row.firm_cash)
-        record("distribution_complementarity", q + row.funding_multiplier - 1)
+        record("cash_adjoint", (b - q * bn - row.funding_multiplier) / b)
+        record("cash_value_inequality", min(0., b - 1) / b)
+        record("funding_inequality", min(0., row.funding_multiplier) / b)
+        record("distribution_complementarity", row.distribution / row.firm_cash * (b - 1) / b)
         record("funding_complementarity", row.funding_multiplier * slack / row.firm_cash)
+        capital_gap = 1 - an / (price * bn)
+        record("investment_inequality", min(0., capital_gap))
+        record("investment_complementarity", row.investment / y * capital_gap)
+        record("capital_adjoint", _relative(
+            row.capital_shadow_value,
+            q * ((1 - p.depreciation) * an + price * bn * .5 * y / k),
+        ))
         record("household_budget", fsum((row.household_cash, row.distribution,
                                         payroll, -spending, -row.next_household_cash)) / .5)
         record("firm_budget", fsum((slack, price * (y - row.investment),
@@ -276,7 +311,7 @@ def _audit(p, rows, tolerance):
         record("firm_supporting_bound", firm_deviation_gap(
             p, row, capital=k, firm_cash=row.firm_cash, distribution=row.distribution,
             labor=labor, investment=row.investment,
-        ) / (row.firm_cash + row.capital_shadow_value * k))
+        ) / (b * row.firm_cash + row.capital_shadow_value * k))
         # Execute each bilateral transfer, not merely the consolidated budgets.
         settle_period(row, tolerance=tolerance)
     for row, following in pairwise(rows):
@@ -285,7 +320,8 @@ def _audit(p, rows, tolerance):
         record("household_money", 1 - p.money_weight * spending / row.next_household_cash
                - p.beta * spending / next_spending)
         record("owner_discount", _relative(row.discount_factor, p.beta * spending / next_spending))
-        record("firm_capital", _relative(row.goods_price, following.capital_shadow_value))
+        record("firm_capital", _relative(_next_capital_value(row), following.capital_shadow_value))
+        record("firm_cash_value", _relative(row.next_cash_shadow_value, following.cash_shadow_value))
         record("state_continuity", max(
             _relative(row.next_capital, following.capital),
             _relative(row.next_firm_cash, following.firm_cash),
@@ -375,3 +411,24 @@ def solve_transition(
         status = "horizon_budget_exhausted"
         size *= 2
     return result()
+
+
+def solve_constrained_transition(
+    parameters, initial_capital, periods, *, initial_firm_cash_share=.5,
+    horizon=64, max_horizon=2048, max_iterations=80,
+    tolerance=1e-10, continuation_tolerance=1e-8,
+):
+    """Monetary transitions with zero-I/zero-D corners and binding opening funding.
+
+    Firm cash/capital shadow values and complementarity are solved jointly.
+    Cash-retention regimes are not imposed away: a negative funding multiplier
+    rejects the candidate as unsupported. No failed solve returns usable history.
+    """
+    from ._monetary_boundaries import solve
+
+    return solve(
+        parameters, initial_capital, periods,
+        initial_firm_cash_share=initial_firm_cash_share, horizon=horizon,
+        max_horizon=max_horizon, max_iterations=max_iterations,
+        tolerance=tolerance, continuation_tolerance=continuation_tolerance,
+    )

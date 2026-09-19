@@ -9,7 +9,8 @@ The reference now also includes [partial-depreciation transitions with work and
 leisure](growth_transition.md), alongside the exact fixed-labor special case
 below. This numerical reference implements the [minimal real model](minimal_reference_economy.md);
 the [monetary transition implementation](monetary_transitions.md) separately
-supports positive distributions and interior investment, not all boundary cases.
+provides the interior benchmark; its [constrained extension](monetary_boundaries.md)
+also permits zero investment and payouts under verified binding opening funding.
 
 ## Modeling requirement
 

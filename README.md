@@ -46,10 +46,12 @@ The isolated reference also supports [partial depreciation and household
 work–leisure transitions](docs/growth_transition.md), with explicit checks for
 numerical continuation. It does not change the running monetary app.
 
-A [symmetric monetary transition reference](docs/monetary_transitions.md) now
-connects household saving, firm investment and funded payments in the
-positive-distribution/interior-investment regime. Unsupported boundary cases
-are reported explicitly; this reference is not yet integrated into the app.
+A [symmetric monetary transition reference](docs/monetary_transitions.md)
+connects household saving, firm investment and funded payments. Its
+[constrained extension](docs/monetary_boundaries.md) allows zero investment and
+dividends while verifying that using opening cash for payouts and payroll is
+optimal. Unspent-opening-cash regimes remain unsupported. Neither reference is
+yet integrated into the app.
 
 ## Save and reopen
 
