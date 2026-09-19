@@ -42,6 +42,17 @@ Use **Firms look ahead** or select a firm's policy in Set up. The separate
 validation benchmark. The [earlier runoff proposal](docs/investment_design.md)
 is deferred.
 
+The isolated reference also supports [partial depreciation and household
+work–leisure transitions](docs/growth_transition.md), with explicit checks for
+numerical continuation. It does not change the running monetary app.
+
+A [symmetric monetary transition reference](docs/monetary_transitions.md)
+connects household saving, firm investment and funded payments. Its
+[constrained extension](docs/monetary_boundaries.md) allows zero investment and
+dividends while verifying that using opening cash for payouts and payroll is
+optimal. Unspent-opening-cash regimes remain unsupported. Neither reference is
+yet integrated into the app.
+
 ## Save and reopen
 
 The app holds experiments in the current browser session, not a user database.
