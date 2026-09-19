@@ -1,8 +1,10 @@
 # Step 2 — Saving, investment and funded owner payouts
 
-Status: proposed economic specification, following
-[Step 1](minimal_reference_economy.md). The running model in `model.md` is
-unchanged. This document specifies a joint replacement for its household saving,
+Status: economic specification, following [Step 1](minimal_reference_economy.md).
+The [first executable monetary regime](monetary_transitions.md) now implements
+symmetric transitions with positive distributions and interior investment.
+Other constrained regimes remain unimplemented. The running model in `model.md`
+is unchanged. This document specifies a joint replacement for its household saving,
 conditional investment and prescribed dividend rules; it is not a patch that
 removes individual safeguards from the existing solver.
 
@@ -299,18 +301,19 @@ Before changing the app:
 - The Step 1 partial-depreciation/labor reference is now implemented and checked
   against its exact special cases and stationary allocation. See
   [the numerical method and acceptance checks](growth_transition.md).
-- Build the symmetric monetary transition solver against the budgets above,
-  checking household optimality, firm complementarity, terminal treatment,
-  forecast consistency, and every funded transaction. Use the stationary fixture
-  and its bound as independent evidence.
+- The first symmetric monetary transition solver now checks these budgets,
+  household optimality, firm complementarity, terminal treatment and every
+  funded transaction in the positive-distribution/interior-investment regime.
+  The stationary fixture, dated firm bound and independent tests provide
+  verification. It explicitly rejects unsupported investment/payout boundaries.
 - Establish a supported initial-state domain and investigate multiple paths,
   corners, numerical convergence and continuation sensitivity. A stationary
   example does not resolve those transition questions.
 - Integrate the resulting single model only after those checks, with explicit
   saved-file/version handling. Its behavior differs from the present engine.
 
-The real-reference transition solver is available separately; this monetary
-design and its stationary checker do not change the application or implement
-monetary transitions. The next executable milestone is the monetary transition
-problem. Market adjustment and self-regulation remain a later architectural
-step; shocks remain postponed.
+Both real and first-regime monetary transition references are available
+separately from the application. The next economic implementation question is
+the unresolved payout/investment boundary regimes; integration also requires
+explicit model/version handling. Market adjustment and self-regulation remain
+a later architectural step; shocks remain postponed.

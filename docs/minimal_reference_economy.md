@@ -1,6 +1,6 @@
 # Step 1 — A minimal economic reference
 
-Status: proposed design following the critical review of release `55dfe72`.
+Status: implemented verification reference, following the review of release `55dfe72`.
 This document specifies a verification reference. It does not change the running
 app, its saved experiments, or the economic rules described in `model.md`.
 
@@ -126,12 +126,12 @@ shares, and firms paying funded dividends. Those accounts are not interchangeabl
 with household-owned capital and rental payments. This document does not
 authorize changing the app's ownership or relabeling dividends as rents.
 
-The next design step must specify household asset budgets and how owners value
-firm distributions, then derive investment and liquidity/payout decisions under
-the actual ownership arrangement. A
-[money-in-utility monetary growth model](https://lhendricks.org/econ720/ih2/miu_sl.pdf)
-is a candidate foundation for retaining money. Merely adding a discount-factor
-control to the present household problem would not complete that integration.
+The [monetary foundation](monetary_foundation.md) now specifies household asset
+budgets, owner valuation and investment/liquidity/payout decisions under the
+actual ownership arrangement. Its money-in-utility extension has a
+[first-regime implementation](monetary_transitions.md). Merely adding a
+discount-factor control to the present household problem would not complete
+that integration.
 
 ## What stays outside this reference
 
@@ -196,13 +196,13 @@ c_t = (1-alpha beta) y_t
 l_t = (1-alpha) / [(1-alpha) + chi (1-alpha beta)]
 ```
 
-This supplies an additional independent check for a future labor solver; it is
-not an implemented feature of the current reference module.
+This supplies an additional independent check used by the implemented labor solver.
 
 Now implemented: partial-depreciation transition paths and endogenous labor in
 the isolated reference. See [the numerical method and acceptance checks](growth_transition.md).
-The [monetary household/firm foundation](monetary_foundation.md) is specified,
-but its transition solver is not yet implemented.
+The [monetary household/firm foundation](monetary_foundation.md) also has a
+[transition solver for its first supported regime](monetary_transitions.md),
+separate from this frictionless reference and the live app.
 
 Before relying on an extended numerical solver, verify resource feasibility,
 labor optimality, Euler residuals along transitions, the stationary allocation,

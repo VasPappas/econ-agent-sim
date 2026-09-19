@@ -9,8 +9,9 @@ The named foundation is the
 [Cass–Koopmans allocation problem](https://python.quantecon.org/cass_koopmans_1.html),
 with the explicitly stated log-leisure extension. This implementation uses a
 boundary-value method rather than the cited lecture's shooting implementation.
-The separate [monetary specification](monetary_foundation.md) is still a design
-and stationary verification exercise, not a transition solver.
+The separate [monetary specification](monetary_foundation.md) now has a
+[first-regime transition solver](monetary_transitions.md). Its constrained
+monetary equilibrium is not interchangeable with this frictionless reference.
 
 ## Use
 
